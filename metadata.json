@@ -1,0 +1,6 @@
+{
+  "name": "Beer Voucher Tracker",
+  "description": "Daily beer voucher tracking and analytics dashboard",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
