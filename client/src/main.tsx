@@ -68,30 +68,38 @@ const trpcClient = trpc.createClient({
           credentials: "include",
         });
 
-        const contentType = res.headers.get("content-type") || "";
-        if (!contentType.includes("application/json")) {
-          // If server/gateway returned HTML or non-JSON (e.g., 404/500/502 page), convert to clean tRPC JSON error
-          const clone = res.clone();
-          const text = await clone.text().catch(() => "");
-          console.error("[tRPC non-JSON response]", res.status, contentType, text.slice(0, 200));
-
-          const mockTrpcErrorResponse = JSON.stringify([
-            {
-              error: {
-                message: "Không thể kết nối đến máy chủ. Vui lòng thử lại sau.",
-                code: -32603,
-                data: { code: "INTERNAL_SERVER_ERROR", httpStatus: res.status || 500 },
-              },
-            },
-          ]);
-
-          return new Response(mockTrpcErrorResponse, {
-            status: res.status >= 200 && res.status < 300 ? 500 : res.status,
-            headers: { "content-type": "application/json" },
-          });
+        if (res.ok) {
+          return res;
         }
 
-        return res;
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          return res;
+        }
+
+        const clone = res.clone();
+        const text = await clone.text().catch(() => "");
+        console.error("[tRPC non-JSON error response]", res.status, contentType, text.slice(0, 200));
+
+        const mockTrpcErrorResponse = JSON.stringify([
+          {
+            error: {
+              message: `Không thể kết nối đến máy chủ (Mã ${res.status}). Vui lòng thử lại sau.`,
+              code: -32603,
+              data: {
+                json: {
+                  code: "INTERNAL_SERVER_ERROR",
+                  httpStatus: res.status || 500,
+                },
+              },
+            },
+          },
+        ]);
+
+        return new Response(mockTrpcErrorResponse, {
+          status: res.status || 500,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
       },
     }),
   ],
