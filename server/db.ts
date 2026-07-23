@@ -44,6 +44,17 @@ function seedSampleVouchers() {
   }
 }
 
+// Helper to prevent database calls from hanging serverless function invocations on Vercel
+const DB_TIMEOUT_MS = 2000;
+async function withTimeout<T>(promise: Promise<T>, ms = DB_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Database query timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -121,9 +132,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    await withTimeout(
+      db.insert(users).values(values).onDuplicateKeyUpdate({
+        set: updateSet,
+      })
+    );
   } catch (error) {
     console.warn("[Database] Failed to upsert user to MySQL, falling back to in-memory:", error);
   }
@@ -133,7 +146,9 @@ export async function getUserByOpenId(openId: string): Promise<User | undefined>
   const db = await getDb();
   if (db) {
     try {
-      const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+      const result = await withTimeout(
+        db.select().from(users).where(eq(users.openId, openId)).limit(1)
+      );
       if (result.length > 0) return result[0];
     } catch (err) {
       console.warn("[Database] MySQL error getting user, falling back to in-memory:", err);

@@ -30,11 +30,23 @@ export const appRouter = router({
             expiresInMs: ONE_YEAR_MS,
           });
 
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          try {
+            const cookieOptions = getSessionCookieOptions(ctx.req);
+            if (ctx.res && typeof ctx.res.cookie === "function") {
+              ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+            } else if (ctx.res && typeof ctx.res.setHeader === "function") {
+              ctx.res.setHeader(
+                "Set-Cookie",
+                `${COOKIE_NAME}=${sessionToken}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${Math.floor(ONE_YEAR_MS / 1000)}`
+              );
+            }
+          } catch (cErr) {
+            console.warn("[Auth API] Warning setting cookie during register (non-fatal):", cErr);
+          }
 
           return { success: true, user, token: sessionToken };
         } catch (err: any) {
+          console.error("[Auth API] Register error:", err);
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: err.message || "Đăng ký thất bại",
@@ -49,21 +61,42 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
+        console.log(`[Auth API] Login attempt for: "${input.emailOrUsername}"`);
         try {
           const user = await db.loginAccount(input);
+          console.log(`[Auth API] Login successful for user openId: "${user.openId}"`);
+
           const sessionToken = await sdk.createSessionToken(user.openId, {
             name: user.name || user.openId,
             expiresInMs: ONE_YEAR_MS,
           });
 
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          try {
+            const cookieOptions = getSessionCookieOptions(ctx.req);
+            if (ctx.res && typeof ctx.res.cookie === "function") {
+              ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+            } else if (ctx.res && typeof ctx.res.setHeader === "function") {
+              ctx.res.setHeader(
+                "Set-Cookie",
+                `${COOKIE_NAME}=${sessionToken}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${Math.floor(ONE_YEAR_MS / 1000)}`
+              );
+            }
+          } catch (cookieErr) {
+            console.warn("[Auth API] Warning setting cookie (non-fatal):", cookieErr);
+          }
 
           return { success: true, user, token: sessionToken };
         } catch (err: any) {
+          console.error(`[Auth API] Login failed for "${input.emailOrUsername}":`, err.message || err);
+
+          if (err instanceof TRPCError) {
+            throw err;
+          }
+
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: err.message || "Đăng nhập thất bại",
+            message: err.message || "Tên đăng nhập hoặc mật khẩu không chính xác.",
+            cause: err,
           });
         }
       }),
@@ -94,11 +127,23 @@ export const appRouter = router({
             expiresInMs: ONE_YEAR_MS,
           });
 
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          try {
+            const cookieOptions = getSessionCookieOptions(ctx.req);
+            if (ctx.res && typeof ctx.res.cookie === "function") {
+              ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+            } else if (ctx.res && typeof ctx.res.setHeader === "function") {
+              ctx.res.setHeader(
+                "Set-Cookie",
+                `${COOKIE_NAME}=${sessionToken}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${Math.floor(ONE_YEAR_MS / 1000)}`
+              );
+            }
+          } catch (cErr) {
+            console.warn("[Auth API] Warning setting cookie during loginAs (non-fatal):", cErr);
+          }
 
           return { success: true, token: sessionToken };
         } catch (err: any) {
+          console.error("[Auth API] loginAs error:", err);
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: err.message || "Đăng nhập nhanh thất bại",
@@ -106,8 +151,19 @@ export const appRouter = router({
         }
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      try {
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        if (ctx.res && typeof ctx.res.clearCookie === "function") {
+          ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+        } else if (ctx.res && typeof ctx.res.setHeader === "function") {
+          ctx.res.setHeader(
+            "Set-Cookie",
+            `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0`
+          );
+        }
+      } catch (cErr) {
+        console.warn("[Auth API] Logout cookie clearing warning:", cErr);
+      }
       return {
         success: true,
       } as const;
