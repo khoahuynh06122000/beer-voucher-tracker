@@ -76,27 +76,34 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const email = input.email || `${input.role}@beervoucher.vn`;
-        const openId = `user-${input.role}-${input.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        try {
+          const email = input.email || `${input.role}@beervoucher.vn`;
+          const openId = `user-${input.role}-${input.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
 
-        await db.upsertUser({
-          openId,
-          name: input.name,
-          email,
-          loginMethod: "direct",
-          role: input.role,
-          lastSignedIn: new Date(),
-        });
+          await db.upsertUser({
+            openId,
+            name: input.name,
+            email,
+            loginMethod: "direct",
+            role: input.role,
+            lastSignedIn: new Date(),
+          });
 
-        const sessionToken = await sdk.createSessionToken(openId, {
-          name: input.name,
-          expiresInMs: ONE_YEAR_MS,
-        });
+          const sessionToken = await sdk.createSessionToken(openId, {
+            name: input.name,
+            expiresInMs: ONE_YEAR_MS,
+          });
 
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-        return { success: true, token: sessionToken };
+          return { success: true, token: sessionToken };
+        } catch (err: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: err.message || "Đăng nhập nhanh thất bại",
+          });
+        }
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
