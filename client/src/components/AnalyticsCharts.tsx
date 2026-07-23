@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +15,11 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, TrendingUp, Ticket, FileCheck, Percent } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getVouchersByDateRange, VoucherRecord } from "@/lib/firestoreService";
 
 export function AnalyticsCharts() {
+  const { user } = useAuth();
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -28,12 +30,29 @@ export function AnalyticsCharts() {
     new Date().toISOString().split("T")[0]
   );
 
-  const { data: records, isLoading } = trpc.voucher.getByDateRange.useQuery(
-    { startDate, endDate },
-    {
-      enabled: !!startDate && !!endDate,
+  const [records, setRecords] = useState<VoucherRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const restaurantId = user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        const data = await getVouchersByDateRange(restaurantId, startDate, endDate);
+        if (isMounted) setRecords(data);
+      } catch (e) {
+        console.error("Error loading analytics data:", e);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
-  );
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurantId, startDate, endDate]);
 
   const handleSetLastDays = (days: number) => {
     const end = new Date();
@@ -44,7 +63,7 @@ export function AnalyticsCharts() {
   };
 
   const chartData = records
-    ? records
+    ? [...records]
         .map((record) => ({
           date: record.date,
           totalIssued: record.totalIssued,
@@ -69,7 +88,6 @@ export function AnalyticsCharts() {
 
   return (
     <div className="space-y-6">
-      {/* Top summary metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
           <div className="flex items-center justify-between mb-2">
@@ -123,7 +141,6 @@ export function AnalyticsCharts() {
         </Card>
       </div>
 
-      {/* Date controls */}
       <Card className="p-5 rounded-xl border border-border/80 bg-card shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -180,7 +197,6 @@ export function AnalyticsCharts() {
         </div>
       </Card>
 
-      {/* Charts Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-6 rounded-xl border border-border/80 bg-card h-80">
@@ -192,7 +208,6 @@ export function AnalyticsCharts() {
         </div>
       ) : chartData.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Bar Chart */}
           <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h4 className="font-bold text-foreground flex items-center gap-2">
@@ -222,7 +237,6 @@ export function AnalyticsCharts() {
             </ResponsiveContainer>
           </Card>
 
-          {/* Line Chart */}
           <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h4 className="font-bold text-foreground flex items-center gap-2">

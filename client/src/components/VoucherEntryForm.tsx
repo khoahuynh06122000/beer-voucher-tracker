@@ -1,62 +1,58 @@
 import { useState, useEffect } from "react";
-import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Ticket, FileCheck, XCircle, CheckCircle2, AlertCircle, Save, Beer } from "lucide-react";
+import { Ticket, XCircle, CheckCircle2, Save, Beer } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getVoucherByDate, upsertVoucher } from "@/lib/firestoreService";
 
 interface VoucherEntryFormProps {
   onSuccess?: () => void;
 }
 
 export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
+  const { user } = useAuth();
   const [date, setDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
   });
-  
-  // Specific item inputs
+
   const [potatoCoupons, setPotatoCoupons] = useState<string>("");
   const [beerCoupons, setBeerCoupons] = useState<string>("");
   const [cancelled, setCancelled] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: existingRecord } = trpc.voucher.getByDate.useQuery(
-    { date },
-    { enabled: !!date }
-  );
+  const restaurantId = user?.username || user?.id || "lehoibia";
+  const restaurantName = user?.restaurantName || user?.name || "Nhà Hàng";
 
   useEffect(() => {
-    if (existingRecord) {
-      setPotatoCoupons((existingRecord.potatoCoupons ?? Math.round(existingRecord.postedBills / 2)).toString());
-      setBeerCoupons((existingRecord.beerCoupons ?? (existingRecord.postedBills - Math.round(existingRecord.postedBills / 2))).toString());
-      setCancelled(existingRecord.cancelled.toString());
-    } else {
-      setPotatoCoupons("");
-      setBeerCoupons("");
-      setCancelled("");
+    let isMounted = true;
+    async function loadData() {
+      if (!restaurantId || !date) return;
+      const record = await getVoucherByDate(restaurantId, date);
+      if (isMounted) {
+        if (record) {
+          setPotatoCoupons(record.potatoCoupons.toString());
+          setBeerCoupons(record.beerCoupons.toString());
+          setCancelled(record.cancelled.toString());
+        } else {
+          setPotatoCoupons("");
+          setBeerCoupons("");
+          setCancelled("");
+        }
+      }
     }
-  }, [existingRecord]);
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurantId, date]);
 
   const potatoNum = parseInt(potatoCoupons) || 0;
   const beerNum = parseInt(beerCoupons) || 0;
   const cancelledNum = parseInt(cancelled) || 0;
 
-  // Formula requested: Tổng coupon = Số coupon khoai tây + coupon beer + coupon hủy
   const postedBillsNum = potatoNum + beerNum;
   const totalIssuedNum = potatoNum + beerNum + cancelledNum;
-
-  const utils = trpc.useUtils();
-  const upsertMutation = trpc.voucher.upsert.useMutation({
-    onSuccess: () => {
-      utils.voucher.getToday.invalidate();
-      utils.voucher.getByDate.invalidate();
-      utils.voucher.getByDateRange.invalidate();
-      toast.success(`Đã lưu thành công số liệu ngày ${date}!`);
-      onSuccess?.();
-    },
-    onError: (err) => {
-      toast.error(err.message || "Không thể lưu số liệu voucher.");
-    },
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,17 +62,25 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      await upsertMutation.mutateAsync({
+      await upsertVoucher({
         date,
-        totalIssued: totalIssuedNum,
-        postedBills: postedBillsNum,
-        cancelled: cancelledNum,
+        restaurantId,
+        restaurantName,
         potatoCoupons: potatoNum,
         beerCoupons: beerNum,
+        cancelled: cancelledNum,
+        postedBills: postedBillsNum,
+        totalIssued: totalIssuedNum,
+        createdBy: user?.username || "user",
       });
-    } catch {
-      // Handled in onError
+      toast.success(`Đã lưu thành công số liệu ngày ${date}!`);
+      onSuccess?.();
+    } catch (err: any) {
+      toast.error(err.message || "Không thể lưu số liệu voucher.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -89,7 +93,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
         <div>
           <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Ticket className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            Nhập Số Liệu Coupon Nhà Hàng Trong Ngày
+            Nhập Số Liệu Coupon ({restaurantName})
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
             Công thức tự động: <strong className="text-amber-600 dark:text-amber-400 font-bold">Tổng Coupon = Coupon Khoai Tây + Coupon Beer + Coupon Hủy</strong>
@@ -105,7 +109,6 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Date Selector */}
         <div className="max-w-xs">
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
             Ngày Ghi Nhận Số Liệu (*)
@@ -121,9 +124,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
           </div>
         </div>
 
-        {/* 3 Main Input Fields for Restaurants */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* 1. Coupon Khoai Tây */}
           <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
               <span className="text-base">🍟</span>
@@ -140,7 +141,6 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
             <p className="text-[11px] text-muted-foreground">Số lượng coupon khoai tây nhà hàng thu về</p>
           </div>
 
-          {/* 2. Coupon Beer */}
           <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
               <Beer className="w-4 h-4 text-blue-500" />
@@ -157,7 +157,6 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
             <p className="text-[11px] text-muted-foreground">Số lượng coupon beer nhà hàng thu về</p>
           </div>
 
-          {/* 3. Coupon Hủy */}
           <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 space-y-2">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
               <XCircle className="w-4 h-4 text-red-500" />
@@ -175,7 +174,6 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
           </div>
         </div>
 
-        {/* Calculated Total Banner */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="space-y-1 text-center sm:text-left">
             <div className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-2 justify-center sm:justify-start">
@@ -199,15 +197,14 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
           </div>
         </div>
 
-        {/* Submit button */}
         <div className="flex justify-end pt-2">
           <Button
             type="submit"
-            disabled={upsertMutation.isPending}
+            disabled={isSubmitting}
             className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            {upsertMutation.isPending ? "Đang lưu số liệu..." : "Lưu Số Liệu Ngày Hôm Nay"}
+            {isSubmitting ? "Đang lưu Firestore..." : "Lưu Số Liệu Hôm Nay"}
           </Button>
         </div>
       </form>

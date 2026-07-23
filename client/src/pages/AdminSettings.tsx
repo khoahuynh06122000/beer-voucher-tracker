@@ -1,28 +1,34 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle } from "lucide-react";
+import { getSetting, setSetting } from "@/lib/firestoreService";
 
 export default function AdminSettings() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-
-  const { data: settingData, isLoading: isLoadingSetting } =
-    trpc.settings.get.useQuery({ key: "ms_teams_webhook" });
-
-  const setSettingMutation = trpc.settings.set.useMutation();
+  const [isLoadingSetting, setIsLoadingSetting] = useState(true);
 
   useEffect(() => {
-    if (settingData?.value) {
-      setWebhookUrl(settingData.value);
+    let isMounted = true;
+    async function loadWebhook() {
+      setIsLoadingSetting(true);
+      const val = await getSetting("ms_teams_webhook");
+      if (isMounted) {
+        if (val) setWebhookUrl(val);
+        setIsLoadingSetting(false);
+      }
     }
-  }, [settingData]);
+    loadWebhook();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -74,15 +80,10 @@ export default function AdminSettings() {
 
     setIsSaving(true);
     try {
-      await setSettingMutation.mutateAsync({
-        key: "ms_teams_webhook",
-        value: webhookUrl,
-      });
-      toast.success("Lưu URL MS Teams Webhook thành công!");
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Không thể lưu cài đặt";
-      toast.error(message);
+      await setSetting("ms_teams_webhook", webhookUrl.trim());
+      toast.success("Lưu URL MS Teams Webhook thành công vào Firestore!");
+    } catch (err: any) {
+      toast.error(err?.message || "Không thể lưu cài đặt");
     } finally {
       setIsSaving(false);
     }
@@ -90,7 +91,6 @@ export default function AdminSettings() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border/80 bg-card/90 backdrop-blur sticky top-0 z-50">
         <div className="container py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export default function AdminSettings() {
             </div>
             <div>
               <h1 className="text-base font-bold text-foreground leading-none">Cài Đặt Quản Trị Hệ Thống</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">MS Teams Integration Settings</p>
+              <p className="text-xs text-muted-foreground mt-0.5">MS Teams Integration Settings (Firestore)</p>
             </div>
           </div>
 
@@ -115,7 +115,6 @@ export default function AdminSettings() {
         </div>
       </header>
 
-      {/* Main Container */}
       <main className="container py-10 flex-1 max-w-3xl">
         <Card className="p-6 md:p-8 rounded-xl border border-border/80 bg-card shadow-sm space-y-8">
           <div className="flex items-start gap-4 pb-6 border-b border-border/60">
@@ -125,7 +124,7 @@ export default function AdminSettings() {
             <div>
               <h2 className="text-xl font-bold text-foreground">Tích Hợp MS Teams Webhook</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Cấu hình webhook để tự động nhận thẻ báo cáo hiệu suất voucher mỗi ngày lúc 8:00 AM UTC.
+                Cấu hình webhook để tự động nhận thẻ báo cáo hiệu suất voucher mỗi ngày.
               </p>
             </div>
           </div>
@@ -154,7 +153,6 @@ export default function AdminSettings() {
               </p>
             </div>
 
-            {/* Instruction Panel */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-border/80 space-y-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                 <HelpCircle className="w-4 h-4 text-amber-600" />
@@ -176,40 +174,30 @@ export default function AdminSettings() {
                 className="px-6 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                {isSaving ? "Đang lưu cài đặt..." : "Lưu Cấu Hình Webhook"}
+                {isSaving ? "Đang lưu..." : "Lưu Cấu Hình Webhook"}
               </Button>
             </div>
           </form>
 
-          {/* Automation summary */}
           <div className="pt-6 border-t border-border/60 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
               <Bell className="w-4 h-4 text-purple-600" />
-              Quy Trình Gửi Báo Cáo Tự Động
+              Lưu Trữ Cấu Hình Báo Cáo
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted-foreground">
               <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Tự động kích hoạt lúc <strong>8:00 AM UTC</strong> mỗi ngày.</span>
+                <span>Cấu hình được đồng bộ tức thì lên <strong>Firestore Settings</strong>.</span>
               </div>
               <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Tổng hợp số liệu chính xác của ngày hôm trước.</span>
-              </div>
-              <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Định dạng thẻ màu trực quan đẹp mắt trên MS Teams.</span>
-              </div>
-              <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cung cấp link truy cập nhanh về ứng dụng web.</span>
+                <span>Hoàn toàn không cần máy chủ backend phụ thuộc.</span>
               </div>
             </div>
           </div>
         </Card>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border bg-card/50 py-6 text-center text-xs text-muted-foreground">
         Hệ Thống Quản Lý Voucher Bia © 2026. Tất cả quyền được bảo lưu.
       </footer>

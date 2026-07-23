@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "User profiles and roles",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "restaurantName": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "username", "role", "email"]
+    },
+    "vouchers": {
+      "title": "vouchers",
+      "description": "Daily voucher records by restaurant",
+      "properties": {
+        "date": { "type": "string" },
+        "restaurantId": { "type": "string" },
+        "restaurantName": { "type": "string" },
+        "potatoCoupons": { "type": "number" },
+        "beerCoupons": { "type": "number" },
+        "cancelled": { "type": "number" },
+        "postedBills": { "type": "number" },
+        "totalIssued": { "type": "number" },
+        "utilizationRate": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["date", "restaurantId", "totalIssued", "postedBills", "cancelled"]
+    },
+    "settings": {
+      "title": "settings",
+      "description": "Application configuration settings",
+      "properties": {
+        "value": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  }
+}

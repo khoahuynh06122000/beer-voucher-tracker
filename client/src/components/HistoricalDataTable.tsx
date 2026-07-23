@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +10,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { History, Calendar, Download, RefreshCw } from "lucide-react";
+import { History, RefreshCw } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getVouchersByDateRange, VoucherRecord } from "@/lib/firestoreService";
 
 export function HistoricalDataTable() {
+  const { user } = useAuth();
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -24,12 +26,26 @@ export function HistoricalDataTable() {
     new Date().toISOString().split("T")[0]
   );
 
-  const { data: records, isLoading, refetch } = trpc.voucher.getByDateRange.useQuery(
-    { startDate, endDate },
-    {
-      enabled: !!startDate && !!endDate,
+  const [records, setRecords] = useState<VoucherRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const restaurantId = user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getVouchersByDateRange(restaurantId, startDate, endDate);
+      setRecords(data);
+    } catch (e) {
+      console.error("Error loading historical data:", e);
+    } finally {
+      setIsLoading(false);
     }
-  );
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [restaurantId, startDate, endDate]);
 
   const handleSetLastDays = (days: number) => {
     const end = new Date();
@@ -48,11 +64,10 @@ export function HistoricalDataTable() {
             Lịch Sử Ghi Nhận Voucher
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Tra cứu toàn bộ lịch sử voucher đã ghi nhận theo khoảng thời gian tùy chỉnh
+            Tra cứu toàn bộ lịch sử voucher đã ghi nhận theo khoảng thời gian tùy chỉnh trên Firestore
           </p>
         </div>
 
-        {/* Quick Range Presets */}
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             onClick={() => handleSetLastDays(7)}
@@ -79,7 +94,7 @@ export function HistoricalDataTable() {
             30 ngày
           </Button>
           <Button
-            onClick={() => refetch()}
+            onClick={loadData}
             variant="ghost"
             size="sm"
             className="text-xs rounded-lg text-muted-foreground hover:text-foreground"
@@ -89,7 +104,6 @@ export function HistoricalDataTable() {
         </div>
       </div>
 
-      {/* Date Pickers */}
       <div className="grid grid-cols-1 sm:grid-cols-2 max-w-lg gap-4 mb-6">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
@@ -115,7 +129,6 @@ export function HistoricalDataTable() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border border-border/70 overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
@@ -123,6 +136,11 @@ export function HistoricalDataTable() {
               <TableHead className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Ngày
               </TableHead>
+              {user?.role === "admin" && (
+                <TableHead className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Nhà Hàng
+                </TableHead>
+              )}
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 🍟 Khoai Tây
               </TableHead>
@@ -148,6 +166,11 @@ export function HistoricalDataTable() {
                     <TableCell className="py-3 px-4">
                       <Skeleton className="h-4 w-24" />
                     </TableCell>
+                    {user?.role === "admin" && (
+                      <TableCell className="py-3 px-4">
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                    )}
                     <TableCell className="py-3 px-4 text-right">
                       <Skeleton className="h-4 w-12 ml-auto" />
                     </TableCell>
@@ -167,19 +190,24 @@ export function HistoricalDataTable() {
                 ))}
               </>
             ) : records && records.length > 0 ? (
-              records.map((record) => {
+              records.map((record, idx) => {
                 const rate = record.utilizationRate;
                 const potato = record.potatoCoupons ?? Math.round(record.postedBills / 2);
                 const beer = record.beerCoupons ?? (record.postedBills - potato);
 
                 return (
                   <TableRow
-                    key={record.id}
+                    key={record.id || `${record.restaurantId}_${record.date}_${idx}`}
                     className="border-b border-border/50 hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors"
                   >
                     <TableCell className="py-3.5 px-4 font-semibold text-sm text-foreground">
                       {record.date}
                     </TableCell>
+                    {user?.role === "admin" && (
+                      <TableCell className="py-3.5 px-4 text-xs font-bold text-amber-600">
+                        {record.restaurantName || record.restaurantId}
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-amber-700 dark:text-amber-300">
                       {potato.toLocaleString()}
                     </TableCell>
@@ -211,7 +239,7 @@ export function HistoricalDataTable() {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={user?.role === "admin" ? 7 : 6}
                   className="py-12 px-4 text-center text-muted-foreground text-sm"
                 >
                   Không có dữ liệu trong khoảng thời gian đã chọn.

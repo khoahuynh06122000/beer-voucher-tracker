@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { trpc } from "@/lib/trpc";
-import { COOKIE_NAME } from "@shared/const";
+import { useAuthContext } from "@/contexts/AuthContext";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 import {
   Beer,
@@ -14,14 +13,10 @@ import {
   Bell,
   BarChart3,
   ChevronDown,
-  UserCheck,
   User,
   X,
   Lock,
   Loader2,
-  Check,
-  UserPlus,
-  KeyRound,
   AlertCircle,
 } from "lucide-react";
 
@@ -34,63 +29,7 @@ export function LandingCover() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const utils = trpc.useUtils();
-
-  const loginCredentialsMutation = trpc.auth.loginWithCredentials.useMutation({
-    onSuccess: async (data) => {
-      if (data?.token) {
-        try {
-          sessionStorage.setItem("manus-cookie", `${COOKIE_NAME}=${data.token}`);
-          document.cookie = `${COOKIE_NAME}=${data.token}; Path=/; max-age=31536000; SameSite=None; Secure`;
-        } catch (e) {
-          console.error("Token storage error:", e);
-        }
-      }
-      await utils.auth.me.invalidate();
-      await utils.auth.me.refetch();
-      setIsLoggingIn(false);
-    },
-    onError: (err) => {
-      let msg = err.message || "Tên tài khoản hoặc mật khẩu không chính xác.";
-      if (
-        msg.includes("Unable to transform") ||
-        msg.includes("Unexpected token") ||
-        msg.includes("is not valid JSON")
-      ) {
-        msg = "Không thể kết nối đến hệ thống máy chủ API. Vui lòng kiểm tra lại dịch vụ backend.";
-      }
-      setAuthError(msg);
-      setIsLoggingIn(false);
-    },
-  });
-
-  const loginAsMutation = trpc.auth.loginAs.useMutation({
-    onSuccess: async (data) => {
-      if (data?.token) {
-        try {
-          sessionStorage.setItem("manus-cookie", `${COOKIE_NAME}=${data.token}`);
-          document.cookie = `${COOKIE_NAME}=${data.token}; Path=/; max-age=31536000; SameSite=None; Secure`;
-        } catch (e) {
-          console.error("Token storage error:", e);
-        }
-      }
-      await utils.auth.me.invalidate();
-      await utils.auth.me.refetch();
-      setIsLoggingIn(false);
-    },
-    onError: (err) => {
-      let msg = err.message || "Đăng nhập nhanh thất bại.";
-      if (
-        msg.includes("Unable to transform") ||
-        msg.includes("Unexpected token") ||
-        msg.includes("is not valid JSON")
-      ) {
-        msg = "Không thể kết nối đến hệ thống máy chủ API. Vui lòng kiểm tra lại dịch vụ backend.";
-      }
-      setAuthError(msg);
-      setIsLoggingIn(false);
-    },
-  });
+  const { loginWithEmailOrUsername, loginAsPreset } = useAuthContext();
 
   const handleLoginWithCreds = async (u: string, p: string) => {
     setAuthError(null);
@@ -98,12 +37,12 @@ export function LandingCover() {
 
     setIsLoggingIn(true);
     try {
-      await loginCredentialsMutation.mutateAsync({
-        emailOrUsername: u.trim(),
-        password: p,
-      });
-    } catch {
-      // Handled in onError
+      await loginWithEmailOrUsername(u.trim(), p);
+      setShowLoginModal(false);
+    } catch (err: any) {
+      setAuthError(err.message || "Đăng nhập thất bại.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -112,12 +51,15 @@ export function LandingCover() {
     await handleLoginWithCreds(loginUsername, loginPassword);
   };
 
-  const handleQuickLogin = async (name: string, role: "admin" | "user") => {
+  const handleQuickPresetLogin = async (key: string) => {
     setAuthError(null);
     setIsLoggingIn(true);
     try {
-      await loginAsMutation.mutateAsync({ name, role });
-    } catch {
+      await loginAsPreset(key);
+      setShowLoginModal(false);
+    } catch (err: any) {
+      setAuthError(err.message || "Đăng nhập nhanh thất bại.");
+    } finally {
       setIsLoggingIn(false);
     }
   };
@@ -131,10 +73,8 @@ export function LandingCover() {
 
     let animationFrameId: number;
 
-    // Nucleation sites (columns where carbonation streams originate)
     let nucleationSites: number[] = [];
 
-    // Micro-bubbles rising in streams
     let streamBubbles: Array<{
       columnX: number;
       x: number;
@@ -148,7 +88,6 @@ export function LandingCover() {
       isAmber: boolean;
     }> = [];
 
-    // Ambient floating bubbles
     let ambientBubbles: Array<{
       x: number;
       y: number;
@@ -161,7 +100,6 @@ export function LandingCover() {
       isAmber: boolean;
     }> = [];
 
-    // Top foam head particles
     let foamHeadParticles: Array<{
       x: number;
       y: number;
@@ -177,14 +115,12 @@ export function LandingCover() {
     };
 
     const initBeerEffect = () => {
-      // Create 16-24 nucleation columns across the width
       const numColumns = Math.floor(canvas.width / 75) + 6;
       nucleationSites = [];
       for (let i = 0; i < numColumns; i++) {
         nucleationSites.push(Math.random() * canvas.width);
       }
 
-      // Stream micro-bubbles
       streamBubbles = [];
       const streamCount = Math.floor((canvas.width * canvas.height) / 5000);
       for (let i = 0; i < streamCount; i++) {
@@ -192,14 +128,12 @@ export function LandingCover() {
         streamBubbles.push(createStreamBubble(colX, Math.random() * canvas.height));
       }
 
-      // Ambient bubbles
       ambientBubbles = [];
       const ambientCount = Math.floor((canvas.width * canvas.height) / 9000);
       for (let i = 0; i < ambientCount; i++) {
         ambientBubbles.push(createAmbientBubble(Math.random() * canvas.height));
       }
 
-      // Creamy foam particles at top
       foamHeadParticles = [];
       const foamCount = Math.floor(canvas.width / 12) + 20;
       for (let i = 0; i < foamCount; i++) {
@@ -252,7 +186,6 @@ export function LandingCover() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       tick += 0.03;
 
-      // 1. Draw Creamy Foam Head Layer at the top (Undulating Beer Foam)
       ctx.save();
       for (const f of foamHeadParticles) {
         const waveY = f.y + Math.sin(tick + f.phase) * 3;
@@ -270,7 +203,6 @@ export function LandingCover() {
         ctx.fill();
       }
 
-      // Continuous Foam Bottom Contour Line
       ctx.beginPath();
       ctx.moveTo(0, 0);
       for (let x = 0; x <= canvas.width; x += 30) {
@@ -283,7 +215,6 @@ export function LandingCover() {
       ctx.fill();
       ctx.restore();
 
-      // Helper to render soft glowing micro-bubbles
       const drawBeerBubble = (b: {
         x: number;
         y: number;
@@ -295,13 +226,11 @@ export function LandingCover() {
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
 
         if (b.radius < 1.8) {
-          // Micro-carbonation dot with glowing aura
           ctx.fillStyle = b.isAmber
             ? `rgba(251, 191, 36, ${b.opacity})`
             : `rgba(255, 255, 255, ${b.opacity * 0.9})`;
           ctx.fill();
         } else {
-          // Medium carbonation bubble with soft radial glow (no harsh dark outlines)
           const radGrad = ctx.createRadialGradient(
             b.x - b.radius * 0.3, b.y - b.radius * 0.3, 0,
             b.x, b.y, b.radius
@@ -320,7 +249,6 @@ export function LandingCover() {
           ctx.fillStyle = radGrad;
           ctx.fill();
 
-          // Soft highlight sheen dot
           ctx.beginPath();
           ctx.arc(b.x - b.radius * 0.35, b.y - b.radius * 0.35, b.radius * 0.3, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255, 255, 255, ${b.opacity * 0.8})`;
@@ -328,14 +256,12 @@ export function LandingCover() {
         }
       };
 
-      // 2. Render Nucleation Stream Bubbles
       for (let i = 0; i < streamBubbles.length; i++) {
         const b = streamBubbles[i];
         b.y -= b.speedY;
         b.phase += b.wobbleSpeed;
         b.x = b.columnX + Math.sin(b.phase) * b.wobbleAmp;
 
-        // Reset when reaching the top foam layer
         if (b.y < 35) {
           const colX = nucleationSites[Math.floor(Math.random() * nucleationSites.length)];
           streamBubbles[i] = createStreamBubble(colX);
@@ -344,7 +270,6 @@ export function LandingCover() {
         drawBeerBubble(b);
       }
 
-      // 3. Render Ambient Bubbles
       for (let i = 0; i < ambientBubbles.length; i++) {
         const b = ambientBubbles[i];
         b.y -= b.speedY;
@@ -373,7 +298,6 @@ export function LandingCover() {
 
   return (
     <div className="relative min-h-screen bg-[#07080a] text-white selection:bg-amber-500 selection:text-black overflow-x-hidden font-sans">
-      {/* Photorealistic Beer Foam & Golden Draft Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <img
           src={beerFoamBg}
@@ -384,20 +308,16 @@ export function LandingCover() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-[#07080a]/95" />
       </div>
 
-      {/* Dynamic Beer Carbonation Canvas Overlay */}
       <canvas
         ref={canvasRef}
         className="fixed inset-0 w-full h-full pointer-events-none z-10 opacity-90"
       />
 
-      {/* Golden Draft Amber Glow Effects */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[550px] bg-gradient-to-b from-amber-500/20 via-amber-600/10 to-transparent blur-[140px] pointer-events-none z-0" />
       <div className="fixed bottom-[-10%] left-[-10%] w-[700px] h-[700px] bg-amber-600/15 blur-[160px] pointer-events-none z-0" />
 
-      {/* Top Beer Foam Crown Line */}
       <div className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-400 z-50 shadow-[0_0_15px_rgba(251,191,36,0.8)]" />
 
-      {/* Header */}
       <header className="fixed top-1.5 left-0 right-0 z-50 backdrop-blur-md bg-black/50 border-b border-white/10 transition-all">
         <div className="container max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -409,7 +329,7 @@ export function LandingCover() {
                 BEER VOUCHER
               </span>
               <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400/90">
-                Analytics Platform
+                Firebase Edition
               </span>
             </div>
           </div>
@@ -425,13 +345,11 @@ export function LandingCover() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="relative z-20 pt-32 pb-20">
-        {/* Hero Section */}
         <section className="container max-w-5xl mx-auto px-6 text-center pt-12 pb-20 flex flex-col items-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold mb-8 backdrop-blur-md">
             <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            Nền Tảng Quản Lý Voucher Chuyên Nghiệp
+            Nền Tảng Quản Lý Voucher Chuyên Nghiệp (Firebase Cloud)
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.1] mb-8 max-w-4xl">
@@ -444,7 +362,7 @@ export function LandingCover() {
           </h1>
 
           <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-10 font-normal">
-            Giải pháp thông minh giúp ghi nhận chính xác chỉ số phát hành, kiểm tra công thức tự động, phân tích xu hướng quy đổi và báo cáo qua MS Teams.
+            Giải pháp thông minh giúp ghi nhận chính xác chỉ số phát hành, kiểm tra công thức tự động và phân tích xu hướng quy đổi trực tiếp trên Cloud Firestore.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center w-full max-w-md mb-16">
@@ -456,11 +374,6 @@ export function LandingCover() {
               Đăng Nhập Hệ Thống
               <ArrowRight className="w-5 h-5" />
             </Button>
-
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md font-mono text-xs text-gray-300">
-              <span className="text-amber-400">&gt;</span>
-              <code>POST /api/vouchers/daily</code>
-            </div>
           </div>
 
           <div className="animate-bounce pt-4 text-gray-500">
@@ -468,7 +381,6 @@ export function LandingCover() {
           </div>
         </section>
 
-        {/* Feature Cards Grid */}
         <section className="container max-w-6xl mx-auto px-6 py-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="group p-8 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1">
@@ -500,33 +412,12 @@ export function LandingCover() {
                 <Bell className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold text-white mb-3">
-                Tự Động Báo Cáo MS Teams
+                Lưu Trữ Firebase Firestore
               </h3>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Tích hợp Incoming Webhook tự động gửi thẻ báo cáo tổng hợp chỉ số phát hành trực tiếp tới kênh MS Teams doanh nghiệp mỗi ngày lúc 8:00 AM UTC.
+                Đồng bộ hóa dữ liệu thời gian thực trực tiếp trên Cloud Firestore, không qua trung gian backend server.
               </p>
             </div>
-          </div>
-        </section>
-
-        {/* Highlight Banner Section */}
-        <section className="container max-w-5xl mx-auto px-6 py-16">
-          <div className="p-10 md:p-14 rounded-3xl bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-transparent border border-amber-500/30 backdrop-blur-2xl text-center md:text-left flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="space-y-3 max-w-xl">
-              <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
-                Sẵn sàng trải nghiệm
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-                Bắt đầu theo dõi và tối ưu hóa hiệu quả voucher bia ngay hôm nay.
-              </h2>
-            </div>
-            <Button
-              onClick={() => setShowLoginModal(true)}
-              size="lg"
-              className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm px-8 py-6 rounded-xl shadow-xl shadow-amber-500/20 transition-all shrink-0"
-            >
-              Truy Cập Ngay
-            </Button>
           </div>
         </section>
       </main>
@@ -535,7 +426,6 @@ export function LandingCover() {
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0f1117] border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white overflow-hidden">
-            {/* Modal Header */}
             <div className="flex items-center justify-between pb-5 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
@@ -543,10 +433,10 @@ export function LandingCover() {
                 </div>
                 <div>
                   <h3 className="text-lg font-extrabold text-white leading-tight">
-                    Đăng Nhập Hệ Thống
+                    Đăng Nhập Firebase Auth
                   </h3>
                   <p className="text-xs text-gray-400">
-                    Nhập tài khoản nhà hàng được cấp để tiếp tục
+                    Nhập tài khoản nhà hàng hoặc bấm chọn nhanh bên dưới
                   </p>
                 </div>
               </div>
@@ -562,7 +452,6 @@ export function LandingCover() {
               </button>
             </div>
 
-            {/* Error Banner */}
             {authError && (
               <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
@@ -570,35 +459,30 @@ export function LandingCover() {
               </div>
             )}
 
-            {/* Modal Body Content */}
             <div className="pt-4 space-y-4">
-              {/* Quick preset account chips */}
               <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
                 <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
                   Chọn Nhanh Tài Khoản Nhà Hàng
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
                   {[
-                    { u: "lehoibia", p: "123", l: "🍺 Lễ Hội Bia" },
-                    { u: "1901", p: "123", l: "🍷 Nhà Hàng 1901" },
-                    { u: "beerplaza", p: "123", l: "🏰 Beer Plaza" },
-                    { u: "admin", p: "123", l: "🏢 Ban Quản Lý" },
+                    { key: "lehoibia", l: "🍺 Lễ Hội Bia" },
+                    { key: "1901", l: "🍷 Nhà Hàng 1901" },
+                    { key: "beerplaza", l: "🏰 Beer Plaza" },
+                    { key: "admin", l: "🏢 Ban Quản Lý" },
                   ].map((acc) => (
                     <button
-                      key={acc.u}
+                      key={acc.key}
                       type="button"
-                      onClick={() => {
-                        setLoginUsername(acc.u);
-                        setLoginPassword(acc.p);
-                        handleLoginWithCreds(acc.u, acc.p);
-                      }}
-                      className="p-2 rounded-lg bg-black/40 border border-white/10 hover:border-amber-400 text-left transition-all group"
+                      onClick={() => handleQuickPresetLogin(acc.key)}
+                      disabled={isLoggingIn}
+                      className="p-2 rounded-lg bg-black/40 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50"
                     >
                       <div className="font-bold text-gray-200 group-hover:text-amber-300 truncate">
                         {acc.l}
                       </div>
                       <div className="text-[10px] text-gray-400 font-mono">
-                        User: {acc.u}
+                        User: {acc.key}
                       </div>
                     </button>
                   ))}
@@ -608,7 +492,7 @@ export function LandingCover() {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-300">
-                    Tên Đăng Nhập
+                    Tên Đăng Nhập Hoặc Email
                   </label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
@@ -648,7 +532,7 @@ export function LandingCover() {
                   {isLoggingIn ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Đang đăng nhập...
+                      Đang đăng nhập Firebase...
                     </>
                   ) : (
                     <>
@@ -663,17 +547,15 @@ export function LandingCover() {
         </div>
       )}
 
-      {/* Footer */}
       <footer className="relative z-20 border-t border-white/10 bg-black/60 py-8 text-center text-xs text-gray-500">
         <div className="container max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Beer className="w-4 h-4 text-amber-500" />
             <span className="font-bold text-gray-300">Beer Voucher Tracker</span>
           </div>
-          <p>© 2026 Beer Voucher Analytics System. All rights reserved.</p>
+          <p>© 2026 Beer Voucher Analytics System. Pure Frontend Firebase Architecture.</p>
         </div>
       </footer>
     </div>
   );
 }
-

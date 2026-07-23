@@ -1,19 +1,36 @@
-import { trpc } from "@/lib/trpc";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ticket, FileCheck, XCircle, Percent, ArrowUpRight, Beer } from "lucide-react";
+import { Ticket, XCircle, Percent, Beer } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getTodayVoucher, VoucherRecord } from "@/lib/firestoreService";
 
 interface KPIDashboardProps {
   refreshTrigger?: number;
 }
 
 export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
-  const { data: todayRecord, isLoading } = trpc.voucher.getToday.useQuery(
-    undefined,
-    {
-      refetchInterval: 30000,
+  const { user } = useAuth();
+  const [todayRecord, setTodayRecord] = useState<VoucherRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const restaurantId = user?.username || user?.id || "lehoibia";
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchKPI() {
+      setIsLoading(true);
+      if (restaurantId) {
+        const record = await getTodayVoucher(restaurantId);
+        if (isMounted) setTodayRecord(record);
+      }
+      if (isMounted) setIsLoading(false);
     }
-  );
+    fetchKPI();
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurantId, refreshTrigger]);
 
   if (isLoading) {
     return (
