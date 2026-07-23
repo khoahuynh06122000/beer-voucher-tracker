@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createServer } from "http";
-import { createExpressApp } from "./app";
+import { createExpressApp } from "./app.js";
 import { serveStatic, setupVite } from "./vite";
 
 async function startServer() {
