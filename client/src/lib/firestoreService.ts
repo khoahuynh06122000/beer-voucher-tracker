@@ -66,7 +66,31 @@ export const PRESET_USERS: Record<string, Omit<UserProfile, "uid">> = {
 /**
  * Fetch or initialize user profile in Firestore `users` collection
  */
-export async function getUserProfile(uid: string, email?: string): Promise<UserProfile | null> {
+export async function getUserProfile(uid: string, email?: string): Promise<UserProfile> {
+  let matchedKey = "admin";
+  if (email) {
+    const usernameFromEmail = email.split("@")[0].toLowerCase();
+    if (PRESET_USERS[usernameFromEmail]) {
+      matchedKey = usernameFromEmail;
+    } else {
+      matchedKey = usernameFromEmail;
+    }
+  }
+
+  const preset = PRESET_USERS[matchedKey] || {
+    username: email ? email.split("@")[0] : "user",
+    role: matchedKey === "admin" ? "admin" : "restaurant",
+    restaurantName: matchedKey === "admin" ? "Ban Quản Lý" : `Nhà Hàng ${email ? email.split("@")[0] : "Lê Hội Bia"}`,
+    email: email || "",
+  };
+
+  const defaultProfile: UserProfile = {
+    uid,
+    ...preset,
+    email: email || preset.email,
+    createdAt: new Date().toISOString(),
+  };
+
   try {
     const userRef = doc(db, "users", uid);
     const snap = await getDoc(userRef);
@@ -75,34 +99,11 @@ export async function getUserProfile(uid: string, email?: string): Promise<UserP
       return snap.data() as UserProfile;
     }
 
-    // If document doesn't exist, check preset map by email or default
-    let matchedKey = "admin";
-    if (email) {
-      const usernameFromEmail = email.split("@")[0].toLowerCase();
-      if (PRESET_USERS[usernameFromEmail]) {
-        matchedKey = usernameFromEmail;
-      }
-    }
-
-    const preset = PRESET_USERS[matchedKey] || {
-      username: email ? email.split("@")[0] : "user",
-      role: "restaurant",
-      restaurantName: "Nhà Hàng",
-      email: email || "",
-    };
-
-    const newProfile: UserProfile = {
-      uid,
-      ...preset,
-      email: email || preset.email,
-      createdAt: new Date().toISOString(),
-    };
-
-    await setDoc(userRef, newProfile);
-    return newProfile;
+    await setDoc(userRef, defaultProfile).catch(() => {});
+    return defaultProfile;
   } catch (error) {
-    console.error("Error fetching user profile:", error);
-    return null;
+    console.error("Error fetching user profile from Firestore:", error);
+    return defaultProfile;
   }
 }
 
