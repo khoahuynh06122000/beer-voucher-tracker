@@ -37,6 +37,17 @@ async function startServer() {
   app.all("/api/*", (_req, res) => {
     res.status(404).json({ error: "API route not found" });
   });
+
+  // Express API Error Handler - ensures all API errors return JSON
+  app.use("/api", (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("[API Error Handler]:", err);
+    res.status(err.status || err.statusCode || 500).json({
+      error: {
+        message: err.message || "Internal Server Error",
+        code: err.code || "INTERNAL_SERVER_ERROR",
+      },
+    });
+  });
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
