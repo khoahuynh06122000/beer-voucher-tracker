@@ -125,6 +125,16 @@ export const appRouter = router({
     }),
 
     /**
+     * Get voucher record for a specific date
+     */
+    getByDate: publicProcedure
+      .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+      .query(async ({ input }) => {
+        const record = await db.getVoucherRecordByDate(input.date);
+        return record || null;
+      }),
+
+    /**
      * Create or update voucher record for a date
      */
     upsert: protectedProcedure

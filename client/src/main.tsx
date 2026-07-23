@@ -75,10 +75,10 @@ const trpcClient = trpc.createClient({
           const errorObj = {
             message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối mạng.",
             code: -32603,
-            data: superjson.serialize({
+            data: {
               code: "INTERNAL_SERVER_ERROR",
               httpStatus: 500,
-            }),
+            },
           };
           return new Response(JSON.stringify([{ error: errorObj }]), {
             status: 500,
@@ -103,10 +103,10 @@ const trpcClient = trpc.createClient({
         const errorObj = {
           message: friendlyMessage,
           code: -32603,
-          data: superjson.serialize({
+          data: {
             code: "INTERNAL_SERVER_ERROR",
             httpStatus: res.status || 500,
-          }),
+          },
         };
 
         return new Response(JSON.stringify([{ error: errorObj }]), {
