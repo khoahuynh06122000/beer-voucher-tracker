@@ -62,7 +62,7 @@ export const appRouter = router({
           return { success: true, user, token: sessionToken };
         } catch (err: any) {
           throw new TRPCError({
-            code: "UNAUTHORIZED",
+            code: "BAD_REQUEST",
             message: err.message || "Đăng nhập thất bại",
           });
         }

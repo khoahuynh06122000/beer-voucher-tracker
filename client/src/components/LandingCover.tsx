@@ -48,6 +48,7 @@ export function LandingCover() {
       }
       await utils.auth.me.invalidate();
       await utils.auth.me.refetch();
+      setIsLoggingIn(false);
     },
     onError: (err) => {
       setAuthError(err.message || "Tên tài khoản hoặc mật khẩu không chính xác.");
@@ -67,6 +68,7 @@ export function LandingCover() {
       }
       await utils.auth.me.invalidate();
       await utils.auth.me.refetch();
+      setIsLoggingIn(false);
     },
     onError: (err) => {
       setAuthError(err.message || "Đăng nhập nhanh thất bại.");

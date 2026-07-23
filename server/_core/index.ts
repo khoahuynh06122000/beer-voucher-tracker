@@ -27,8 +27,16 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      onError({ error, path }) {
+        console.error(`[tRPC Error] on path ${path}:`, error);
+      },
     })
   );
+
+  // Fallback handler for API routes to prevent falling through to Vite HTML
+  app.all("/api/*", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
