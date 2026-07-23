@@ -1,5 +1,6 @@
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import crypto from "crypto";
 import { InsertUser, User, users, voucherRecords, VoucherRecord, settings, Setting } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -21,9 +22,11 @@ function seedSampleVouchers() {
     const dateStr = d.toISOString().split("T")[0];
     
     // Create realistic mock voucher numbers
-    const totalIssued = 150 + Math.floor(Math.sin(i) * 30) + (i % 3) * 10;
+    const potatoCoupons = 70 + Math.floor(Math.sin(i) * 15);
+    const beerCoupons = 80 + (i % 3) * 10;
     const cancelled = 5 + Math.floor(Math.random() * 8);
-    const postedBills = totalIssued - cancelled;
+    const postedBills = potatoCoupons + beerCoupons;
+    const totalIssued = postedBills + cancelled;
     const utilizationRate = Math.round((postedBills / totalIssued) * 100);
 
     inMemoryVouchers.set(dateStr, {
@@ -32,6 +35,8 @@ function seedSampleVouchers() {
       totalIssued,
       postedBills,
       cancelled,
+      potatoCoupons,
+      beerCoupons,
       utilizationRate,
       createdAt: d,
       updatedAt: d,
@@ -170,8 +175,13 @@ export async function upsertVoucherRecord(data: {
   totalIssued: number;
   postedBills: number;
   cancelled: number;
+  potatoCoupons?: number;
+  beerCoupons?: number;
 }) {
   seedSampleVouchers();
+
+  const potatoCoupons = data.potatoCoupons ?? 0;
+  const beerCoupons = data.beerCoupons ?? 0;
 
   const utilizationRate =
     data.totalIssued > 0
@@ -186,6 +196,8 @@ export async function upsertVoucherRecord(data: {
     totalIssued: data.totalIssued,
     postedBills: data.postedBills,
     cancelled: data.cancelled,
+    potatoCoupons,
+    beerCoupons,
     utilizationRate,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -203,6 +215,8 @@ export async function upsertVoucherRecord(data: {
         totalIssued: data.totalIssued,
         postedBills: data.postedBills,
         cancelled: data.cancelled,
+        potatoCoupons,
+        beerCoupons,
         utilizationRate,
       })
       .onDuplicateKeyUpdate({
@@ -210,6 +224,8 @@ export async function upsertVoucherRecord(data: {
           totalIssued: data.totalIssued,
           postedBills: data.postedBills,
           cancelled: data.cancelled,
+          potatoCoupons,
+          beerCoupons,
           utilizationRate,
         },
       });
@@ -337,6 +353,158 @@ export async function deleteVoucherRecord(date: string) {
   } catch (err) {
     console.warn("[Database] MySQL error deleting voucher, removed from in-memory:", err);
   }
+}
+
+// In-memory accounts with password and restaurant department
+interface RegisteredAccount {
+  openId: string;
+  name: string;
+  restaurant: string;
+  emailOrUsername: string;
+  passwordHash: string;
+  role: "admin" | "user";
+}
+
+const registeredAccounts = new Map<string, RegisteredAccount>();
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(`beervoucher_${password}_salt`).digest("hex");
+}
+
+// Pre-seed default accounts for the 3 restaurants and admin
+function initializeDefaultAccounts() {
+  const defaultAccounts: Array<{
+    username: string;
+    name: string;
+    restaurant: string;
+    role: "admin" | "user";
+    password: string;
+  }> = [
+    {
+      username: "lehoibia",
+      name: "Thu Ngân Lễ Hội Bia",
+      restaurant: "Lễ Hội Bia",
+      role: "user",
+      password: "123",
+    },
+    {
+      username: "1901",
+      name: "Thu Ngân Nhà Hàng 1901",
+      restaurant: "1901",
+      role: "user",
+      password: "123",
+    },
+    {
+      username: "beerplaza",
+      name: "Thu Ngân Beer Plaza",
+      restaurant: "Beer Plaza",
+      role: "user",
+      password: "123",
+    },
+    {
+      username: "admin",
+      name: "Ban Quản Lý - Admin",
+      restaurant: "Ban Quản Lý",
+      role: "admin",
+      password: "123",
+    },
+  ];
+
+  for (const acc of defaultAccounts) {
+    const key = acc.username.toLowerCase().trim();
+    if (!registeredAccounts.has(key)) {
+      registeredAccounts.set(key, {
+        openId: `reg-${key}`,
+        name: acc.name,
+        restaurant: acc.restaurant,
+        emailOrUsername: acc.username,
+        passwordHash: hashPassword(acc.password),
+        role: acc.role,
+      });
+    }
+  }
+}
+
+// Initialize on module load
+initializeDefaultAccounts();
+
+export async function registerAccount(input: {
+  name: string;
+  restaurant?: string;
+  emailOrUsername: string;
+  password: string;
+  role?: "admin" | "user";
+}): Promise<User> {
+  const normalizedKey = input.emailOrUsername.toLowerCase().trim();
+  if (registeredAccounts.has(normalizedKey)) {
+    throw new Error("Tài khoản hoặc Email này đã được đăng ký. Vui lòng chọn tab Đăng Nhập.");
+  }
+
+  const role = input.role || "user";
+  const restaurant = input.restaurant || "Lễ Hội Bia";
+  const displayName = input.name.includes(" - ") ? input.name : `${input.name} (${restaurant})`;
+  const openId = `reg-${normalizedKey.replace(/[^a-z0-9]/g, "-")}`;
+  const passwordHash = hashPassword(input.password);
+
+  registeredAccounts.set(normalizedKey, {
+    openId,
+    name: displayName,
+    restaurant,
+    emailOrUsername: input.emailOrUsername,
+    passwordHash,
+    role,
+  });
+
+  await upsertUser({
+    openId,
+    name: displayName,
+    email: input.emailOrUsername.includes("@") ? input.emailOrUsername : `${normalizedKey}@beervoucher.vn`,
+    loginMethod: "credentials",
+    role,
+    lastSignedIn: new Date(),
+  });
+
+  const user = await getUserByOpenId(openId);
+  if (!user) {
+    throw new Error("Không thể tạo tài khoản người dùng.");
+  }
+
+  return user;
+}
+
+export async function loginAccount(input: {
+  emailOrUsername: string;
+  password: string;
+}): Promise<User> {
+  const normalizedKey = input.emailOrUsername.toLowerCase().trim();
+  
+  // Ensure default accounts exist
+  initializeDefaultAccounts();
+
+  const account = registeredAccounts.get(normalizedKey);
+
+  if (!account) {
+    throw new Error(`Tài khoản "${input.emailOrUsername}" chưa được đăng ký. Vui lòng chọn tab Đăng Ký.`);
+  }
+
+  const hash = hashPassword(input.password);
+  if (account.passwordHash !== hash) {
+    throw new Error("Mật khẩu không chính xác. Vui lòng thử lại.");
+  }
+
+  await upsertUser({
+    openId: account.openId,
+    name: account.name,
+    role: account.role,
+    lastSignedIn: new Date(),
+  });
+
+  const user = await getUserByOpenId(account.openId);
+  if (!user) {
+    throw new Error("Đăng nhập thất bại.");
+  }
+
+  return user;
 }
 
 

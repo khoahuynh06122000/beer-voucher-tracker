@@ -34,6 +34,8 @@ export const voucherRecords = mysqlTable("voucher_records", {
   totalIssued: int("total_issued").notNull().default(0),
   postedBills: int("posted_bills").notNull().default(0),
   cancelled: int("cancelled").notNull().default(0),
+  potatoCoupons: int("potato_coupons").notNull().default(0),
+  beerCoupons: int("beer_coupons").notNull().default(0),
   utilizationRate: int("utilization_rate").notNull().default(0), // percentage 0-100
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

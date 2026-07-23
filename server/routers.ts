@@ -12,6 +12,61 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+    register: publicProcedure
+      .input(
+        z.object({
+          name: z.string().min(2, "Tên hiển thị phải từ 2 ký tự trở lên"),
+          restaurant: z.string().optional(),
+          emailOrUsername: z.string().min(3, "Tên đăng nhập hoặc email từ 3 ký tự trở lên"),
+          password: z.string().min(4, "Mật khẩu phải từ 4 ký tự trở lên"),
+          role: z.enum(["admin", "user"]).default("user"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const user = await db.registerAccount(input);
+          const sessionToken = await sdk.createSessionToken(user.openId, {
+            name: user.name || input.name,
+            expiresInMs: ONE_YEAR_MS,
+          });
+
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+          return { success: true, user, token: sessionToken };
+        } catch (err: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: err.message || "Đăng ký thất bại",
+          });
+        }
+      }),
+    loginWithCredentials: publicProcedure
+      .input(
+        z.object({
+          emailOrUsername: z.string().min(1, "Vui lòng nhập tên đăng nhập hoặc email"),
+          password: z.string().min(1, "Vui lòng nhập mật khẩu"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const user = await db.loginAccount(input);
+          const sessionToken = await sdk.createSessionToken(user.openId, {
+            name: user.name || user.openId,
+            expiresInMs: ONE_YEAR_MS,
+          });
+
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+          return { success: true, user, token: sessionToken };
+        } catch (err: any) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: err.message || "Đăng nhập thất bại",
+          });
+        }
+      }),
     loginAs: publicProcedure
       .input(
         z.object({
@@ -41,7 +96,7 @@ export const appRouter = router({
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-        return { success: true };
+        return { success: true, token: sessionToken };
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -72,6 +127,8 @@ export const appRouter = router({
           totalIssued: z.number().int().min(0),
           postedBills: z.number().int().min(0),
           cancelled: z.number().int().min(0),
+          potatoCoupons: z.number().int().min(0).optional(),
+          beerCoupons: z.number().int().min(0).optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -79,7 +136,7 @@ export const appRouter = router({
         if (input.totalIssued !== input.postedBills + input.cancelled) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Total issued must equal posted bills + cancelled",
+            message: `Tổng coupon (${input.totalIssued}) phải bằng Coupon khoai tây + Coupon beer + Coupon hủy (${input.postedBills + input.cancelled})`,
           });
         }
 

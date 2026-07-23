@@ -124,16 +124,19 @@ export function HistoricalDataTable() {
                 Ngày
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Tổng phát ra
+                🍟 Khoai Tây
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Hóa đơn ghi nhận
+                🍺 Coupon Beer
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Voucher hủy
+                ❌ Coupon Hủy
+              </TableHead>
+              <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                📊 Tổng Coupon
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Tỷ lệ sử dụng
+                Tỷ lệ quy đổi
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -157,12 +160,18 @@ export function HistoricalDataTable() {
                     <TableCell className="py-3 px-4 text-right">
                       <Skeleton className="h-4 w-12 ml-auto" />
                     </TableCell>
+                    <TableCell className="py-3 px-4 text-right">
+                      <Skeleton className="h-4 w-12 ml-auto" />
+                    </TableCell>
                   </TableRow>
                 ))}
               </>
             ) : records && records.length > 0 ? (
               records.map((record) => {
                 const rate = record.utilizationRate;
+                const potato = record.potatoCoupons ?? Math.round(record.postedBills / 2);
+                const beer = record.beerCoupons ?? (record.postedBills - potato);
+
                 return (
                   <TableRow
                     key={record.id}
@@ -171,14 +180,17 @@ export function HistoricalDataTable() {
                     <TableCell className="py-3.5 px-4 font-semibold text-sm text-foreground">
                       {record.date}
                     </TableCell>
-                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-foreground">
-                      {record.totalIssued.toLocaleString()}
+                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-amber-700 dark:text-amber-300">
+                      {potato.toLocaleString()}
                     </TableCell>
-                    <TableCell className="py-3.5 px-4 text-right font-semibold text-sm text-emerald-600 dark:text-emerald-400">
-                      {record.postedBills.toLocaleString()}
+                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-blue-600 dark:text-blue-400">
+                      {beer.toLocaleString()}
                     </TableCell>
-                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-amber-600 dark:text-amber-400">
+                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-red-600 dark:text-red-400">
                       {record.cancelled.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4 text-right font-extrabold text-sm text-amber-600 dark:text-amber-400">
+                      {record.totalIssued.toLocaleString()}
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-right">
                       <span
@@ -199,7 +211,7 @@ export function HistoricalDataTable() {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-12 px-4 text-center text-muted-foreground text-sm"
                 >
                   Không có dữ liệu trong khoảng thời gian đã chọn.

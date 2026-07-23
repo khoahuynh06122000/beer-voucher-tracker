@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
+import { COOKIE_NAME } from "@shared/const";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 import {
   Beer,
@@ -19,44 +20,86 @@ import {
   Lock,
   Loader2,
   Check,
+  UserPlus,
+  KeyRound,
+  AlertCircle,
 } from "lucide-react";
 
 export function LandingCover() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"admin" | "user">("admin");
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const utils = trpc.useUtils();
-  const loginAsMutation = trpc.auth.loginAs.useMutation({
-    onSuccess: async () => {
+
+  const loginCredentialsMutation = trpc.auth.loginWithCredentials.useMutation({
+    onSuccess: async (data) => {
+      if (data?.token) {
+        try {
+          sessionStorage.setItem("manus-cookie", `${COOKIE_NAME}=${data.token}`);
+          document.cookie = `${COOKIE_NAME}=${data.token}; Path=/; max-age=31536000; SameSite=None; Secure`;
+        } catch (e) {
+          console.error("Token storage error:", e);
+        }
+      }
       await utils.auth.me.invalidate();
-      window.location.reload();
+      await utils.auth.me.refetch();
+    },
+    onError: (err) => {
+      setAuthError(err.message || "Tên tài khoản hoặc mật khẩu không chính xác.");
+      setIsLoggingIn(false);
     },
   });
 
-  const handleQuickLogin = async (name: string, role: "admin" | "user") => {
+  const loginAsMutation = trpc.auth.loginAs.useMutation({
+    onSuccess: async (data) => {
+      if (data?.token) {
+        try {
+          sessionStorage.setItem("manus-cookie", `${COOKIE_NAME}=${data.token}`);
+          document.cookie = `${COOKIE_NAME}=${data.token}; Path=/; max-age=31536000; SameSite=None; Secure`;
+        } catch (e) {
+          console.error("Token storage error:", e);
+        }
+      }
+      await utils.auth.me.invalidate();
+      await utils.auth.me.refetch();
+    },
+    onError: (err) => {
+      setAuthError(err.message || "Đăng nhập nhanh thất bại.");
+      setIsLoggingIn(false);
+    },
+  });
+
+  const handleLoginWithCreds = async (u: string, p: string) => {
+    setAuthError(null);
+    if (!u.trim() || !p) return;
+
     setIsLoggingIn(true);
     try {
-      await loginAsMutation.mutateAsync({ name, role });
-    } catch (e) {
-      console.error("Login failed", e);
-      setIsLoggingIn(false);
+      await loginCredentialsMutation.mutateAsync({
+        emailOrUsername: u.trim(),
+        password: p,
+      });
+    } catch {
+      // Handled in onError
     }
   };
 
-  const handleCustomLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customName.trim()) return;
+    await handleLoginWithCreds(loginUsername, loginPassword);
+  };
+
+  const handleQuickLogin = async (name: string, role: "admin" | "user") => {
+    setAuthError(null);
     setIsLoggingIn(true);
     try {
-      await loginAsMutation.mutateAsync({
-        name: customName.trim(),
-        role: selectedRole,
-      });
-    } catch (e) {
-      console.error("Custom login failed", e);
+      await loginAsMutation.mutateAsync({ name, role });
+    } catch {
       setIsLoggingIn(false);
     }
   };
@@ -470,158 +513,128 @@ export function LandingCover() {
         </section>
       </main>
 
-      {/* User Login Modal Dialog */}
+      {/* User Auth Modal Dialog */}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-md p-8 rounded-3xl bg-[#0f1117] border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white overflow-hidden">
+          <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0f1117] border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-6 border-b border-white/10">
+            <div className="flex items-center justify-between pb-5 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
                   <Beer className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-lg font-extrabold text-white leading-tight">
-                    Đăng Nhập Tài Khoản
+                    Đăng Nhập Hệ Thống
                   </h3>
                   <p className="text-xs text-gray-400">
-                    Chọn tài khoản hoặc nhập tên người dùng
+                    Nhập tài khoản nhà hàng được cấp để tiếp tục
                   </p>
                 </div>
               </div>
 
               <button
-                onClick={() => setShowLoginModal(false)}
+                onClick={() => {
+                  setShowLoginModal(false);
+                  setAuthError(null);
+                }}
                 className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="py-6 space-y-6">
-              {/* Quick Preset Accounts */}
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-400/90">
-                  Chọn Nhanh Quyền Truy Cập
+            {/* Error Banner */}
+            {authError && (
+              <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            {/* Modal Body Content */}
+            <div className="pt-4 space-y-4">
+              {/* Quick preset account chips */}
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+                <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
+                  Chọn Nhanh Tài Khoản Nhà Hàng
                 </p>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <button
-                    disabled={isLoggingIn}
-                    onClick={() => handleQuickLogin("Quản Trị Viên (Admin)", "admin")}
-                    className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-amber-500/15 to-transparent border border-amber-500/30 hover:border-amber-400 hover:bg-amber-500/20 transition-all text-left group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-amber-500 text-black font-bold">
-                        <ShieldCheck className="w-5 h-5" />
+                <div className="grid grid-cols-2 gap-1.5 text-xs">
+                  {[
+                    { u: "lehoibia", p: "123", l: "🍺 Lễ Hội Bia" },
+                    { u: "1901", p: "123", l: "🍷 Nhà Hàng 1901" },
+                    { u: "beerplaza", p: "123", l: "🏰 Beer Plaza" },
+                    { u: "admin", p: "123", l: "🏢 Ban Quản Lý" },
+                  ].map((acc) => (
+                    <button
+                      key={acc.u}
+                      type="button"
+                      onClick={() => {
+                        setLoginUsername(acc.u);
+                        setLoginPassword(acc.p);
+                        handleLoginWithCreds(acc.u, acc.p);
+                      }}
+                      className="p-2 rounded-lg bg-black/40 border border-white/10 hover:border-amber-400 text-left transition-all group"
+                    >
+                      <div className="font-bold text-gray-200 group-hover:text-amber-300 truncate">
+                        {acc.l}
                       </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-white group-hover:text-amber-300">
-                          Quản Trị Viên (Admin)
-                        </h4>
-                        <p className="text-xs text-gray-400">
-                          Toàn quyền quản lý, nhập dữ liệu & cấu hình Webhook
-                        </p>
+                      <div className="text-[10px] text-gray-400 font-mono">
+                        User: {acc.u}
                       </div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-
-                  <button
-                    disabled={isLoggingIn}
-                    onClick={() => handleQuickLogin("Nhân Viên Thu Ngân", "user")}
-                    className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:border-amber-500/30 hover:bg-white/10 transition-all text-left group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30">
-                        <UserCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-white group-hover:text-amber-300">
-                          Nhân Viên Thu Ngân (Staff)
-                        </h4>
-                        <p className="text-xs text-gray-400">
-                          Quyền cập nhật chỉ số voucher hàng ngày
-                        </p>
-                      </div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="relative flex items-center justify-center">
-                <div className="w-full border-t border-white/10" />
-                <span className="absolute px-3 bg-[#0f1117] text-[11px] uppercase font-bold text-gray-500 tracking-wider">
-                  Hoặc đăng nhập theo tên
-                </span>
-              </div>
-
-              {/* Custom Login Form */}
-              <form onSubmit={handleCustomLogin} className="space-y-4">
-                <div className="space-y-2">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-300">
-                    Tên Người Dùng
+                    Tên Đăng Nhập
                   </label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                     <Input
                       type="text"
-                      placeholder="Ví dụ: Khoa Huỳnh, Thu Ngân 01..."
-                      value={customName}
-                      onChange={(e) => setCustomName(e.target.value)}
+                      placeholder="Nhập tên đăng nhập (ví dụ: lehoibia)..."
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
                       className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400"
                       required
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-300">
-                    Vai Trò
+                    Mật Khẩu
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole("admin")}
-                      className={`p-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        selectedRole === "admin"
-                          ? "bg-amber-500/20 border-amber-400 text-amber-300"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                      }`}
-                    >
-                      {selectedRole === "admin" && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                      Quản Trị Viên
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole("user")}
-                      className={`p-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        selectedRole === "user"
-                          ? "bg-amber-500/20 border-amber-400 text-amber-300"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                      }`}
-                    >
-                      {selectedRole === "user" && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                      Nhân Viên
-                    </button>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="password"
+                      placeholder="Nhập mật khẩu..."
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400"
+                      required
+                    />
                   </div>
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={isLoggingIn || !customName.trim()}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm py-6 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+                  disabled={isLoggingIn || !loginUsername.trim() || !loginPassword}
+                  className="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm py-5 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
                 >
                   {isLoggingIn ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Đang xử lý đăng nhập...
+                      Đang đăng nhập...
                     </>
                   ) : (
                     <>
-                      Xác Nhận Đăng Nhập
+                      Đăng Nhập Ngay
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ticket, FileCheck, XCircle, Percent, ArrowUpRight } from "lucide-react";
+import { Ticket, FileCheck, XCircle, Percent, ArrowUpRight, Beer } from "lucide-react";
 
 interface KPIDashboardProps {
   refreshTrigger?: number;
@@ -29,45 +29,53 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
     );
   }
 
+  const potato = todayRecord?.potatoCoupons ?? Math.round((todayRecord?.postedBills ?? 0) / 2);
+  const beer = todayRecord?.beerCoupons ?? ((todayRecord?.postedBills ?? 0) - potato);
+  const cancelled = todayRecord?.cancelled ?? 0;
+  const total = todayRecord?.totalIssued ?? 0;
   const rate = todayRecord?.utilizationRate ?? 0;
 
   const stats = [
     {
-      label: "TỔNG PHÁT RA",
-      value: todayRecord?.totalIssued ?? 0,
-      unit: "Voucher",
+      label: "COUPON KHOAI TÂY",
+      value: potato,
+      unit: "Coupon khoai tây",
       icon: Ticket,
-      iconBg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20",
-      accentBorder: "border-l-4 border-l-blue-500",
-      badge: "Hôm nay",
-    },
-    {
-      label: "HÓA ĐƠN GHI NHẬN",
-      value: todayRecord?.postedBills ?? 0,
-      unit: "Hóa đơn",
-      icon: FileCheck,
-      iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-500/20",
-      accentBorder: "border-l-4 border-l-emerald-500",
-      badge: "Đã sử dụng",
-    },
-    {
-      label: "VOUCHER ĐÃ HỦY",
-      value: todayRecord?.cancelled ?? 0,
-      unit: "Voucher",
-      icon: XCircle,
       iconBg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 dark:bg-amber-500/20",
       accentBorder: "border-l-4 border-l-amber-500",
-      badge: "Không dùng",
+      badge: "Khoai tây",
+      emoji: "🍟",
     },
     {
-      label: "TỶ LỆ SỬ DỤNG",
-      value: `${rate}%`,
-      unit: "Hiệu suất chuyển đổi",
+      label: "COUPON BEER",
+      value: beer,
+      unit: "Coupon bia",
+      icon: Beer,
+      iconBg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20",
+      accentBorder: "border-l-4 border-l-blue-500",
+      badge: "Đồ uống",
+      emoji: "🍺",
+    },
+    {
+      label: "COUPON HỦY",
+      value: cancelled,
+      unit: "Coupon bị hủy",
+      icon: XCircle,
+      iconBg: "bg-red-500/10 text-red-600 dark:text-red-400 dark:bg-red-500/20",
+      accentBorder: "border-l-4 border-l-red-500",
+      badge: "Đã hủy",
+      emoji: "❌",
+    },
+    {
+      label: "TỔNG COUPON",
+      value: total,
+      unit: `Tỷ lệ quy đổi ${rate}%`,
       icon: Percent,
-      iconBg: "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:bg-purple-500/20",
-      accentBorder: "border-l-4 border-l-purple-500",
-      badge: rate >= 80 ? "Rất tốt" : rate >= 50 ? "Khá" : "Cần tăng trưởng",
+      iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-500/20",
+      accentBorder: "border-l-4 border-l-emerald-500",
+      badge: `${rate}% Quy đổi`,
       isRate: true,
+      emoji: "📊",
     },
   ];
 
