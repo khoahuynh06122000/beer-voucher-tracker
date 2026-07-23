@@ -51,7 +51,15 @@ export function LandingCover() {
       setIsLoggingIn(false);
     },
     onError: (err) => {
-      setAuthError(err.message || "Tên tài khoản hoặc mật khẩu không chính xác.");
+      let msg = err.message || "Tên tài khoản hoặc mật khẩu không chính xác.";
+      if (
+        msg.includes("Unable to transform") ||
+        msg.includes("Unexpected token") ||
+        msg.includes("is not valid JSON")
+      ) {
+        msg = "Không thể kết nối đến hệ thống máy chủ API. Vui lòng kiểm tra lại dịch vụ backend.";
+      }
+      setAuthError(msg);
       setIsLoggingIn(false);
     },
   });
@@ -71,7 +79,15 @@ export function LandingCover() {
       setIsLoggingIn(false);
     },
     onError: (err) => {
-      setAuthError(err.message || "Đăng nhập nhanh thất bại.");
+      let msg = err.message || "Đăng nhập nhanh thất bại.";
+      if (
+        msg.includes("Unable to transform") ||
+        msg.includes("Unexpected token") ||
+        msg.includes("is not valid JSON")
+      ) {
+        msg = "Không thể kết nối đến hệ thống máy chủ API. Vui lòng kiểm tra lại dịch vụ backend.";
+      }
+      setAuthError(msg);
       setIsLoggingIn(false);
     },
   });

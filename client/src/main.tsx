@@ -64,13 +64,26 @@ const trpcClient = trpc.createClient({
         return {};
       },
       async fetch(input, init) {
-        const res = await globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
-
-        if (res.ok) {
-          return res;
+        let res: Response;
+        try {
+          res = await globalThis.fetch(input, {
+            ...(init ?? {}),
+            credentials: "include",
+          });
+        } catch (fetchErr: any) {
+          console.error("[tRPC fetch network error]", fetchErr);
+          const errorObj = {
+            message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối mạng.",
+            code: -32603,
+            data: superjson.serialize({
+              code: "INTERNAL_SERVER_ERROR",
+              httpStatus: 500,
+            }),
+          };
+          return new Response(JSON.stringify([{ error: errorObj }]), {
+            status: 500,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          });
         }
 
         const contentType = res.headers.get("content-type") || "";
@@ -82,23 +95,22 @@ const trpcClient = trpc.createClient({
         const text = await clone.text().catch(() => "");
         console.error("[tRPC non-JSON error response]", res.status, contentType, text.slice(0, 200));
 
-        const mockTrpcErrorResponse = JSON.stringify([
-          {
-            error: {
-              message: `Không thể kết nối đến máy chủ (Mã ${res.status}). Vui lòng thử lại sau.`,
-              code: -32603,
-              data: {
-                json: {
-                  code: "INTERNAL_SERVER_ERROR",
-                  httpStatus: res.status || 500,
-                },
-              },
-            },
-          },
-        ]);
+        const friendlyMessage =
+          res.status === 200
+            ? "Máy chủ API trả về định dạng không hợp lệ. Vui lòng kiểm tra cấu hình máy chủ."
+            : `Không thể kết nối đến máy chủ (Mã lỗi ${res.status}). Vui lòng thử lại sau.`;
 
-        return new Response(mockTrpcErrorResponse, {
-          status: res.status || 500,
+        const errorObj = {
+          message: friendlyMessage,
+          code: -32603,
+          data: superjson.serialize({
+            code: "INTERNAL_SERVER_ERROR",
+            httpStatus: res.status || 500,
+          }),
+        };
+
+        return new Response(JSON.stringify([{ error: errorObj }]), {
+          status: res.status >= 200 && res.status < 300 ? 500 : res.status,
           headers: { "content-type": "application/json; charset=utf-8" },
         });
       },
