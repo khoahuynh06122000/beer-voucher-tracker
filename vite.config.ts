@@ -98,15 +98,63 @@ function vitePluginManusDebugCollector(): Plugin {
     },
 
     configureServer(server: ViteDevServer) {
-      // GET/POST /api/cron/check-missing-reports: Returns daily missing report Adaptive Card for Power Automate / cron jobs
-      server.middlewares.use("/api/cron/check-missing-reports", async (req, res) => {
-        const now = new Date();
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
-        const checkDateFormatted = `${String(yesterday.getDate()).padStart(2, "0")}/${String(yesterday.getMonth() + 1).padStart(2, "0")}/${yesterday.getFullYear()}`;
+      const FIREBASE_PROJECT_ID = "ai-studio-beervoucher-cd7e66ad-a681-4c93-a133-30df0862fdee";
+      const RESTAURANTS = [
+        { id: "lehoibia", name: "Lê Hội Bia" },
+        { id: "nhahang1901", name: "Nhà Hàng 1901" },
+        { id: "beerplaza", name: "Beer Plaza" },
+        { id: "maisonkayser", name: "Maison Kayser" },
+      ];
 
-        const card = {
+      // Helper function to query real Firestore missing status
+      async function getLiveMissingStatus(dateStr?: string) {
+        const now = new Date();
+        let targetDateStr = dateStr;
+        if (!targetDateStr) {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const y = yesterday.getFullYear();
+          const m = String(yesterday.getMonth() + 1).padStart(2, "0");
+          const d = String(yesterday.getDate()).padStart(2, "0");
+          targetDateStr = `${y}-${m}-${d}`;
+        }
+
+        const dateParts = targetDateStr.split("-");
+        const formattedCheckDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+
+        const missing: string[] = [];
+        const updated: Array<{ name: string; postedBills: number }> = [];
+
+        for (const r of RESTAURANTS) {
+          const docId = `${r.id}_${targetDateStr}`;
+          const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/vouchers/${docId}`;
+          try {
+            const resp = await fetch(url);
+            if (resp.ok) {
+              const data = await resp.json();
+              const fields = data.fields || {};
+              const postedBillsVal = Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0);
+              if (postedBillsVal > 0) {
+                updated.push({ name: r.name, postedBills: postedBillsVal });
+                continue;
+              }
+            }
+            missing.push(r.name);
+          } catch (e) {
+            missing.push(r.name);
+          }
+        }
+
+        const missingText = missing.length > 0
+          ? missing.map(m => `• **${m}**: CHƯA cập nhật lần nào`).join("\n\n")
+          : "🟢 Tất cả nhà hàng đã gửi báo cáo đầy đủ!";
+
+        const updatedText = updated.length > 0
+          ? updated.map(u => `• **${u.name}**: Đã cập nhật (${u.postedBills} phiếu)`).join("\n\n")
+          : "Chưa có nhà hàng nào cập nhật.";
+
+        return {
           $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
           type: "AdaptiveCard",
           version: "1.2",
@@ -116,29 +164,31 @@ function vitePluginManusDebugCollector(): Plugin {
               size: "Large",
               weight: "Bolder",
               text: `⚠️ CẢNH BÁO LỆCH CẬP NHẬT KIỂM KÊ — ${timeStr}`,
-              color: "Attention",
+              color: missing.length > 0 ? "Attention" : "Good",
               wrap: true
             },
             {
               type: "TextBlock",
-              text: `📅 **Ngày kiểm tra:** ${checkDateFormatted}  |  ⏰ **Thời gian quét:** ${timeStr}`,
+              text: `📅 **Ngày kiểm tra:** ${formattedCheckDate}  |  ⏰ **Thời gian quét:** ${timeStr}`,
               isSubtle: true,
               wrap: true
             },
             {
               type: "Container",
-              style: "attention",
+              style: missing.length > 0 ? "attention" : "good",
               items: [
                 {
                   type: "TextBlock",
-                  text: `🔴 KHẨN (Nhà hàng chưa cập nhật số liệu ngày ${checkDateFormatted}):`,
+                  text: missing.length > 0
+                    ? `🔴 KHẨN (${missing.length}/${RESTAURANTS.length} nhà hàng chưa gửi số liệu ngày ${formattedCheckDate}):`
+                    : "🟢 HOÀN THÀNH (100% nhà hàng đã cập nhật):",
                   weight: "Bolder",
-                  color: "Attention",
+                  color: missing.length > 0 ? "Attention" : "Good",
                   wrap: true
                 },
                 {
                   type: "TextBlock",
-                  text: "• **Lê Hội Bia**: CHƯA cập nhật lần nào\n\n• **Maison Kayser**: CHƯA cập nhật lần nào",
+                  text: missingText,
                   wrap: true
                 }
               ]
@@ -149,13 +199,13 @@ function vitePluginManusDebugCollector(): Plugin {
               items: [
                 {
                   type: "TextBlock",
-                  text: "🟢 ĐÃ CẬP NHẬT HOÀN TẤT:",
+                  text: `🟢 ĐÃ CẬP NHẬT HOÀN TẤT (${updated.length}/${RESTAURANTS.length}):`,
                   weight: "Bolder",
                   wrap: true
                 },
                 {
                   type: "TextBlock",
-                  text: "• **Beer Plaza**: Đã cập nhật số liệu\n\n• **Nhà Hàng 1901**: Đã cập nhật số liệu",
+                  text: updatedText,
                   wrap: true
                 }
               ]
@@ -169,9 +219,56 @@ function vitePluginManusDebugCollector(): Plugin {
             }
           ]
         };
+      }
 
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(card));
+      // Automated 09:00 AM Daily Scheduler
+      let lastSentDateStr = "";
+      setInterval(async () => {
+        try {
+          const now = new Date();
+          // Check Vietnam local time (UTC+7)
+          const vnOffset = 7 * 60 * 60 * 1000;
+          const vnDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + vnOffset);
+          const hour = vnDate.getHours();
+          const minute = vnDate.getMinutes();
+          const todayStr = `${vnDate.getFullYear()}-${String(vnDate.getMonth() + 1).padStart(2, "0")}-${String(vnDate.getDate()).padStart(2, "0")}`;
+
+          if (hour === 9 && minute === 0 && lastSentDateStr !== todayStr) {
+            lastSentDateStr = todayStr;
+            console.log(`[AUTOMATED CRON 09:00 AM] Triggering daily missing report check for ${todayStr}...`);
+
+            // Fetch saved webhook URL from Firestore
+            const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
+            const settingResp = await fetch(settingUrl);
+            if (settingResp.ok) {
+              const settingData = await settingResp.json();
+              const webhookUrl = settingData.fields?.value?.stringValue;
+              if (webhookUrl) {
+                const cardPayload = await getLiveMissingStatus();
+                await fetch(webhookUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(cardPayload),
+                });
+                console.log(`[AUTOMATED CRON 09:00 AM] Sent alert to MS Teams successfully!`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[AUTOMATED CRON ERROR]", e);
+        }
+      }, 60000); // Check every minute
+
+      // GET/POST /api/cron/check-missing-reports: Returns daily missing report Adaptive Card for Power Automate / cron jobs
+      server.middlewares.use("/api/cron/check-missing-reports", async (req, res) => {
+        try {
+          const card = await getLiveMissingStatus();
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(card));
+        } catch (e: any) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
       });
 
       // POST /api/send-msteams: Server-side proxy for sending MS Teams reports (avoids CORS issues & handles format fallbacks)
