@@ -36,20 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        try {
-          const userProf = await getUserProfile(firebaseUser.uid, firebaseUser.email || undefined);
-          setProfile(userProf);
-          if (userProf) {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProf));
-          }
-        } catch (e) {
-          console.error("Error loading user profile:", e);
-        }
-      } else {
-        // Fallback to local session if present
+    let resolved = false;
+
+    // Safety timeout for iOS Safari / MS Teams Webview where onAuthStateChanged may hang or delay
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        console.warn("Auth initialization timeout reached. Attempting local storage recovery.");
+        resolved = true;
         const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (saved) {
           try {
@@ -64,11 +57,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(null);
           setUser(null);
         }
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    }, 2000);
 
-    return () => unsubscribe();
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (firebaseUser) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
+
+        if (firebaseUser) {
+          setUser(firebaseUser);
+          try {
+            const userProf = await getUserProfile(firebaseUser.uid, firebaseUser.email || undefined);
+            setProfile(userProf);
+            if (userProf) {
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProf));
+            }
+          } catch (e) {
+            console.error("Error loading user profile:", e);
+          }
+        } else {
+          // Fallback to local session if present
+          const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved) as UserProfile;
+              setProfile(parsed);
+              setUser({ uid: parsed.uid, email: parsed.email });
+            } catch (e) {
+              setProfile(null);
+              setUser(null);
+            }
+          } else {
+            setProfile(null);
+            setUser(null);
+          }
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("onAuthStateChanged error:", error);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const formatEmailAndPassword = (input: string, pass: string) => {

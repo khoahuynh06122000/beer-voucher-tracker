@@ -102,13 +102,16 @@ export async function getUserProfile(uid: string, email?: string): Promise<UserP
 
   try {
     const userRef = doc(db, "users", uid);
-    const snap = await getDoc(userRef);
+    const fetchPromise = getDoc(userRef);
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
 
-    if (snap.exists()) {
+    const snap = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (snap && snap.exists()) {
       return snap.data() as UserProfile;
     }
 
-    await setDoc(userRef, defaultProfile).catch(() => {});
+    setDoc(userRef, defaultProfile).catch(() => {});
     return defaultProfile;
   } catch (error) {
     console.error("Error fetching user profile from Firestore:", error);

@@ -48,13 +48,16 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0c10] text-white flex items-center justify-center">
-        <div className="text-center space-y-4">
+      <div className="min-h-screen bg-[#0a0c10] text-white flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm">
           <div className="p-4 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 inline-block animate-bounce shadow-xl shadow-amber-500/20">
             <Beer className="w-10 h-10" />
           </div>
           <p className="text-sm font-semibold text-amber-300 tracking-wide uppercase">
             Đang Tải Hệ Thống Cloud Firestore...
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Đang mở cổng kết nối dữ liệu bảo mật trên Safari / Teams...
           </p>
         </div>
       </div>
