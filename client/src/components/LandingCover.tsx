@@ -366,17 +366,17 @@ export function LandingCover() {
                 Lễ Hội Bia Sun World Ba Na Hills • B'Acoustic & Beer Plaza
               </div>
 
-              <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-[1.15] mb-6">
-                Quản lý voucher{" "}
-                <span className="relative inline-block text-amber-400">
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.15] mb-6">
+                <span className="text-white drop-shadow-sm">Quản lý voucher </span>
+                <span className="relative inline-block bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 bg-clip-text text-transparent drop-shadow-[0_4px_16px_rgba(245,158,11,0.35)]">
                   bia Ba Na Hills
-                  <span className="absolute bottom-1 left-0 w-full h-[6px] bg-amber-500/40 rounded-full -z-10" />
+                  <span className="absolute -bottom-1 left-0 w-full h-[4px] bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/20 rounded-full" />
                 </span>
-                .
+                <span className="text-amber-400">.</span>
               </h1>
 
               <p className="text-base sm:text-lg text-gray-300 max-w-xl leading-relaxed mb-8 font-normal">
-                Hệ thống chuyên dụng phục vụ các nhà hàng Beer Plaza, 1901 Làng Pháp &amp; Quảng Trường Lễ Hội Ba Na Hills. Tự động kiểm tra công thức quy đổi, phát hành &amp; báo cáo đồng bộ Cloud Firestore.
+                Giải pháp quản lý, ghi nhận và báo cáo hiệu suất quy đổi voucher bia hàng ngày dành cho hệ thống nhà hàng tại Sun World Ba Na Hills.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start w-full max-w-md">
