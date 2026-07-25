@@ -104,6 +104,104 @@ export async function sendMSTeamsReport(
     assessment = `Tỷ lệ quy đổi đạt **${rate}%**, chưa đạt mức tối ưu. Khuyến nghị nhân viên chủ động nhắc khách về ưu đãi voucher.`;
   }
 
+  const adaptiveCardContent = {
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    type: "AdaptiveCard",
+    version: "1.2",
+    body: [
+      {
+        type: "TextBlock",
+        size: "ExtraLarge",
+        weight: "Bolder",
+        text: `📊 DASHBOARD VOUCHER — ${record.restaurantName.toUpperCase()}`,
+        color: rate >= 80 ? "Good" : rate >= 50 ? "Warning" : "Attention",
+        wrap: true
+      },
+      {
+        type: "TextBlock",
+        text: `📅 **Ngày:** ${record.date}  |  👤 **Người báo cáo:** ${record.createdBy || "Hệ thống"}`,
+        isSubtle: true,
+        wrap: true
+      },
+      {
+        type: "Container",
+        style: "emphasis",
+        items: [
+          {
+            type: "TextBlock",
+            text: `TỶ LỆ KPI: ${progressBar}  ${rate}% (${badgeText})`,
+            weight: "Bolder",
+            color: badgeColor,
+            wrap: true
+          }
+        ]
+      },
+      {
+        type: "ColumnSet",
+        columns: [
+          {
+            type: "Column",
+            width: "1",
+            items: [
+              { type: "TextBlock", text: "Phát Hành", size: "Small", isSubtle: true },
+              { type: "TextBlock", text: `${totalIssued}`, size: "Large", weight: "Bolder" }
+            ]
+          },
+          {
+            type: "Column",
+            width: "1",
+            items: [
+              { type: "TextBlock", text: "Thu Về (Bill)", size: "Small", isSubtle: true },
+              { type: "TextBlock", text: `${postedBills}`, size: "Large", weight: "Bolder", color: "Good" }
+            ]
+          },
+          {
+            type: "Column",
+            width: "1",
+            items: [
+              { type: "TextBlock", text: "Hủy Bỏ", size: "Small", isSubtle: true },
+              { type: "TextBlock", text: `${cancelled}`, size: "Large", weight: "Bolder", color: "Attention" }
+            ]
+          }
+        ]
+      },
+      {
+        type: "Container",
+        style: "emphasis",
+        items: [
+          {
+            type: "TextBlock",
+            text: "💡 ĐÁNH GIÁ & PHÂN TÍCH TỰ ĐỘNG",
+            weight: "Bolder"
+          },
+          {
+            type: "TextBlock",
+            text: assessment,
+            wrap: true
+          }
+        ]
+      }
+    ],
+    actions: [
+      {
+        type: "Action.OpenUrl",
+        title: "🌐 Mở Live Dashboard Báo Cáo",
+        url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+      }
+    ]
+  };
+
+  const adaptiveCardPayload = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        contentUrl: null,
+        content: adaptiveCardContent
+      }
+    ]
+  };
+
   const messageCardPayload = {
     "@type": "MessageCard",
     "@context": "http://schema.org/extensions",
@@ -144,18 +242,31 @@ export async function sendMSTeamsReport(
     ]
   };
 
-  try {
-    const res = await fetch(webhookUrl.trim(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(messageCardPayload),
-    });
+  const url = webhookUrl.trim();
+  const isPowerAutomate =
+    url.includes("logic.azure.com") ||
+    url.includes("powerautomate") ||
+    url.includes("powerplatform") ||
+    url.includes("flow.microsoft.com");
 
-    if (res.ok || res.status === 200 || res.status === 202) {
-      return { success: true, message: "Đã gửi báo cáo & phân tích tự động lên MS Teams thành công!" };
+  const payloadsToTry = isPowerAutomate
+    ? [adaptiveCardContent, adaptiveCardPayload]
+    : [messageCardPayload, adaptiveCardContent, adaptiveCardPayload];
+
+  for (const payload of payloadsToTry) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok || res.status === 200 || res.status === 202) {
+        return { success: true, message: "Đã gửi báo cáo & phân tích tự động lên MS Teams thành công!" };
+      }
+    } catch (err: any) {
+      console.warn("Direct fetch error:", err);
     }
-  } catch (err: any) {
-    return { success: false, message: "Không thể kết nối trực tiếp đến MS Teams: " + (err.message || String(err)) };
   }
 
   return { success: false, message: "Không thể gửi báo cáo lên MS Teams. Vui lòng kiểm tra lại URL Webhook." };

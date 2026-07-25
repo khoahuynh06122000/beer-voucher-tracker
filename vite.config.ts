@@ -391,9 +391,20 @@ function vitePluginManusDebugCollector(): Plugin {
             };
 
             const url = webhookUrl.trim();
-            const payloadsToTry = url.includes("logic.azure.com") || url.includes("powerautomate")
-              ? [adaptiveCardPayload, messageCardPayload, simpleTextPayload]
-              : [messageCardPayload, adaptiveCardPayload, simpleTextPayload];
+            const isPowerAutomate =
+              url.includes("logic.azure.com") ||
+              url.includes("powerautomate") ||
+              url.includes("powerplatform") ||
+              url.includes("flow.microsoft.com");
+
+            // Direct Adaptive Card object (some Power Automate workflows expect raw AdaptiveCard body without message wrapper)
+            const directAdaptiveCardPayload = adaptiveCardPayload.attachments[0].content;
+
+            // Power Automate Workflows Workflows expect a raw Adaptive Card JSON object at the root level!
+            // When sent as direct Adaptive Card JSON, Power Automate's "Post card in a chat or channel" action renders the card UI natively.
+            const payloadsToTry = isPowerAutomate
+              ? [directAdaptiveCardPayload, adaptiveCardPayload, simpleTextPayload]
+              : [messageCardPayload, directAdaptiveCardPayload, adaptiveCardPayload, simpleTextPayload];
 
             let lastError = "";
             let success = false;
