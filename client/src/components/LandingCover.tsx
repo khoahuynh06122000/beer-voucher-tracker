@@ -19,7 +19,7 @@ import {
 
 export function LandingCover() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(true);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
 
@@ -294,7 +294,7 @@ export function LandingCover() {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#06070a] text-white selection:bg-amber-500 selection:text-black overflow-x-hidden font-sans">
+    <div className="relative min-h-screen flex flex-col justify-between bg-[#06070a] text-white selection:bg-amber-500 selection:text-black overflow-x-hidden font-sans">
       {/* Cinematic Photorealistic Submerged Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         {/* Layer 1: High-resolution Ba Na Hills Beer Festival Photo Backdrop */}
@@ -356,8 +356,8 @@ export function LandingCover() {
         </div>
       </header>
 
-      <main className="relative z-20 pt-28 pb-20">
-        <section className="container max-w-6xl mx-auto px-6 pt-8 pb-16">
+      <main className="relative z-20 pt-28 pb-16 flex-grow flex items-center">
+        <section className="container max-w-6xl mx-auto px-6 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Left Content */}
             <div className="lg:col-span-7 text-center lg:text-left flex flex-col items-center lg:items-start">
@@ -553,13 +553,13 @@ export function LandingCover() {
         </div>
       )}
 
-      <footer className="relative z-20 border-t border-white/10 bg-black/60 py-8 text-center text-xs text-gray-500">
-        <div className="container max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="relative z-20 border-t border-amber-500/20 bg-black/80 backdrop-blur-md py-5 text-xs text-gray-400 mt-auto">
+        <div className="container max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Beer className="w-4 h-4 text-amber-500" />
-            <span className="font-bold text-gray-300">Beer Voucher Tracker</span>
+            <Beer className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+            <span className="font-bold text-amber-300">Sun World Ba Na Hills • Beer Voucher Tracker</span>
           </div>
-          <p>© 2026 Beer Voucher Analytics System. Pure Frontend Firebase Architecture.</p>
+          <p>© 2026 Sun World Ba Na Hills • Lễ Hội Bia Sun KraftBeer Real-Time Cloud Engine</p>
         </div>
       </footer>
     </div>
