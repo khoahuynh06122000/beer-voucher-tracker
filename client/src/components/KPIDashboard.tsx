@@ -601,26 +601,96 @@ export function KPIDashboard({
         })}
       </div>
 
-      {/* Department Trend & Daily Fluctuation Cards Section */}
-      <div className="space-y-4 pt-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-amber-500" />
+      {/* Department Trend & Daily Fluctuation Cards Section (FP&A Standard) */}
+      <div className="space-y-5 pt-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              <BarChart2 className="w-5 h-5" />
+            </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight">
-                Phân Tích Biến Động Theo Ngày Của Các Bộ Phận
+              <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight flex items-center gap-2">
+                <span>Báo Cáo Biến Động Vận Hành &amp; Quy Đổi Voucher (FP&amp;A Standard)</span>
+                <Sparkles className="w-4 h-4 text-amber-500" />
               </h3>
               <p className="text-xs text-muted-foreground">
-                So sánh số liệu phát hành, quy đổi và tỷ lệ tăng/giảm qua từng ngày (7 ngày gần nhất)
+                Phân tích Ma trận Chuỗi Thời Gian (Time-Series Matrix) &amp; Biến động Ngày-qua-Ngày (DoD Variance)
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full self-start sm:self-auto">
-            {departmentFluctuations.deptSummaries.length} Bộ Phận Hoạt Động
+          <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl self-start md:self-auto shrink-0">
+            {departmentFluctuations.deptSummaries.length} Bộ Phận Trong Kỳ
           </span>
         </div>
 
-        {/* 4 Department Summary Cards */}
+        {/* FP&A Executive Commentary & Key Insight Highlights */}
+        <Card className="p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/[0.04] via-card to-card shadow-xs space-y-3">
+          <div className="flex items-center gap-2 text-xs font-black text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Đánh Giá Báo Cáo Điều Hành FP&amp;A (Executive Highlights)</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-background border border-border/70 space-y-1">
+              <span className="font-extrabold text-amber-600 dark:text-amber-400 block text-[11px]">
+                1. Động Lực Khối Lượng (Volume Driver)
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {(() => {
+                  const sortedDepts = [...departmentFluctuations.deptSummaries].sort(
+                    (a, b) => b.totalIssued - a.totalIssued
+                  );
+                  if (sortedDepts.length === 0) return "Chưa có dữ liệu trong kỳ.";
+                  const topDept = sortedDepts[0];
+                  return `${topDept.meta.name} đóng góp khối lượng phát hành lớn nhất với ${topDept.totalIssued.toLocaleString("vi-VN")} vé (trung bình ${topDept.avgDaily.toLocaleString("vi-VN")} vé/ngày).`;
+                })()}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background border border-border/70 space-y-1">
+              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block text-[11px]">
+                2. Hiệu Quả Quy Đổi (Redemption Rate)
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {(() => {
+                  const sortedRate = [...departmentFluctuations.deptSummaries].sort(
+                    (a, b) => b.overallRate - a.overallRate
+                  );
+                  if (sortedRate.length === 0) return "Chưa có dữ liệu trong kỳ.";
+                  const bestRate = sortedRate[0];
+                  return `${bestRate.meta.name} dẫn đầu tỷ lệ chuyển đổi đạt ${bestRate.overallRate}% (thực thu ${bestRate.totalPosted.toLocaleString("vi-VN")} hóa đơn). Tỷ lệ thất thoát/hủy toàn bộ phận duy trì thấp.`;
+                })()}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background border border-border/70 space-y-1">
+              <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-[11px]">
+                3. Xu Hướng Biến Động DoD (Day-over-Day Trend)
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {(() => {
+                  const latestDate = departmentFluctuations.allDailyFlat[0]?.date || "";
+                  const latestItems = departmentFluctuations.allDailyFlat.filter(
+                    (i) => i.date === latestDate && !i.isFirstDay
+                  );
+                  if (latestItems.length === 0)
+                    return "Số liệu ổn định qua các ngày khảo sát.";
+                  const maxDrop = [...latestItems].sort((a, b) => a.diff - b.diff)[0];
+                  const maxUp = [...latestItems].sort((a, b) => b.diff - a.diff)[0];
+                  if (maxDrop && maxDrop.diff < 0) {
+                    return `Ngày ${latestDate}: ${maxDrop.restaurantName} điều chỉnh giảm ${Math.abs(maxDrop.diff).toLocaleString("vi-VN")} vé (${maxDrop.pctChange}%) so với ngày trước.`;
+                  }
+                  if (maxUp && maxUp.diff > 0) {
+                    return `Ngày ${latestDate}: ${maxUp.restaurantName} tăng trưởng +${maxUp.diff.toLocaleString("vi-VN")} vé (+${maxUp.pctChange}%) so với ngày trước.`;
+                  }
+                  return `Ngày ${latestDate}: Biến động phát hành ở mức cân bằng giữa các nhà hàng.`;
+                })()}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* 4 Department Overview Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {departmentFluctuations.deptSummaries.map((dept) => {
             const hasData = dept.totalIssued > 0;
@@ -632,7 +702,7 @@ export function KPIDashboard({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div
-                      className={`w-3 h-3 rounded-full bg-gradient-to-r ${dept.meta.color}`}
+                      className={`w-3.5 h-3.5 rounded-full bg-gradient-to-r ${dept.meta.color}`}
                     />
                     <h4 className="font-extrabold text-sm text-foreground">
                       {dept.meta.name}
@@ -640,7 +710,7 @@ export function KPIDashboard({
                   </div>
                   {hasData && (
                     <span
-                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${
+                      className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
                         dept.periodGrowth > 0
                           ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                           : dept.periodGrowth < 0
@@ -661,32 +731,38 @@ export function KPIDashboard({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                  <div className="p-2.5 rounded-xl bg-background border border-border/60">
                     <span className="text-[10px] text-muted-foreground font-semibold block">
-                      Tổng Phát Ra (7D)
+                      Tổng Phát Ra
                     </span>
                     <span className="text-base font-black text-foreground">
                       {dept.totalIssued.toLocaleString("vi-VN")}
                     </span>
                   </div>
-                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                  <div className="p-2.5 rounded-xl bg-background border border-border/60">
                     <span className="text-[10px] text-muted-foreground font-semibold block">
-                      TB / Ngày
+                      Đã Quy Đổi
                     </span>
-                    <span className="text-base font-black text-amber-600 dark:text-amber-400">
-                      {dept.avgDaily.toLocaleString("vi-VN")}
+                    <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                      {dept.totalPosted.toLocaleString("vi-VN")}
                     </span>
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-xs">
+                <div className="space-y-1.5 text-xs pt-1 border-t border-border/50">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground">Tỷ Lệ Quy Đổi:</span>
+                    <span className="text-muted-foreground font-medium">Tỷ Lệ Quy Đổi:</span>
                     <span className="font-extrabold text-foreground">{dept.overallRate}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground font-medium">Trung Bình Ngày:</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      {dept.avgDaily.toLocaleString("vi-VN")} vé/ngày
+                    </span>
                   </div>
                   {dept.peakRecord && (
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">Ngày Cao Điểm:</span>
+                      <span className="text-muted-foreground font-medium">Đỉnh Phát Hành:</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         {dept.peakRecord.date} ({dept.peakRecord.totalIssued?.toLocaleString("vi-VN")})
                       </span>
@@ -698,16 +774,153 @@ export function KPIDashboard({
           })}
         </div>
 
-        {/* Daily Fluctuation Timeline Table */}
+        {/* Primary FP&A Pivot Matrix Table (Chuỗi Thời Gian Theo Nhà Hàng) */}
+        <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+            <div>
+              <h4 className="text-sm sm:text-base font-extrabold text-foreground flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-amber-500" />
+                <span>Bảng Ma Trận Khối Lượng Phát Hành &amp; Quy Đổi Theo Nhà Hàng (FP&amp;A Time-Series Matrix)</span>
+              </h4>
+              <p className="text-[11px] text-muted-foreground">
+                Mỗi bộ phận được nhóm riêng theo dòng, các cột thể hiện chuỗi thời gian ngày thực hiện
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-muted-foreground bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-lg border border-amber-500/20">
+                Đơn vị: Vé / Coupon
+              </span>
+            </div>
+          </div>
+
+          {/* Pivot Table Rendering */}
+          <div className="overflow-x-auto rounded-xl border border-border/80">
+            {(() => {
+              // Extract all unique dates sorted ascending
+              const uniqueDates = Array.from(
+                new Set(departmentFluctuations.allDailyFlat.map((d) => d.date))
+              ).sort();
+
+              return (
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-muted/70 text-muted-foreground uppercase text-[10px] font-extrabold tracking-wider border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3 min-w-[150px]">Bộ Phận / Nhà Hàng</th>
+                      <th className="px-3 py-3 min-w-[90px]">Chỉ Số FP&amp;A</th>
+                      {uniqueDates.map((date) => (
+                        <th key={date} className="px-3 py-3 text-right min-w-[95px]">
+                          {date}
+                        </th>
+                      ))}
+                      <th className="px-3.5 py-3 text-right min-w-[110px] bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                        Tổng Trong Kỳ
+                      </th>
+                      <th className="px-3.5 py-3 text-center min-w-[110px] bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                        Hiệu Suất TB
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/70 font-semibold">
+                    {departmentFluctuations.deptSummaries.map((dept) => {
+                      // Map date to record
+                      const dateMap: Record<string, (typeof departmentFluctuations.allDailyFlat)[0]> = {};
+                      dept.dailyList.forEach((item) => {
+                        dateMap[item.date] = item;
+                      });
+
+                      return (
+                        <tr
+                          key={dept.deptId}
+                          className="hover:bg-amber-500/5 transition-colors group"
+                        >
+                          <td className="px-4 py-3 font-extrabold text-foreground align-middle border-r border-border/50">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r ${dept.meta.color}`}
+                              />
+                              <span className={dept.meta.textCol}>{dept.meta.name}</span>
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-3 font-bold text-muted-foreground align-middle border-r border-border/50 space-y-1 text-[11px]">
+                            <div className="text-foreground font-extrabold">Phát Hành</div>
+                            <div className="text-blue-600 dark:text-blue-400">Đã Quy Đổi</div>
+                            <div className="text-emerald-600 dark:text-emerald-400">% Chuyển Đổi</div>
+                          </td>
+
+                          {uniqueDates.map((date) => {
+                            const rec = dateMap[date];
+                            if (!rec) {
+                              return (
+                                <td
+                                  key={date}
+                                  className="px-3 py-3 text-right text-muted-foreground/40 align-middle border-r border-border/30 text-[11px]"
+                                >
+                                  -
+                                </td>
+                              );
+                            }
+
+                            return (
+                              <td
+                                key={date}
+                                className="px-3 py-3 text-right align-middle border-r border-border/30 space-y-1 text-[11px]"
+                              >
+                                <div className="font-black text-foreground">
+                                  {rec.issued.toLocaleString("vi-VN")}
+                                </div>
+                                <div className="font-bold text-blue-600 dark:text-blue-400">
+                                  {rec.posted.toLocaleString("vi-VN")}
+                                </div>
+                                <div>
+                                  <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-extrabold text-[10px]">
+                                    {rec.rate}%
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })}
+
+                          <td className="px-3.5 py-3 text-right align-middle bg-amber-500/[0.03] border-r border-border/50 space-y-1 text-[11px]">
+                            <div className="font-black text-foreground text-xs">
+                              {dept.totalIssued.toLocaleString("vi-VN")}
+                            </div>
+                            <div className="font-bold text-blue-600 dark:text-blue-400">
+                              {dept.totalPosted.toLocaleString("vi-VN")}
+                            </div>
+                            <div className="text-muted-foreground text-[10px]">
+                              Thất thoát: {dept.totalCancelled.toLocaleString("vi-VN")}
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-3 text-center align-middle bg-amber-500/[0.03] space-y-1">
+                            <span className="inline-block px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-black text-xs border border-emerald-500/30">
+                              {dept.overallRate}%
+                            </span>
+                            <div className="text-[10px] text-muted-foreground font-semibold">
+                              TB {dept.avgDaily.toLocaleString("vi-VN")}/ngày
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        </Card>
+
+        {/* Secondary Detailed Variance Table (Phân Tích Biến Động DoD Ngày-qua-Ngày) */}
         <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
             <div>
               <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-amber-500" />
-                <span>Chi Tiết Biến Động Số Vé Phát Ra Theo Ngày &amp; Bộ Phận</span>
+                <TrendingUp className="w-4 h-4 text-amber-500" />
+                <span>Bảng So Sánh Chi Tiết Biến Động Ngày Liền Trước (Day-over-Day Variance)</span>
               </h4>
               <p className="text-[11px] text-muted-foreground">
-                So sánh số phát hành và biến động % tăng/giảm so với ngày liền trước
+                So sánh chênh lệch tuyệt đối ($\Delta$) và chênh lệch tương đối ($\%\Delta$) từng ngày của từng nhà hàng
               </p>
             </div>
           </div>
@@ -718,11 +931,11 @@ export function KPIDashboard({
                 <tr>
                   <th className="px-3.5 py-2.5">Ngày</th>
                   <th className="px-3.5 py-2.5">Bộ Phận / Nhà Hàng</th>
-                  <th className="px-3.5 py-2.5 text-right">Tổng Phát Ra</th>
+                  <th className="px-3.5 py-2.5 text-right">Phát Hành</th>
                   <th className="px-3.5 py-2.5 text-right">Đã Quy Đổi</th>
                   <th className="px-3.5 py-2.5 text-right">Hủy</th>
                   <th className="px-3.5 py-2.5 text-center">Tỷ Lệ Quy Đổi</th>
-                  <th className="px-3.5 py-2.5 text-right">Biến Động So Với Ngày Trước</th>
+                  <th className="px-3.5 py-2.5 text-right">Tăng/Giảm So Với Ngày Trước</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60 font-semibold">
@@ -741,9 +954,7 @@ export function KPIDashboard({
                           {item.date}
                         </td>
                         <td className="px-3.5 py-2.5 whitespace-nowrap">
-                          <span
-                            className={`font-extrabold ${meta.textCol}`}
-                          >
+                          <span className={`font-extrabold ${meta.textCol}`}>
                             {meta.name}
                           </span>
                         </td>
@@ -763,8 +974,8 @@ export function KPIDashboard({
                         </td>
                         <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
                           {item.isFirstDay ? (
-                            <span className="text-[11px] text-muted-foreground font-normal">
-                              Mốc bắt đầu
+                            <span className="text-[11px] text-muted-foreground font-normal italic">
+                              Mốc bắt đầu (Baseline)
                             </span>
                           ) : item.diff > 0 ? (
                             <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg text-[11px]">
