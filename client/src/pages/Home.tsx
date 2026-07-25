@@ -197,7 +197,7 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className="relative z-10 container py-8 flex-1 space-y-8">
+      <main className="relative z-10 container py-4 sm:py-8 pb-28 md:pb-8 flex-1 space-y-6 sm:space-y-8">
         {/* Admin Comprehensive Analytics View */}
         {activeTab === "analytics" && (
           <div className="space-y-8">
@@ -319,8 +319,34 @@ export default function Home() {
         )}
       </main>
 
+      {/* Mobile Bottom Navigation Dock (Optimized for iPhone 13 Pro Max & Smartphones) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border/80 px-3 py-2 shadow-2xl flex items-center justify-around">
+        {navTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all active:scale-95 ${
+                isActive
+                  ? "text-amber-500 font-extrabold"
+                  : "text-muted-foreground hover:text-foreground font-medium"
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${isActive ? "bg-amber-500/15 text-amber-500" : ""}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] tracking-tight truncate max-w-[80px]">
+                {tab.id === "analytics" ? "Phân Tích" : tab.id === "dashboard" ? "Tổng Quan" : tab.id === "entry" ? "Nhập Liệu" : "Lịch Sử"}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* Footer */}
-      <footer className="relative z-10 border-t border-border/60 bg-card py-6 text-center text-xs text-muted-foreground">
+      <footer className="relative z-10 border-t border-border/60 bg-card py-6 mb-16 md:mb-0 text-center text-xs text-muted-foreground">
         <div className="flex items-center justify-center gap-2 mb-1 text-amber-600 dark:text-amber-400 font-semibold">
           <Beer className="w-4 h-4" />
           <span>Sun World Ba Na Hills • Beer Voucher Tracker</span>

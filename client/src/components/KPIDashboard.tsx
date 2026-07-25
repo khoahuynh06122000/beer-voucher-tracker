@@ -38,12 +38,12 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="p-6 rounded-xl border border-border bg-card">
-            <Skeleton className="h-4 w-28 mb-4" />
-            <Skeleton className="h-8 w-20 mb-2" />
-            <Skeleton className="h-3 w-36" />
+          <Card key={i} className="p-4 sm:p-6 rounded-xl border border-border bg-card">
+            <Skeleton className="h-4 w-20 sm:w-28 mb-3" />
+            <Skeleton className="h-7 w-16 sm:w-20 mb-2" />
+            <Skeleton className="h-3 w-24 sm:w-36" />
           </Card>
         ))}
       </div>
@@ -167,46 +167,46 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card
               key={stat.label}
-              className={`p-6 rounded-xl border border-border/70 bg-card shadow-sm hover:shadow-md transition-all duration-200 ${stat.accentBorder}`}
+              className={`p-3.5 sm:p-5 rounded-2xl border border-border/70 bg-card shadow-sm hover:shadow-md transition-all duration-200 ${stat.accentBorder}`}
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[10px] sm:text-xs font-black tracking-wider text-muted-foreground uppercase truncate">
                   {stat.label}
                 </span>
-                <div className={`p-2.5 rounded-lg ${stat.iconBg}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`p-2 rounded-xl shrink-0 ${stat.iconBg}`}>
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               </div>
 
-              <div className="flex items-baseline justify-between mb-2">
-                <span className="text-3xl font-extrabold tracking-tight text-foreground">
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                   {stat.value.toLocaleString("vi-VN")}
                 </span>
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border/50">
+                <span className="text-[9px] sm:text-xs font-bold px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border/50 truncate max-w-[80px] sm:max-w-none">
                   {stat.badge}
                 </span>
               </div>
 
               {stat.isRate ? (
-                <div className="space-y-1.5 mt-3">
-                  <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                <div className="space-y-1 mt-2">
+                  <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
                     <div
                       className="bg-emerald-500 h-full rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(100, Math.max(0, rate))}%` }}
                     />
                   </div>
-                  <p className="text-[11px] text-muted-foreground font-medium text-right">
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground font-medium text-right truncate">
                     {stat.unit}
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground font-medium mt-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mt-1 truncate">
                   {stat.unit}
                 </p>
               )}

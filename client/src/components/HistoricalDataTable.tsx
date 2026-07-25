@@ -117,24 +117,24 @@ export function HistoricalDataTable() {
   };
 
   return (
-    <Card className="p-6 md:p-8 rounded-xl border border-border/80 bg-card shadow-sm space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-border/60">
+    <Card className="p-4 sm:p-6 md:p-8 rounded-2xl border border-border/80 bg-card shadow-sm space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border/60">
         <div>
-          <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <History className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            Lịch Sử Ghi Nhận Voucher
+          <h3 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
+            <History className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>Lịch Sử Ghi Nhận Voucher</span>
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
             Tra cứu toàn bộ lịch sử voucher đã ghi nhận theo khoảng thời gian tùy chỉnh trên Firestore
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             onClick={() => handleSetLastDays(7)}
             variant="outline"
             size="sm"
-            className="text-xs font-semibold rounded-lg"
+            className="text-xs font-semibold rounded-xl h-9"
           >
             7 ngày
           </Button>
@@ -142,7 +142,7 @@ export function HistoricalDataTable() {
             onClick={() => handleSetLastDays(14)}
             variant="outline"
             size="sm"
-            className="text-xs font-semibold rounded-lg"
+            className="text-xs font-semibold rounded-xl h-9"
           >
             14 ngày
           </Button>
@@ -150,7 +150,7 @@ export function HistoricalDataTable() {
             onClick={() => handleSetLastDays(30)}
             variant="outline"
             size="sm"
-            className="text-xs font-semibold rounded-lg"
+            className="text-xs font-semibold rounded-xl h-9"
           >
             30 ngày
           </Button>
@@ -158,7 +158,7 @@ export function HistoricalDataTable() {
             onClick={handleExportCSV}
             variant="outline"
             size="sm"
-            className="text-xs font-semibold gap-1.5 rounded-lg border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+            className="text-xs font-bold gap-1.5 rounded-xl h-9 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Xuất CSV</span>
@@ -167,14 +167,14 @@ export function HistoricalDataTable() {
             onClick={loadData}
             variant="ghost"
             size="sm"
-            className="text-xs rounded-lg text-muted-foreground hover:text-foreground"
+            className="text-xs rounded-xl h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 max-w-lg gap-4">
+      <div className="grid grid-cols-2 max-w-lg gap-3">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
             Từ ngày
@@ -183,7 +183,7 @@ export function HistoricalDataTable() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-lg bg-background border border-border text-foreground font-medium text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+            className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 touch-manipulation"
           />
         </div>
         <div>
@@ -194,7 +194,7 @@ export function HistoricalDataTable() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-lg bg-background border border-border text-foreground font-medium text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+            className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 touch-manipulation"
           />
         </div>
       </div>
