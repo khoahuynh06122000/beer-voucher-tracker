@@ -24,9 +24,18 @@ const RESTAURANT_OPTIONS = [
 
 export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPIDashboardProps) {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const userRestaurantId = user?.username || user?.id || "lehoibia";
+
   const [selectedRestId, setSelectedRestId] = useState<string>(() => {
-    return user?.username && user.username !== "admin" ? user.username : "all";
+    return isAdmin ? "all" : userRestaurantId;
   });
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSelectedRestId(userRestaurantId);
+    }
+  }, [user, isAdmin, userRestaurantId]);
   const [todayRecord, setTodayRecord] = useState<VoucherRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -72,7 +81,6 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
   const rate = todayRecord?.utilizationRate ?? 0;
 
   const isMaisonKayser = selectedRestId === "maisonkayser" || todayRecord?.restaurantId === "maisonkayser";
-  const isAdmin = isAll || user?.role === "admin";
 
   let stats;
 
@@ -213,17 +221,23 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
 
           <div className="flex items-center gap-1.5 ml-0 sm:ml-3 border-l border-amber-500/30 pl-3">
             <span className="font-semibold text-foreground">Xem số liệu:</span>
-            <select
-              value={selectedRestId}
-              onChange={(e) => setSelectedRestId(e.target.value)}
-              className="px-2.5 py-1 rounded-xl bg-background border border-amber-500/30 text-foreground font-extrabold shadow-xs text-xs outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
-            >
-              {RESTAURANT_OPTIONS.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            {isAdmin ? (
+              <select
+                value={selectedRestId}
+                onChange={(e) => setSelectedRestId(e.target.value)}
+                className="px-2.5 py-1 rounded-xl bg-background border border-amber-500/30 text-foreground font-extrabold shadow-xs text-xs outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
+              >
+                {RESTAURANT_OPTIONS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold text-xs">
+                {RESTAURANT_OPTIONS.find((r) => r.id === userRestaurantId)?.name || userRestaurantId}
+              </span>
+            )}
           </div>
         </div>
 

@@ -28,7 +28,18 @@ const RESTAURANT_OPTIONS = [
 
 export function HistoricalDataTable() {
   const { user } = useAuth();
-  const [selectedFilterRestaurant, setSelectedFilterRestaurant] = useState<string>("all");
+  const isAdmin = user?.role === "admin";
+  const userRestaurantId = user?.username || user?.id || "lehoibia";
+
+  const [selectedFilterRestaurant, setSelectedFilterRestaurant] = useState<string>(() => {
+    return user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
+  });
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSelectedFilterRestaurant(userRestaurantId);
+    }
+  }, [user, isAdmin, userRestaurantId]);
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -220,17 +231,23 @@ export function HistoricalDataTable() {
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
             Nhà hàng
           </label>
-          <select
-            value={selectedFilterRestaurant}
-            onChange={(e) => setSelectedFilterRestaurant(e.target.value)}
-            className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 touch-manipulation cursor-pointer"
-          >
-            {RESTAURANT_OPTIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+          {isAdmin ? (
+            <select
+              value={selectedFilterRestaurant}
+              onChange={(e) => setSelectedFilterRestaurant(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 touch-manipulation cursor-pointer"
+            >
+              {RESTAURANT_OPTIONS.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="w-full h-11 px-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 font-extrabold text-sm flex items-center shadow-xs">
+              {RESTAURANT_OPTIONS.find((r) => r.id === userRestaurantId)?.name || userRestaurantId}
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
