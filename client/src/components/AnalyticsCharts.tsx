@@ -46,20 +46,54 @@ const RESTAURANTS = [
   { id: "maisonkayser", name: "Maison Kayser" },
 ];
 
-export function AnalyticsCharts() {
+interface AnalyticsChartsProps {
+  startDate?: string;
+  endDate?: string;
+  selectedRestaurant?: string;
+  onStartDateChange?: (date: string) => void;
+  onEndDateChange?: (date: string) => void;
+  onRestaurantChange?: (restId: string) => void;
+}
+
+export function AnalyticsCharts({
+  startDate: propStartDate,
+  endDate: propEndDate,
+  selectedRestaurant: propSelectedRestaurant,
+  onStartDateChange,
+  onEndDateChange,
+  onRestaurantChange,
+}: AnalyticsChartsProps = {}) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const [selectedRestaurant, setSelectedRestaurant] = useState<string>("all");
-  
-  // Default range set to 7 days
-  const [startDate, setStartDate] = useState<string>(() => {
+  const [internalRestaurant, setInternalRestaurant] = useState<string>("all");
+
+  const [internalStartDate, setInternalStartDate] = useState<string>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
     return getLocalDateString(date);
   });
 
-  const [endDate, setEndDate] = useState<string>(() => getLocalDateString());
+  const [internalEndDate, setInternalEndDate] = useState<string>(() => getLocalDateString());
+
+  const startDate = propStartDate ?? internalStartDate;
+  const endDate = propEndDate ?? internalEndDate;
+  const selectedRestaurant = propSelectedRestaurant ?? internalRestaurant;
+
+  const handleUpdateStartDate = (val: string) => {
+    setInternalStartDate(val);
+    if (onStartDateChange) onStartDateChange(val);
+  };
+
+  const handleUpdateEndDate = (val: string) => {
+    setInternalEndDate(val);
+    if (onEndDateChange) onEndDateChange(val);
+  };
+
+  const handleUpdateRestaurant = (val: string) => {
+    setInternalRestaurant(val);
+    if (onRestaurantChange) onRestaurantChange(val);
+  };
 
   const [records, setRecords] = useState<VoucherRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -88,8 +122,10 @@ export function AnalyticsCharts() {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - days);
-    setStartDate(getLocalDateString(start));
-    setEndDate(getLocalDateString(end));
+    const startStr = getLocalDateString(start);
+    const endStr = getLocalDateString(end);
+    handleUpdateStartDate(startStr);
+    handleUpdateEndDate(endStr);
   };
 
   // Group daily totals for combined chart
@@ -125,10 +161,13 @@ export function AnalyticsCharts() {
     const bakery = record.bakeryCoupons || 0;
     const potato = record.potatoCoupons ?? (bakery > 0 ? 0 : Math.round((record.postedBills || 0) / 2));
     const beer = record.beerCoupons ?? (bakery > 0 ? 0 : ((record.postedBills || 0) - potato));
+    const cancelled = record.cancelled || 0;
+    const posted = record.postedBills || 0;
+    const issued = record.totalIssued || (potato + beer + bakery + cancelled);
 
-    existingDay.totalIssued += record.totalIssued || 0;
-    existingDay.postedBills += record.postedBills || 0;
-    existingDay.cancelled += record.cancelled || 0;
+    existingDay.totalIssued += issued;
+    existingDay.postedBills += posted;
+    existingDay.cancelled += cancelled;
     existingDay.potato += potato;
     existingDay.beer += beer;
     existingDay.bakery += bakery;
@@ -138,9 +177,9 @@ export function AnalyticsCharts() {
     const rId = record.restaurantId;
     if (restaurantDataMap.has(rId)) {
       const existingR = restaurantDataMap.get(rId)!;
-      existingR.totalIssued += record.totalIssued || 0;
-      existingR.postedBills += record.postedBills || 0;
-      existingR.cancelled += record.cancelled || 0;
+      existingR.totalIssued += issued;
+      existingR.postedBills += posted;
+      existingR.cancelled += cancelled;
       existingR.potato += potato;
       existingR.beer += beer;
       existingR.bakery += bakery;
@@ -203,7 +242,7 @@ export function AnalyticsCharts() {
             {isAdmin && (
               <select
                 value={selectedRestaurant}
-                onChange={(e) => setSelectedRestaurant(e.target.value)}
+                onChange={(e) => handleUpdateRestaurant(e.target.value)}
                 className="px-3 py-1.5 rounded-xl bg-background border border-amber-500/30 text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 shadow-xs cursor-pointer"
               >
                 {RESTAURANTS.map((r) => (
@@ -266,14 +305,14 @@ export function AnalyticsCharts() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleUpdateStartDate(e.target.value)}
               className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 cursor-pointer"
             />
             <span className="text-xs text-muted-foreground font-semibold">đến:</span>
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => handleUpdateEndDate(e.target.value)}
               className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 cursor-pointer"
             />
           </div>

@@ -33,6 +33,14 @@ export default function Home() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateString());
 
+  const [analyticsStartDate, setAnalyticsStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return getLocalDateString(d);
+  });
+  const [analyticsEndDate, setAnalyticsEndDate] = useState<string>(() => getLocalDateString());
+  const [analyticsSelectedRestaurant, setAnalyticsSelectedRestaurant] = useState<string>("all");
+
   const isAdmin = user?.role === "admin";
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "entry" | "analytics" | "history">(
@@ -72,7 +80,7 @@ export default function Home() {
   const navTabs = isAdmin
     ? [
         { id: "analytics", label: "Phân Tích Báo Cáo Toàn Diện", icon: BarChart3 },
-        { id: "dashboard", label: "Tổng Quan KPI Hôm Nay", icon: LayoutDashboard },
+        { id: "dashboard", label: "Tổng Quan KPI Theo Ngày", icon: LayoutDashboard },
         { id: "history", label: "Lịch Sử Tất Cả Nhà Hàng", icon: History },
       ]
     : [
@@ -231,11 +239,24 @@ export default function Home() {
                 refreshTrigger={refreshTrigger}
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
+                startDate={analyticsStartDate}
+                endDate={analyticsEndDate}
+                onStartDateChange={setAnalyticsStartDate}
+                onEndDateChange={setAnalyticsEndDate}
+                selectedRestaurant={analyticsSelectedRestaurant}
+                onRestaurantChange={setAnalyticsSelectedRestaurant}
               />
             </section>
 
             <section className="space-y-4">
-              <AnalyticsCharts />
+              <AnalyticsCharts
+                startDate={analyticsStartDate}
+                endDate={analyticsEndDate}
+                onStartDateChange={setAnalyticsStartDate}
+                onEndDateChange={setAnalyticsEndDate}
+                selectedRestaurant={analyticsSelectedRestaurant}
+                onRestaurantChange={setAnalyticsSelectedRestaurant}
+              />
             </section>
 
             <section className="space-y-4">
@@ -259,11 +280,13 @@ export default function Home() {
                   <div className="w-1.5 h-6 rounded-full bg-amber-500" />
                   <div>
                     <h2 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
-                      <span>Hiệu Suất Hôm Nay</span>
+                      <span>{isAdmin ? "Tổng Quan KPI Theo Ngày" : "Hiệu Suất KPI Nhà Hàng"}</span>
                       <Sparkles className="w-4 h-4 text-amber-500" />
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                      Thống kê chỉ số phát hành voucher trên Cloud Firestore
+                      {isAdmin
+                        ? "Phân tích biến động phát hành vé & quy đổi từng Bộ phận theo 7 ngày gần nhất"
+                        : "Thống kê chỉ số phát hành voucher trên Cloud Firestore"}
                     </p>
                   </div>
                 </div>
@@ -272,6 +295,12 @@ export default function Home() {
                 refreshTrigger={refreshTrigger}
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
+                startDate={analyticsStartDate}
+                endDate={analyticsEndDate}
+                onStartDateChange={setAnalyticsStartDate}
+                onEndDateChange={setAnalyticsEndDate}
+                selectedRestaurant={analyticsSelectedRestaurant}
+                onRestaurantChange={setAnalyticsSelectedRestaurant}
               />
             </section>
 
@@ -290,7 +319,14 @@ export default function Home() {
 
             {isAdmin && (
               <section className="space-y-4">
-                <AnalyticsCharts />
+                <AnalyticsCharts
+                  startDate={analyticsStartDate}
+                  endDate={analyticsEndDate}
+                  onStartDateChange={setAnalyticsStartDate}
+                  onEndDateChange={setAnalyticsEndDate}
+                  selectedRestaurant={analyticsSelectedRestaurant}
+                  onRestaurantChange={setAnalyticsSelectedRestaurant}
+                />
               </section>
             )}
 

@@ -1,17 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ticket, XCircle, Percent, Beer, Calendar, Camera, Eye, Download, FileText } from "lucide-react";
+import {
+  Ticket,
+  XCircle,
+  Percent,
+  Beer,
+  Calendar,
+  FileText,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Building2,
+  Sparkles,
+  BarChart2,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronRight,
+} from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getAggregatedVoucherByDateRange, getLocalDateString, VoucherRecord } from "@/lib/firestoreService";
-import { ImagePreviewModal } from "./ImagePreviewModal";
-import { downloadImage } from "@/lib/imageUtils";
+import {
+  getAggregatedVoucherByDateRange,
+  getVouchersByDateRange,
+  getLocalDateString,
+  VoucherRecord,
+} from "@/lib/firestoreService";
 
 interface KPIDashboardProps {
   refreshTrigger?: number;
   selectedDate?: string;
   onDateChange?: (date: string) => void;
+  startDate?: string;
+  endDate?: string;
+  selectedRestaurant?: string;
+  onStartDateChange?: (date: string) => void;
+  onEndDateChange?: (date: string) => void;
+  onRestaurantChange?: (restId: string) => void;
 }
 
 const RESTAURANT_OPTIONS = [
@@ -22,40 +47,117 @@ const RESTAURANT_OPTIONS = [
   { id: "maisonkayser", name: "Maison Kayser" },
 ];
 
-export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPIDashboardProps) {
+const RESTAURANT_META: Record<
+  string,
+  { name: string; color: string; badgeBg: string; textCol: string; borderCol: string }
+> = {
+  lehoibia: {
+    name: "Lễ Hội Bia",
+    color: "from-amber-500 to-amber-600",
+    badgeBg: "bg-amber-500/10",
+    textCol: "text-amber-600 dark:text-amber-400",
+    borderCol: "border-amber-500/30",
+  },
+  "1901": {
+    name: "Nhà Hàng 1901",
+    color: "from-orange-500 to-amber-500",
+    badgeBg: "bg-orange-500/10",
+    textCol: "text-orange-600 dark:text-orange-400",
+    borderCol: "border-orange-500/30",
+  },
+  beerplaza: {
+    name: "Beer Plaza",
+    color: "from-blue-500 to-indigo-600",
+    badgeBg: "bg-blue-500/10",
+    textCol: "text-blue-600 dark:text-blue-400",
+    borderCol: "border-blue-500/30",
+  },
+  maisonkayser: {
+    name: "Maison Kayser",
+    color: "from-emerald-500 to-teal-600",
+    badgeBg: "bg-emerald-500/10",
+    textCol: "text-emerald-600 dark:text-emerald-400",
+    borderCol: "border-emerald-500/30",
+  },
+};
+
+export function KPIDashboard({
+  refreshTrigger,
+  selectedDate,
+  onDateChange,
+  startDate: propStartDate,
+  endDate: propEndDate,
+  selectedRestaurant: propSelectedRestaurant,
+  onStartDateChange,
+  onEndDateChange,
+  onRestaurantChange,
+}: KPIDashboardProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const userRestaurantId = user?.username || user?.id || "lehoibia";
 
-  const [selectedRestId, setSelectedRestId] = useState<string>(() => {
+  const [internalRestId, setInternalRestId] = useState<string>(() => {
     return isAdmin ? "all" : userRestaurantId;
   });
 
-  const [startDate, setStartDate] = useState<string>(() => {
+  const [internalStartDate, setInternalStartDate] = useState<string>(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 7);
     return getLocalDateString(d);
   });
 
-  const [endDate, setEndDate] = useState<string>(() => getLocalDateString());
+  const [internalEndDate, setInternalEndDate] = useState<string>(() => getLocalDateString());
+
+  const startDate = propStartDate ?? internalStartDate;
+  const endDate = propEndDate ?? internalEndDate;
+  const selectedRestId = propSelectedRestaurant ?? internalRestId;
+
+  const handleUpdateStartDate = (val: string) => {
+    setInternalStartDate(val);
+    if (onStartDateChange) onStartDateChange(val);
+  };
+
+  const handleUpdateEndDate = (val: string) => {
+    setInternalEndDate(val);
+    if (onEndDateChange) onEndDateChange(val);
+  };
+
+  const handleUpdateRestId = (val: string) => {
+    setInternalRestId(val);
+    if (onRestaurantChange) onRestaurantChange(val);
+  };
+
+  const handleSetLastDays = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    const startStr = getLocalDateString(start);
+    const endStr = getLocalDateString(end);
+    handleUpdateStartDate(startStr);
+    handleUpdateEndDate(endStr);
+  };
 
   useEffect(() => {
     if (!isAdmin) {
-      setSelectedRestId(userRestaurantId);
+      handleUpdateRestId(userRestaurantId);
     }
   }, [user, isAdmin, userRestaurantId]);
 
   const [todayRecord, setTodayRecord] = useState<VoucherRecord | null>(null);
+  const [allRecords, setAllRecords] = useState<VoucherRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     async function fetchKPI() {
       setIsLoading(true);
-      const record = await getAggregatedVoucherByDateRange(selectedRestId, startDate, endDate);
+      const [record, records] = await Promise.all([
+        getAggregatedVoucherByDateRange(selectedRestId, startDate, endDate),
+        getVouchersByDateRange("all", startDate, endDate),
+      ]);
       if (isMounted) {
         setTodayRecord(record);
+        setAllRecords(records);
         setIsLoading(false);
       }
     }
@@ -64,6 +166,134 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
       isMounted = false;
     };
   }, [selectedRestId, startDate, endDate, refreshTrigger]);
+
+  // Process Department Fluctuation Data
+  const departmentFluctuations = useMemo(() => {
+    const filtered =
+      selectedRestId === "all"
+        ? allRecords
+        : allRecords.filter((r) => r.restaurantId === selectedRestId);
+
+    // Group records by restaurantId
+    const deptMap: Record<string, VoucherRecord[]> = {
+      lehoibia: [],
+      "1901": [],
+      beerplaza: [],
+      maisonkayser: [],
+    };
+
+    filtered.forEach((rec) => {
+      if (deptMap[rec.restaurantId]) {
+        deptMap[rec.restaurantId].push(rec);
+      }
+    });
+
+    const deptSummaries = Object.entries(deptMap).map(([deptId, recs]) => {
+      // Sort ascending by date for chronological trend calculation
+      const sorted = [...recs].sort((a, b) => a.date.localeCompare(b.date));
+
+      let totalIssued = 0;
+      let totalPosted = 0;
+      let totalCancelled = 0;
+      let peakRecord: VoucherRecord | null = null;
+      let offPeakRecord: VoucherRecord | null = null;
+
+      const dailyWithFluctuation = sorted.map((r, idx) => {
+        const potato = r.potatoCoupons ?? Math.round((r.postedBills || 0) / 2);
+        const beer = r.beerCoupons ?? ((r.postedBills || 0) - potato);
+        const bakery = r.bakeryCoupons ?? 0;
+        const cancelled = r.cancelled || 0;
+        const posted = r.postedBills || (potato + beer + bakery);
+        const issued = r.totalIssued || (potato + beer + bakery + cancelled);
+        const rate = issued > 0 ? Math.round((posted / issued) * 100) : 0;
+
+        totalIssued += issued;
+        totalPosted += posted;
+        totalCancelled += cancelled;
+
+        if (!peakRecord || issued > (peakRecord.totalIssued || 0)) {
+          peakRecord = { ...r, totalIssued: issued };
+        }
+        if (!offPeakRecord || issued < (offPeakRecord.totalIssued || Infinity)) {
+          offPeakRecord = { ...r, totalIssued: issued };
+        }
+
+        // Calculate day-over-day difference
+        let diff = 0;
+        let pctChange = 0;
+        if (idx > 0) {
+          const prevRecord = sorted[idx - 1];
+          const prevPotato = prevRecord.potatoCoupons ?? Math.round((prevRecord.postedBills || 0) / 2);
+          const prevBeer = prevRecord.beerCoupons ?? ((prevRecord.postedBills || 0) - prevPotato);
+          const prevBakery = prevRecord.bakeryCoupons ?? 0;
+          const prevCancelled = prevRecord.cancelled || 0;
+          const prevIssued =
+            prevRecord.totalIssued || (prevPotato + prevBeer + prevBakery + prevCancelled);
+
+          diff = issued - prevIssued;
+          if (prevIssued > 0) {
+            pctChange = Math.round((diff / prevIssued) * 100);
+          } else if (issued > 0) {
+            pctChange = 100;
+          }
+        }
+
+        return {
+          id: r.id || `${deptId}_${r.date}`,
+          date: r.date,
+          restaurantId: deptId,
+          restaurantName: RESTAURANT_META[deptId]?.name || r.restaurantName || deptId,
+          issued,
+          posted,
+          cancelled,
+          rate,
+          diff,
+          pctChange,
+          isFirstDay: idx === 0,
+        };
+      });
+
+      const avgDaily = sorted.length > 0 ? Math.round(totalIssued / sorted.length) : 0;
+      const overallRate = totalIssued > 0 ? Math.round((totalPosted / totalIssued) * 100) : 0;
+
+      // Overall growth across the 7 days (first vs last day)
+      let periodGrowth = 0;
+      if (dailyWithFluctuation.length >= 2) {
+        const firstIssued = dailyWithFluctuation[0].issued;
+        const lastIssued = dailyWithFluctuation[dailyWithFluctuation.length - 1].issued;
+        if (firstIssued > 0) {
+          periodGrowth = Math.round(((lastIssued - firstIssued) / firstIssued) * 100);
+        }
+      }
+
+      return {
+        deptId,
+        meta: RESTAURANT_META[deptId] || {
+          name: deptId,
+          color: "from-amber-500 to-amber-600",
+          badgeBg: "bg-amber-500/10",
+          textCol: "text-amber-600",
+          borderCol: "border-amber-500/30",
+        },
+        totalIssued,
+        totalPosted,
+        totalCancelled,
+        avgDaily,
+        overallRate,
+        periodGrowth,
+        peakRecord,
+        offPeakRecord,
+        dailyList: dailyWithFluctuation.reverse(), // desc for display
+      };
+    });
+
+    // Flatten all daily records desc by date for table view
+    const allDailyFlat = deptSummaries
+      .flatMap((d) => d.dailyList)
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    return { deptSummaries, allDailyFlat };
+  }, [allRecords, selectedRestId]);
 
   if (isLoading) {
     return (
@@ -91,7 +321,6 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
   let stats;
 
   if (isMaisonKayser) {
-    // Maison Kayser ONLY uses Voucher Bánh (No Potato, Beer, or Cancelled)
     stats = [
       {
         label: "VOUCHER BÁNH",
@@ -132,7 +361,6 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
       },
     ];
   } else if (isAdmin) {
-    // Admin View combining all restaurants
     stats = [
       {
         label: "COUPON KHOAI TÂY & BIA",
@@ -173,7 +401,6 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
       },
     ];
   } else {
-    // Standard Beer Restaurants (Lễ Hội Bia, Beer Plaza, Craft Beer, Taiga, etc.)
     stats = [
       {
         label: "COUPON KHOAI TÂY",
@@ -216,8 +443,8 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
   }
 
   return (
-    <div className="space-y-3">
-      {/* Date Range & Restaurant Bar */}
+    <div className="space-y-6">
+      {/* Date Range & Restaurant Filter Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs text-muted-foreground bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 p-3 sm:px-4 sm:py-2.5 rounded-2xl shadow-xs">
         {/* Left Section: Info badge & Restaurant filter */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -232,11 +459,11 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
           </div>
 
           <div className="flex items-center gap-1.5 border-l border-amber-500/30 pl-2.5">
-            <span className="font-semibold text-foreground">Xem số liệu:</span>
+            <span className="font-semibold text-foreground">Bộ phận / Nhà hàng:</span>
             {isAdmin ? (
               <select
                 value={selectedRestId}
-                onChange={(e) => setSelectedRestId(e.target.value)}
+                onChange={(e) => handleUpdateRestId(e.target.value)}
                 className="px-2.5 py-1 rounded-xl bg-background border border-amber-500/30 text-foreground font-extrabold shadow-xs text-xs outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
               >
                 {RESTAURANT_OPTIONS.map((r) => (
@@ -259,53 +486,35 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
           <div className="flex items-center gap-1 bg-background/80 dark:bg-card/80 border border-amber-500/30 p-0.5 rounded-xl">
             <button
               type="button"
-              onClick={() => {
-                const end = new Date();
-                const start = new Date();
-                start.setDate(start.getDate() - 30);
-                setStartDate(getLocalDateString(start));
-                setEndDate(getLocalDateString(end));
-              }}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer"
+              onClick={() => handleSetLastDays(7)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                startDate === getLocalDateString(new Date(Date.now() - 7 * 86400000))
+                  ? "bg-amber-500 text-white shadow-xs"
+                  : "text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+              }`}
             >
-              1 Tháng (Mặc định)
+              7 ngày (Mặc định)
             </button>
             <button
               type="button"
-              onClick={() => {
-                const end = new Date();
-                const start = new Date(end.getFullYear(), end.getMonth(), 1);
-                setStartDate(getLocalDateString(start));
-                setEndDate(getLocalDateString(end));
-              }}
+              onClick={() => handleSetLastDays(14)}
               className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
             >
-              Tháng Này
+              14 ngày
             </button>
             <button
               type="button"
-              onClick={() => {
-                const end = new Date();
-                const start = new Date();
-                start.setDate(start.getDate() - 7);
-                setStartDate(getLocalDateString(start));
-                setEndDate(getLocalDateString(end));
-              }}
+              onClick={() => handleSetLastDays(30)}
               className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
             >
-              7 Ngày
+              30 ngày
             </button>
             <button
               type="button"
-              onClick={() => {
-                const today = getLocalDateString();
-                setStartDate(today);
-                setEndDate(today);
-                if (onDateChange) onDateChange(today);
-              }}
+              onClick={() => handleSetLastDays(90)}
               className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
             >
-              Hôm Nay
+              90 ngày
             </button>
           </div>
 
@@ -316,7 +525,7 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
               type="date"
               value={startDate}
               onChange={(e) => {
-                setStartDate(e.target.value);
+                handleUpdateStartDate(e.target.value);
                 if (onDateChange) onDateChange(e.target.value);
               }}
               className="px-2 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
@@ -326,7 +535,7 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
               type="date"
               value={endDate}
               onChange={(e) => {
-                setEndDate(e.target.value);
+                handleUpdateEndDate(e.target.value);
               }}
               className="px-2 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
             />
@@ -334,6 +543,7 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
         </div>
       </div>
 
+      {/* 4 Core Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -342,14 +552,20 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
               key={stat.label}
               className="relative overflow-hidden p-4 sm:p-5 rounded-2xl border border-border/80 bg-gradient-to-b from-card via-card to-amber-500/[0.02] shadow-[0_4px_20px_-4px_rgba(217,119,6,0.06)] dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.4)] hover:shadow-lg hover:border-amber-500/30 transition-all duration-300 group"
             >
-              {/* Subtle colored accent top bar */}
-              <div className={`absolute top-0 left-0 right-0 h-1 ${stat.accentBorder.replace('border-l-4 border-l-', 'bg-')}`} />
+              <div
+                className={`absolute top-0 left-0 right-0 h-1 ${stat.accentBorder.replace(
+                  "border-l-4 border-l-",
+                  "bg-"
+                )}`}
+              />
 
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] sm:text-xs font-black tracking-wider text-muted-foreground uppercase truncate">
                   {stat.label}
                 </span>
-                <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 group-hover:scale-110 transition-transform ${stat.iconBg}`}>
+                <div
+                  className={`p-2 sm:p-2.5 rounded-xl shrink-0 group-hover:scale-110 transition-transform ${stat.iconBg}`}
+                >
                   <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               </div>
@@ -385,87 +601,204 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
         })}
       </div>
 
-      {/* Bill & Voucher Images Section for Selected Date */}
-      {todayRecord && ((todayRecord.billImages && todayRecord.billImages.length > 0) || todayRecord.billNumber) && (
-        <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/60">
-            <div className="flex items-center gap-2">
-              <Camera className="w-4 h-4 text-amber-500" />
-              <h4 className="text-sm font-extrabold text-foreground">
-                Ảnh Bill &amp; Chứng Từ Đối Soát ({targetDate})
-              </h4>
+      {/* Department Trend & Daily Fluctuation Cards Section */}
+      <div className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-amber-500" />
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight">
+                Phân Tích Biến Động Theo Ngày Của Các Bộ Phận
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                So sánh số liệu phát hành, quy đổi và tỷ lệ tăng/giảm qua từng ngày (7 ngày gần nhất)
+              </p>
             </div>
-            {todayRecord.billNumber && (
-              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                Mã / Số Bill: {todayRecord.billNumber}
-              </span>
-            )}
+          </div>
+          <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full self-start sm:self-auto">
+            {departmentFluctuations.deptSummaries.length} Bộ Phận Hoạt Động
+          </span>
+        </div>
+
+        {/* 4 Department Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {departmentFluctuations.deptSummaries.map((dept) => {
+            const hasData = dept.totalIssued > 0;
+            return (
+              <Card
+                key={dept.deptId}
+                className={`p-4 rounded-2xl border ${dept.meta.borderCol} bg-card hover:shadow-md transition-all space-y-3 relative overflow-hidden`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-3 h-3 rounded-full bg-gradient-to-r ${dept.meta.color}`}
+                    />
+                    <h4 className="font-extrabold text-sm text-foreground">
+                      {dept.meta.name}
+                    </h4>
+                  </div>
+                  {hasData && (
+                    <span
+                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${
+                        dept.periodGrowth > 0
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : dept.periodGrowth < 0
+                          ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {dept.periodGrowth > 0 ? (
+                        <TrendingUp className="w-3 h-3" />
+                      ) : dept.periodGrowth < 0 ? (
+                        <TrendingDown className="w-3 h-3" />
+                      ) : (
+                        <Minus className="w-3 h-3" />
+                      )}
+                      {dept.periodGrowth > 0 ? `+${dept.periodGrowth}%` : `${dept.periodGrowth}%`}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                    <span className="text-[10px] text-muted-foreground font-semibold block">
+                      Tổng Phát Ra (7D)
+                    </span>
+                    <span className="text-base font-black text-foreground">
+                      {dept.totalIssued.toLocaleString("vi-VN")}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                    <span className="text-[10px] text-muted-foreground font-semibold block">
+                      TB / Ngày
+                    </span>
+                    <span className="text-base font-black text-amber-600 dark:text-amber-400">
+                      {dept.avgDaily.toLocaleString("vi-VN")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">Tỷ Lệ Quy Đổi:</span>
+                    <span className="font-extrabold text-foreground">{dept.overallRate}%</span>
+                  </div>
+                  {dept.peakRecord && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">Ngày Cao Điểm:</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        {dept.peakRecord.date} ({dept.peakRecord.totalIssued?.toLocaleString("vi-VN")})
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Daily Fluctuation Timeline Table */}
+        <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+            <div>
+              <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-amber-500" />
+                <span>Chi Tiết Biến Động Số Vé Phát Ra Theo Ngày &amp; Bộ Phận</span>
+              </h4>
+              <p className="text-[11px] text-muted-foreground">
+                So sánh số phát hành và biến động % tăng/giảm so với ngày liền trước
+              </p>
+            </div>
           </div>
 
-          {todayRecord.billImages && todayRecord.billImages.length > 0 ? (
-            <div className="space-y-2">
-              <div className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                <span>Danh sách ảnh đính kèm ({todayRecord.billImages.length} ảnh):</span>
-                <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">
-                  Nhấp vào ảnh để xem phóng to &amp; tải về
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {todayRecord.billImages.map((imgUrl, idx) => (
-                  <div
-                    key={idx}
-                    className="group relative rounded-xl overflow-hidden border border-border/80 bg-background aspect-square shadow-xs flex items-center justify-center cursor-pointer"
-                    onClick={() => setPreviewIndex(idx)}
-                  >
-                    <img
-                      src={imgUrl}
-                      alt={`Bill ${idx + 1}`}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 w-8 p-0 rounded-full bg-white/20 hover:bg-white/40 text-white"
-                        title="Xem ảnh"
+          <div className="overflow-x-auto rounded-xl border border-border/80">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-muted/60 text-muted-foreground uppercase text-[10px] font-extrabold tracking-wider border-b border-border">
+                <tr>
+                  <th className="px-3.5 py-2.5">Ngày</th>
+                  <th className="px-3.5 py-2.5">Bộ Phận / Nhà Hàng</th>
+                  <th className="px-3.5 py-2.5 text-right">Tổng Phát Ra</th>
+                  <th className="px-3.5 py-2.5 text-right">Đã Quy Đổi</th>
+                  <th className="px-3.5 py-2.5 text-right">Hủy</th>
+                  <th className="px-3.5 py-2.5 text-center">Tỷ Lệ Quy Đổi</th>
+                  <th className="px-3.5 py-2.5 text-right">Biến Động So Với Ngày Trước</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60 font-semibold">
+                {departmentFluctuations.allDailyFlat.length > 0 ? (
+                  departmentFluctuations.allDailyFlat.map((item) => {
+                    const meta = RESTAURANT_META[item.restaurantId] || {
+                      name: item.restaurantName,
+                      textCol: "text-foreground",
+                    };
+                    return (
+                      <tr
+                        key={`${item.restaurantId}_${item.date}`}
+                        className="hover:bg-amber-500/5 transition-colors"
                       >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          downloadImage(imgUrl, `bill_${targetDate}_${idx + 1}.jpg`);
-                        }}
-                        className="h-8 w-8 p-0 rounded-full bg-amber-500 text-black hover:bg-amber-600"
-                        title="Tải về"
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Chưa có ảnh bill được tải lên cho ngày này.</p>
-          )}
+                        <td className="px-3.5 py-2.5 font-bold text-foreground whitespace-nowrap">
+                          {item.date}
+                        </td>
+                        <td className="px-3.5 py-2.5 whitespace-nowrap">
+                          <span
+                            className={`font-extrabold ${meta.textCol}`}
+                          >
+                            {meta.name}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right font-black text-foreground">
+                          {item.issued.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right text-blue-600 dark:text-blue-400 font-bold">
+                          {item.posted.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right text-red-500 font-bold">
+                          {item.cancelled.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-center">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-extrabold border border-emerald-500/20">
+                            {item.rate}%
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                          {item.isFirstDay ? (
+                            <span className="text-[11px] text-muted-foreground font-normal">
+                              Mốc bắt đầu
+                            </span>
+                          ) : item.diff > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg text-[11px]">
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                              +{item.diff.toLocaleString("vi-VN")} (+{item.pctChange}%)
+                            </span>
+                          ) : item.diff < 0 ? (
+                            <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-black bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-lg text-[11px]">
+                              <ArrowDownRight className="w-3.5 h-3.5" />
+                              {item.diff.toLocaleString("vi-VN")} ({item.pctChange}%)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded-lg text-[11px]">
+                              <Minus className="w-3 h-3" /> 0% (Không đổi)
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      Chưa có dữ liệu ghi nhận trong khoảng thời gian đã chọn.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
-      )}
-
-      {/* Lightbox / Preview Modal for Dashboard */}
-      {previewIndex !== null && todayRecord?.billImages && todayRecord.billImages.length > 0 && (
-        <ImagePreviewModal
-          isOpen={previewIndex !== null}
-          onClose={() => setPreviewIndex(null)}
-          images={todayRecord.billImages}
-          initialIndex={previewIndex}
-          billNumber={todayRecord.billNumber}
-          title={`Ảnh Bill & Vé Đối Soát - Ngày ${targetDate}`}
-        />
-      )}
+      </div>
     </div>
   );
 }
+
 
