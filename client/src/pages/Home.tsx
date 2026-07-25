@@ -80,31 +80,39 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden">
+      {/* Background Ambient Warm Lighting Blobs */}
+      <div className="fixed top-0 left-1/4 w-[500px] h-[350px] bg-amber-500/10 dark:bg-amber-500/15 rounded-full blur-[130px] pointer-events-none z-0" />
+      <div className="fixed bottom-0 right-1/4 w-[450px] h-[350px] bg-amber-600/5 dark:bg-amber-500/10 rounded-full blur-[120px] pointer-events-none z-0" />
+      <div className="fixed top-1/2 right-10 w-[300px] h-[300px] bg-orange-400/5 rounded-full blur-[100px] pointer-events-none z-0" />
+
       {/* Background Subtle Beer Texture */}
       <div
         className="fixed inset-0 bg-cover bg-center pointer-events-none opacity-[0.03] dark:opacity-10 z-0"
         style={{ backgroundImage: `url(${beerFoamBg})` }}
       />
 
+      {/* Top Header Accent Gold Bar */}
+      <div className="h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 w-full relative z-50 shadow-xs" />
+
       {/* Top Glassmorphism Navigation Header */}
-      <header className="relative z-50 border-b border-border/60 bg-background/95 backdrop-blur-md sticky top-0 shadow-sm">
+      <header className="relative z-50 border-b border-border/80 bg-background/90 backdrop-blur-xl sticky top-0 shadow-sm">
         <div className="container py-3 flex items-center justify-between">
           {/* Logo & Title */}
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center">
-              <Beer className="w-6 h-6 fill-amber-500/20 text-amber-600 dark:text-amber-400" />
+            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-black shadow-md shadow-amber-500/20 flex items-center justify-center shrink-0">
+              <Beer className="w-5 h-5 fill-black/20 text-black font-extrabold" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-extrabold text-foreground tracking-tight leading-none">
+                <h1 className="text-base sm:text-lg font-black text-foreground tracking-tight leading-none">
                   Sun World Ba Na Hills
                 </h1>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider">
-                  Beer Voucher System
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-xs">
+                  Beer Voucher
                 </span>
               </div>
-              <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>
                   {isAdmin ? "Hệ thống Báo cáo Quản trị Admin" : "Đã kết nối dữ liệu nhà hàng"}
                 </span>
@@ -113,13 +121,13 @@ export default function Home() {
           </div>
 
           {/* User & Actions */}
-          <div className="flex items-center gap-2.5">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/80 border border-border/60 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-foreground">
               <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>{user?.name || "Người dùng"}</span>
               {isAdmin && (
-                <span className="px-2 py-0.5 text-[10px] uppercase font-bold bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-md">
-                  Admin Quản Lý
+                <span className="px-2 py-0.5 text-[10px] uppercase font-extrabold bg-amber-500 text-black rounded-md shadow-xs">
+                  Admin
                 </span>
               )}
             </div>
@@ -129,7 +137,7 @@ export default function Home() {
                 onClick={toggleTheme}
                 variant="ghost"
                 size="sm"
-                className="p-2 h-9 w-9 rounded-xl border border-border/60 hover:bg-secondary text-muted-foreground hover:text-foreground"
+                className="p-2 h-10 w-10 rounded-2xl border border-amber-500/20 hover:bg-amber-500/10 text-muted-foreground hover:text-foreground transition-all active:scale-95"
                 title="Đổi giao diện Sáng / Tối"
               >
                 {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-amber-600" />}
@@ -140,11 +148,11 @@ export default function Home() {
               onClick={() => setLocation("/guide")}
               variant="outline"
               size="sm"
-              className="text-xs font-bold gap-1.5 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+              className="text-xs font-bold gap-1.5 rounded-2xl h-10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 active:scale-95 transition-all"
               title="Xem Hướng Dẫn Sử Dụng & Xuất File PDF"
             >
-              <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="hidden md:inline">Hướng Dẫn / In PDF</span>
+              <BookOpen className="w-4 h-4 text-emerald-500" />
+              <span className="hidden md:inline">Hướng Dẫn / PDF</span>
             </Button>
 
             {isAdmin && (
@@ -152,9 +160,9 @@ export default function Home() {
                 onClick={() => setLocation("/admin")}
                 variant="outline"
                 size="sm"
-                className="text-xs font-bold gap-1.5 rounded-xl border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                className="text-xs font-bold gap-1.5 rounded-2xl h-10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 active:scale-95 transition-all"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="w-4 h-4" />
                 <span className="hidden sm:inline">Cài Đặt Admin</span>
               </Button>
             )}
@@ -163,17 +171,17 @@ export default function Home() {
               onClick={() => logout()}
               variant="ghost"
               size="sm"
-              className="text-xs font-semibold gap-1.5 rounded-xl text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+              className="text-xs font-bold gap-1.5 rounded-2xl h-10 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 active:scale-95 transition-all"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Thoát</span>
             </Button>
           </div>
         </div>
 
         {/* Dashboard Navigation Tabs */}
-        <div className="border-t border-border/40 bg-secondary/30 backdrop-blur-md">
-          <div className="container flex items-center gap-2 overflow-x-auto py-1.5">
+        <div className="border-t border-border/60 bg-card/60 backdrop-blur-xl">
+          <div className="container flex items-center gap-2 overflow-x-auto py-2">
             {navTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -181,10 +189,10 @@ export default function Home() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all duration-200 whitespace-nowrap active:scale-95 ${
                     isActive
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                      ? "bg-amber-500 text-black shadow-md shadow-amber-500/25 border border-amber-400"
+                      : "text-muted-foreground hover:text-foreground hover:bg-amber-500/10 border border-transparent"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
