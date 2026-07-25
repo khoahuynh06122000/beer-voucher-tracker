@@ -235,20 +235,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <KPIDashboard
-                refreshTrigger={refreshTrigger}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                startDate={analyticsStartDate}
-                endDate={analyticsEndDate}
-                onStartDateChange={setAnalyticsStartDate}
-                onEndDateChange={setAnalyticsEndDate}
-                selectedRestaurant={analyticsSelectedRestaurant}
-                onRestaurantChange={setAnalyticsSelectedRestaurant}
-              />
-            </section>
-
-            <section className="space-y-4">
               <AnalyticsCharts
                 startDate={analyticsStartDate}
                 endDate={analyticsEndDate}
@@ -257,16 +243,6 @@ export default function Home() {
                 selectedRestaurant={analyticsSelectedRestaurant}
                 onRestaurantChange={setAnalyticsSelectedRestaurant}
               />
-            </section>
-
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 rounded-full bg-amber-500" />
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">
-                  Bảng Chi Tiết Lịch Sử Tất Cả Nhà Hàng
-                </h2>
-              </div>
-              <HistoricalDataTable />
             </section>
           </div>
         )}
@@ -316,29 +292,6 @@ export default function Home() {
                 <VoucherEntryForm onSuccess={handleFormSuccess} />
               </section>
             )}
-
-            {isAdmin && (
-              <section className="space-y-4">
-                <AnalyticsCharts
-                  startDate={analyticsStartDate}
-                  endDate={analyticsEndDate}
-                  onStartDateChange={setAnalyticsStartDate}
-                  onEndDateChange={setAnalyticsEndDate}
-                  selectedRestaurant={analyticsSelectedRestaurant}
-                  onRestaurantChange={setAnalyticsSelectedRestaurant}
-                />
-              </section>
-            )}
-
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 rounded-full bg-amber-500" />
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">
-                  Bảng Báo Cáo Lịch Sử
-                </h2>
-              </div>
-              <HistoricalDataTable />
-            </section>
           </div>
         )}
 
