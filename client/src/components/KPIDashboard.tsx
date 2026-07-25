@@ -61,7 +61,6 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
       iconBg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 dark:bg-amber-500/20",
       accentBorder: "border-l-4 border-l-amber-500",
       badge: "Khoai tây",
-      emoji: "🍟",
     },
     {
       label: "COUPON BEER",
@@ -71,7 +70,6 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
       iconBg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20",
       accentBorder: "border-l-4 border-l-blue-500",
       badge: "Đồ uống",
-      emoji: "🍺",
     },
     {
       label: "COUPON HỦY",
@@ -81,7 +79,6 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
       iconBg: "bg-red-500/10 text-red-600 dark:text-red-400 dark:bg-red-500/20",
       accentBorder: "border-l-4 border-l-red-500",
       badge: "Đã hủy",
-      emoji: "❌",
     },
     {
       label: "TỔNG COUPON",
@@ -92,7 +89,6 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
       accentBorder: "border-l-4 border-l-emerald-500",
       badge: `${rate}% Quy đổi`,
       isRate: true,
-      emoji: "📊",
     },
   ];
 
@@ -116,7 +112,7 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
 
             <div className="flex items-baseline justify-between mb-2">
               <span className="text-3xl font-extrabold tracking-tight text-foreground">
-                {stat.value}
+                {stat.value.toLocaleString("vi-VN")}
               </span>
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground border border-border/50">
                 {stat.badge}
@@ -127,7 +123,7 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
               <div className="space-y-1.5 mt-3">
                 <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
                   <div
-                    className="bg-purple-600 dark:bg-purple-500 h-full rounded-full transition-all duration-500"
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, Math.max(0, rate))}%` }}
                   />
                 </div>
@@ -146,3 +142,4 @@ export function KPIDashboard({ refreshTrigger }: KPIDashboardProps) {
     </div>
   );
 }
+

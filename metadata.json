@@ -1,6 +1,6 @@
 {
-  "name": "Beer Voucher Tracker",
-  "description": "Daily beer voucher tracking and analytics dashboard",
+  "name": "Sun World Ba Na Hills - Quản Lý Voucher Bia",
+  "description": "Hệ thống quản lý voucher bia tươi Sun KraftBeer tại Sun World Ba Na Hills",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

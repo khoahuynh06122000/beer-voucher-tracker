@@ -10,9 +10,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { History, RefreshCw } from "lucide-react";
+import { History, RefreshCw, Download } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVouchersByDateRange, VoucherRecord } from "@/lib/firestoreService";
+import { toast } from "sonner";
 
 export function HistoricalDataTable() {
   const { user } = useAuth();
@@ -55,9 +56,50 @@ export function HistoricalDataTable() {
     setEndDate(end.toISOString().split("T")[0]);
   };
 
+  const handleExportCSV = () => {
+    if (!records || records.length === 0) {
+      toast.error("Không có dữ liệu để xuất file CSV!");
+      return;
+    }
+
+    const headers = [
+      "Ngay",
+      "Nha Hang",
+      "Khoai Tay",
+      "Coupon Beer",
+      "Coupon Huy",
+      "Tong Coupon",
+      "Ty Le Quy Doi (%)",
+    ];
+
+    const rows = records.map((r) => {
+      const potato = r.potatoCoupons ?? Math.round(r.postedBills / 2);
+      const beer = r.beerCoupons ?? (r.postedBills - potato);
+      return [
+        r.date,
+        `"${r.restaurantName || r.restaurantId}"`,
+        potato,
+        beer,
+        r.cancelled,
+        r.totalIssued,
+        `${r.utilizationRate}%`,
+      ].join(",");
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `bao_cao_voucher_${startDate}_den_${endDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Đã tải xuống báo cáo CSV thành công!");
+  };
+
   return (
-    <Card className="p-6 md:p-8 rounded-xl border border-border/80 bg-card shadow-sm">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-6 border-b border-border/60">
+    <Card className="p-6 md:p-8 rounded-xl border border-border/80 bg-card shadow-sm space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-border/60">
         <div>
           <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
             <History className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -94,6 +136,15 @@ export function HistoricalDataTable() {
             30 ngày
           </Button>
           <Button
+            onClick={handleExportCSV}
+            variant="outline"
+            size="sm"
+            className="text-xs font-semibold gap-1.5 rounded-lg border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Xuất CSV</span>
+          </Button>
+          <Button
             onClick={loadData}
             variant="ghost"
             size="sm"
@@ -104,7 +155,7 @@ export function HistoricalDataTable() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 max-w-lg gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 max-w-lg gap-4">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
             Từ ngày

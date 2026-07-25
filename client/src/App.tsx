@@ -24,7 +24,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ThemeProvider defaultTheme="light">
+        <ThemeProvider defaultTheme="dark" switchable={true}>
           <TooltipProvider>
             <Toaster />
             <Router />

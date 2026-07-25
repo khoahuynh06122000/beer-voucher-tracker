@@ -3,26 +3,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthContext } from "@/contexts/AuthContext";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
+import banaHillsBeer from "@/assets/bana_hills_beer.jpg";
+import { DraftBeerGlass } from "@/components/DraftBeerGlass";
 import {
   Beer,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  FileCheck,
-  Bell,
-  BarChart3,
-  ChevronDown,
   User,
   X,
   Lock,
   Loader2,
   AlertCircle,
+  Flame,
 } from "lucide-react";
 
 export function LandingCover() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(true);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
 
@@ -48,7 +45,7 @@ export function LandingCover() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    await handleLoginWithCreds(loginUsername, loginPassword);
+    await handleLoginWithCreds(loginUsername.trim() || "admin", loginPassword);
   };
 
   const handleQuickPresetLogin = async (key: string) => {
@@ -297,15 +294,29 @@ export function LandingCover() {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-[#07080a] text-white selection:bg-amber-500 selection:text-black overflow-x-hidden font-sans">
+    <div className="relative min-h-screen bg-[#06070a] text-white selection:bg-amber-500 selection:text-black overflow-x-hidden font-sans">
+      {/* Cinematic Photorealistic Submerged Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        {/* Layer 1: High-resolution Ba Na Hills Beer Festival Photo Backdrop */}
+        <img
+          src={banaHillsBeer}
+          alt="Sun World Ba Na Hills Beer Atmosphere"
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover object-center opacity-65 scale-105 filter contrast-125 saturate-135 brightness-95 transition-transform duration-1000"
+        />
+
+        {/* Layer 2: Texture Foam Overlay */}
         <img
           src={beerFoamBg}
-          alt="Draft Beer Foam Background"
+          alt="Draft Beer Foam Texture"
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-top opacity-40 scale-105 filter contrast-125 saturate-125"
+          className="absolute inset-0 w-full h-full object-cover opacity-25 mix-blend-overlay"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-[#07080a]/95" />
+
+        {/* Layer 3: Dark Vignette Gradient Overlays for High Legibility */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/85" />
+        <div className="absolute inset-0 bg-radial from-amber-950/30 via-black/80 to-[#040508]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-[#050609]" />
       </div>
 
       <canvas
@@ -326,10 +337,10 @@ export function LandingCover() {
             </div>
             <div>
               <span className="font-extrabold text-lg tracking-tight text-white block leading-none">
-                BEER VOUCHER
+                SUN WORLD BA NA HILLS
               </span>
               <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400/90">
-                Firebase Edition
+                Beer Voucher Cloud System
               </span>
             </div>
           </div>
@@ -345,204 +356,199 @@ export function LandingCover() {
         </div>
       </header>
 
-      <main className="relative z-20 pt-32 pb-20">
-        <section className="container max-w-5xl mx-auto px-6 text-center pt-12 pb-20 flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold mb-8 backdrop-blur-md">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            Nền Tảng Quản Lý Voucher Chuyên Nghiệp (Firebase Cloud)
-          </div>
-
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.1] mb-8 max-w-4xl">
-            Tối ưu hóa quản lý{" "}
-            <span className="relative inline-block text-amber-400">
-              voucher bia
-              <span className="absolute bottom-1 left-0 w-full h-[6px] bg-amber-500/40 rounded-full -z-10" />
-            </span>{" "}
-            thời gian thực.
-          </h1>
-
-          <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-10 font-normal">
-            Giải pháp thông minh giúp ghi nhận chính xác chỉ số phát hành, kiểm tra công thức tự động và phân tích xu hướng quy đổi trực tiếp trên Cloud Firestore.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-center w-full max-w-md mb-16">
-            <Button
-              onClick={() => setShowLoginModal(true)}
-              size="lg"
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm px-8 py-6 rounded-xl shadow-xl shadow-amber-500/25 transition-all hover:scale-105 flex items-center justify-center gap-2"
-            >
-              Đăng Nhập Hệ Thống
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-          </div>
-
-          <div className="animate-bounce pt-4 text-gray-500">
-            <ChevronDown className="w-6 h-6" />
-          </div>
-        </section>
-
-        <section className="container max-w-6xl mx-auto px-6 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="group p-8 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 w-fit mb-6 border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                <FileCheck className="w-6 h-6" />
+      <main className="relative z-20 pt-28 pb-20">
+        <section className="container max-w-6xl mx-auto px-6 pt-8 pb-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Content */}
+            <div className="lg:col-span-7 text-center lg:text-left flex flex-col items-center lg:items-start">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold mb-6 backdrop-blur-md">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                Lễ Hội Bia Sun World Ba Na Hills • B'Acoustic & Beer Plaza
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">
-                Công Thức Tự Động
-              </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                Hệ thống tự động xác thực công thức nghiêm ngặt: <strong className="text-gray-200">Tổng phát = Hóa đơn ghi nhận + Voucher hủy</strong> nhằm ngăn chặn sai lệch số liệu.
+
+              <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-[1.15] mb-6">
+                Quản lý voucher{" "}
+                <span className="relative inline-block text-amber-400">
+                  bia Ba Na Hills
+                  <span className="absolute bottom-1 left-0 w-full h-[6px] bg-amber-500/40 rounded-full -z-10" />
+                </span>
+                .
+              </h1>
+
+              <p className="text-base sm:text-lg text-gray-300 max-w-xl leading-relaxed mb-8 font-normal">
+                Hệ thống chuyên dụng phục vụ các nhà hàng Beer Plaza, 1901 Làng Pháp &amp; Quảng Trường Lễ Hội Ba Na Hills. Tự động kiểm tra công thức quy đổi, phát hành &amp; báo cáo đồng bộ Cloud Firestore.
               </p>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start w-full max-w-md">
+                <Button
+                  onClick={() => setShowLoginModal(true)}
+                  size="lg"
+                  className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm px-8 py-6 rounded-xl shadow-xl shadow-amber-500/25 transition-all hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  <Beer className="w-5 h-5 fill-black" />
+                  Đăng Nhập Hệ Thống
+                  <ArrowRight className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
 
-            <div className="group p-8 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 w-fit mb-6 border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                <BarChart3 className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-3">
-                Biểu Đồ & Tỷ Lệ Sử Dụng
-              </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                Trực quan hóa tỷ lệ quy đổi voucher theo ngày, tuần, tháng với biểu đồ tương tác Recharts hiện đại, giúp dễ dàng dự báo nhu cầu tiêu thụ.
-              </p>
-            </div>
+            {/* Right Graphic: Floating Transparent Draft Beer Glass */}
+            <div className="lg:col-span-5 flex flex-col items-center justify-center relative py-6">
+              <div
+                className="relative group cursor-pointer flex flex-col items-center justify-center transition-all duration-500 hover:scale-105"
+                onClick={() => setShowLoginModal(true)}
+              >
+                {/* Floating Glass Graphic without background card box */}
+                <div className="relative flex items-center justify-center">
+                  {/* Subtle golden ambient aura glow behind the glass */}
+                  <div className="absolute w-64 h-64 rounded-full bg-amber-500/20 blur-3xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500" />
+                  
+                  <DraftBeerGlass size="lg" showGlow={true} className="relative z-10 transform transition-transform duration-500 group-hover:scale-110" />
+                </div>
 
-            <div className="group p-8 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 w-fit mb-6 border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
-                <Bell className="w-6 h-6" />
+                {/* Minimal floating caption */}
+                <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 backdrop-blur-md text-amber-300 text-xs font-bold shadow-lg group-hover:bg-amber-500/20 group-hover:border-amber-400 transition-all">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Lễ Hội Bia Ba Na Hills • Beer Plaza</span>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">
-                Lưu Trữ Firebase Firestore
-              </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                Đồng bộ hóa dữ liệu thời gian thực trực tiếp trên Cloud Firestore, không qua trung gian backend server.
-              </p>
             </div>
           </div>
         </section>
       </main>
 
-      {/* User Auth Modal Dialog */}
+      {/* User Auth Modal Dialog with Beer Glass Visual */}
       {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-md p-6 sm:p-8 rounded-3xl bg-[#0f1117] border border-amber-500/30 shadow-2xl shadow-amber-500/10 text-white overflow-hidden">
-            <div className="flex items-center justify-between pb-5 border-b border-white/10">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
-                  <Beer className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-white leading-tight">
-                    Đăng Nhập Firebase Auth
-                  </h3>
-                  <p className="text-xs text-gray-400">
-                    Nhập tài khoản nhà hàng hoặc bấm chọn nhanh bên dưới
-                  </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-2xl rounded-3xl bg-[#0d0f15] border border-amber-500/40 shadow-2xl shadow-amber-500/20 text-white overflow-hidden grid grid-cols-1 md:grid-cols-12">
+            
+            {/* Left Decorative Column with Transparent Draft Beer Glass */}
+            <div className="md:col-span-5 relative p-6 flex flex-col items-center justify-between border-b md:border-b-0 md:border-r border-amber-500/30 overflow-hidden min-h-[320px] bg-gradient-to-b from-amber-500/10 via-amber-950/30 to-black/60">
+              <div className="relative z-10 w-full flex items-center justify-between">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold backdrop-blur-md">
+                  <Beer className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span>Sun KraftBeer</span>
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  setShowLoginModal(false);
-                  setAuthError(null);
-                }}
-                className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {authError && (
-              <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{authError}</span>
+              <div className="relative z-10 my-auto py-4 flex flex-col items-center justify-center">
+                <DraftBeerGlass size="md" showGlow={true} />
               </div>
-            )}
 
-            <div className="pt-4 space-y-4">
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
-                <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
-                  Chọn Nhanh Tài Khoản Nhà Hàng
+              <div className="relative z-10 text-center px-2 py-2">
+                <h4 className="text-sm font-black text-amber-300 tracking-wider uppercase">
+                  Beer Voucher System
+                </h4>
+                <p className="text-[11px] text-gray-300 mt-0.5 font-medium">
+                  Đăng nhập để xem báo cáo &amp; nhập liệu chỉ số voucher
                 </p>
-                <div className="grid grid-cols-2 gap-1.5 text-xs">
-                  {[
-                    { key: "lehoibia", l: "🍺 Lễ Hội Bia" },
-                    { key: "1901", l: "🍷 Nhà Hàng 1901" },
-                    { key: "beerplaza", l: "🏰 Beer Plaza" },
-                    { key: "admin", l: "🏢 Ban Quản Lý" },
-                  ].map((acc) => (
-                    <button
-                      key={acc.key}
-                      type="button"
-                      onClick={() => handleQuickPresetLogin(acc.key)}
-                      disabled={isLoggingIn}
-                      className="p-2 rounded-lg bg-black/40 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50"
+              </div>
+            </div>
+
+            {/* Right Form Column */}
+            <div className="md:col-span-7 p-6 sm:p-8 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-white leading-tight">
+                      Đăng Nhập Tài Khoản
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Chọn nhanh nhà hàng hoặc tự nhập thông tin
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      setAuthError(null);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {authError && (
+                  <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <div className="pt-4 space-y-4">
+                  {/* Preset Quick Login Buttons */}
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+                    <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Chọn Nhanh Nhà Hàng:</span>
+                      <span className="text-[10px] text-gray-400 font-normal">Click 1 giây</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
+                      {[
+                        { key: "lehoibia", l: "🍺 Lễ Hội Bia" },
+                        { key: "1901", l: "🍷 Nhà Hàng 1901" },
+                        { key: "beerplaza", l: "🏰 Beer Plaza" },
+                        { key: "admin", l: "🏢 Ban Quản Lý" },
+                      ].map((acc) => (
+                        <button
+                          key={acc.key}
+                          type="button"
+                          onClick={() => handleQuickPresetLogin(acc.key)}
+                          disabled={isLoggingIn}
+                          className="p-2 rounded-lg bg-black/50 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50 hover:bg-amber-500/20"
+                        >
+                          <div className="font-bold text-gray-200 group-hover:text-amber-300 truncate">
+                            {acc.l}
+                          </div>
+                          <div className="text-[10px] text-gray-400 font-mono">
+                            User: {acc.key}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Manual Login Form */}
+                  <form onSubmit={handleLogin} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-300">
+                        Mật Khẩu
+                      </label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+                        <Input
+                          type="password"
+                          placeholder="Nhập mật khẩu..."
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400 text-xs h-10"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={isLoggingIn || !loginPassword}
+                      className="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider py-5 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
                     >
-                      <div className="font-bold text-gray-200 group-hover:text-amber-300 truncate">
-                        {acc.l}
-                      </div>
-                      <div className="text-[10px] text-gray-400 font-mono">
-                        User: {acc.key}
-                      </div>
-                    </button>
-                  ))}
+                      {isLoggingIn ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Đang đăng nhập...
+                        </>
+                      ) : (
+                        <>
+                          Đăng Nhập Ngay
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </Button>
+                  </form>
                 </div>
               </div>
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">
-                    Tên Đăng Nhập Hoặc Email
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
-                    <Input
-                      type="text"
-                      placeholder="Nhập tên đăng nhập (ví dụ: lehoibia)..."
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">
-                    Mật Khẩu
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
-                    <Input
-                      type="password"
-                      placeholder="Nhập mật khẩu..."
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isLoggingIn || !loginUsername.trim() || !loginPassword}
-                  className="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm py-5 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
-                >
-                  {isLoggingIn ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Đang đăng nhập Firebase...
-                    </>
-                  ) : (
-                    <>
-                      Đăng Nhập Ngay
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </Button>
-              </form>
             </div>
+
           </div>
         </div>
       )}

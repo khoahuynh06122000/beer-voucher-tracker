@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle } from "lucide-react";
 import { getSetting, setSetting } from "@/lib/firestoreService";
 
+import beerFoamBg from "@/assets/beer_foam_bg.jpg";
+
 export default function AdminSettings() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -32,12 +34,12 @@ export default function AdminSettings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0c10] text-white flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 inline-block animate-pulse">
+          <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 inline-block animate-bounce">
             <Beer className="w-8 h-8" />
           </div>
-          <p className="text-sm font-semibold text-muted-foreground">Đang tải cài đặt...</p>
+          <p className="text-sm font-semibold text-amber-300">Đang tải cài đặt...</p>
         </div>
       </div>
     );
@@ -45,18 +47,18 @@ export default function AdminSettings() {
 
   if (!isAuthenticated || user?.role !== "admin") {
     return (
-      <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
-        <Card className="p-8 max-w-md w-full text-center space-y-4 rounded-xl border border-border">
-          <div className="p-3 bg-destructive/10 text-destructive rounded-full w-fit mx-auto">
+      <div className="min-h-screen bg-[#07090e] text-white flex flex-col justify-center items-center p-4">
+        <Card className="p-8 max-w-md w-full text-center space-y-4 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl">
+          <div className="p-3 bg-red-500/20 text-red-400 rounded-2xl w-fit mx-auto border border-red-500/30">
             <Settings className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-foreground">Không Có Quyền Truy Cập</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-xl font-extrabold text-white">Không Có Quyền Truy Cập</h2>
+          <p className="text-xs text-gray-400">
             Bạn cần tài khoản quản trị viên (Admin) để thiết lập tích hợp báo cáo MS Teams.
           </p>
           <Button
             onClick={() => setLocation("/")}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm rounded-lg"
+            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm rounded-xl py-5 shadow-lg shadow-amber-500/20"
           >
             Về Bảng Điều Khiển
           </Button>
@@ -90,16 +92,25 @@ export default function AdminSettings() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b border-border/80 bg-card/90 backdrop-blur sticky top-0 z-50">
+    <div className="relative min-h-screen bg-[#07090e] text-gray-100 flex flex-col overflow-x-hidden">
+      {/* Background Cinematic Beer Foam Texture */}
+      <div
+        className="fixed inset-0 bg-cover bg-center pointer-events-none opacity-15 mix-blend-overlay z-0"
+        style={{ backgroundImage: `url(${beerFoamBg})` }}
+      />
+
+      {/* Ambient Radial Golden Glow */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-950/40 via-[#0a0c12]/95 to-[#06070a] pointer-events-none z-0" />
+
+      <header className="relative z-50 border-b border-amber-500/20 bg-[#0c0e15]/90 backdrop-blur-md sticky top-0 shadow-xl">
         <div className="container py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-              <Beer className="w-6 h-6" />
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-lg shadow-amber-500/10">
+              <Beer className="w-6 h-6 fill-amber-400 text-amber-400" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-foreground leading-none">Cài Đặt Quản Trị Hệ Thống</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">MS Teams Integration Settings (Firestore)</p>
+              <h1 className="text-base font-extrabold text-white leading-none">Cài Đặt Quản Trị Hệ Thống</h1>
+              <p className="text-xs text-amber-300/80 mt-0.5 font-medium">MS Teams Integration Settings (Firestore)</p>
             </div>
           </div>
 
@@ -107,7 +118,7 @@ export default function AdminSettings() {
             onClick={() => setLocation("/")}
             variant="outline"
             size="sm"
-            className="text-xs font-semibold gap-1.5 rounded-lg"
+            className="text-xs font-bold gap-1.5 rounded-xl border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Quay Lại Trang Chủ
@@ -115,15 +126,15 @@ export default function AdminSettings() {
         </div>
       </header>
 
-      <main className="container py-10 flex-1 max-w-3xl">
-        <Card className="p-6 md:p-8 rounded-xl border border-border/80 bg-card shadow-sm space-y-8">
-          <div className="flex items-start gap-4 pb-6 border-b border-border/60">
-            <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+      <main className="relative z-10 container py-10 flex-1 max-w-3xl">
+        <Card className="p-6 md:p-8 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-8 text-white">
+          <div className="flex items-start gap-4 pb-6 border-b border-white/10">
+            <div className="p-3 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
               <Link2 className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-foreground">Tích Hợp MS Teams Webhook</h2>
-              <p className="text-xs text-muted-foreground mt-1">
+              <h2 className="text-xl font-black text-white">Tích Hợp MS Teams Webhook</h2>
+              <p className="text-xs text-gray-400 mt-1">
                 Cấu hình webhook để tự động nhận thẻ báo cáo hiệu suất voucher mỗi ngày.
               </p>
             </div>
