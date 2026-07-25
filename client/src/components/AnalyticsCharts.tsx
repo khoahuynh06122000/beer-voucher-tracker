@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  BarChart,
+  ComposedChart,
   Bar,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -15,6 +14,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  BarChart,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,6 +28,12 @@ import {
   Award,
   Filter,
   PieChart as PieChartIcon,
+  Calendar,
+  Sparkles,
+  Activity,
+  Flame,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVouchersByDateRange, VoucherRecord, getLocalDateString } from "@/lib/firestoreService";
@@ -40,16 +46,16 @@ const RESTAURANTS = [
   { id: "maisonkayser", name: "Maison Kayser" },
 ];
 
-const COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6"];
-
 export function AnalyticsCharts() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
   const [selectedRestaurant, setSelectedRestaurant] = useState<string>("all");
+  
+  // Default range set to 7 days
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date();
-    date.setDate(date.getDate() - 30);
+    date.setDate(date.getDate() - 7);
     return getLocalDateString(date);
   });
 
@@ -86,7 +92,7 @@ export function AnalyticsCharts() {
     setEndDate(getLocalDateString(end));
   };
 
-  // Group daily totals for bar/line charts
+  // Group daily totals for combined chart
   const dailyDataMap = new Map<string, { date: string; totalIssued: number; postedBills: number; cancelled: number; potato: number; beer: number; bakery: number }>();
 
   // Group by restaurant for restaurant breakdown comparison
@@ -166,6 +172,16 @@ export function AnalyticsCharts() {
   // Best performing restaurant
   const topRestaurant = [...restaurantComparisonData].sort((a, b) => b.utilizationRate - a.utilizationRate)[0];
 
+  // Specific Detailed Analysis metrics for Right Panel
+  const daysCount = dailyChartData.length || 1;
+  const avgIssuedPerDay = Math.round(totalIssuedAll / daysCount);
+  const avgPostedPerDay = Math.round(totalPostedAll / daysCount);
+  const avgCancelledPerDay = Math.round(totalCancelledAll / daysCount);
+
+  const peakIssuedDay = [...dailyChartData].sort((a, b) => b.totalIssued - a.totalIssued)[0];
+  const peakRateDay = [...dailyChartData].sort((a, b) => b.utilizationRate - a.utilizationRate)[0];
+  const cancellationRate = totalIssuedAll > 0 ? ((totalCancelledAll / totalIssuedAll) * 100).toFixed(1) : "0";
+
   const pieCouponData = [
     { name: "Coupon Khoai Tây", value: totalPotatoAll, color: "#f59e0b" },
     { name: "Coupon Beer", value: totalBeerAll, color: "#3b82f6" },
@@ -176,19 +192,19 @@ export function AnalyticsCharts() {
   return (
     <div className="space-y-6">
       {/* Top Filter Controls Card */}
-      <Card className="p-5 rounded-2xl border border-border/80 bg-card shadow-sm">
+      <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-sm">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground mr-1">
+            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
               <Filter className="w-4 h-4 text-amber-500" />
-              <span>Bộ lọc báo cáo:</span>
+              <span>Thanh Lọc Khoảng Thời Gian:</span>
             </div>
 
             {isAdmin && (
               <select
                 value={selectedRestaurant}
                 onChange={(e) => setSelectedRestaurant(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                className="px-3 py-1.5 rounded-xl bg-background border border-amber-500/30 text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 shadow-xs cursor-pointer"
               >
                 {RESTAURANTS.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -198,35 +214,67 @@ export function AnalyticsCharts() {
               </select>
             )}
 
-            <div className="flex items-center gap-1.5">
-              {[7, 14, 30, 90].map((days) => (
-                <Button
-                  key={days}
-                  onClick={() => handleSetLastDays(days)}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs font-semibold rounded-lg h-8 px-2.5"
-                >
-                  {days} ngày
-                </Button>
-              ))}
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1 bg-amber-500/10 p-1 rounded-xl border border-amber-500/20">
+              <Button
+                type="button"
+                onClick={() => handleSetLastDays(7)}
+                variant="ghost"
+                size="sm"
+                className={`text-xs font-bold rounded-lg h-7 px-2.5 transition-all ${
+                  startDate === getLocalDateString(new Date(Date.now() - 7 * 86400000))
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "text-foreground hover:bg-amber-500/20"
+                }`}
+              >
+                7 ngày (Mặc định)
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleSetLastDays(14)}
+                variant="ghost"
+                size="sm"
+                className="text-xs font-semibold rounded-lg h-7 px-2 text-foreground hover:bg-amber-500/20"
+              >
+                14 ngày
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleSetLastDays(30)}
+                variant="ghost"
+                size="sm"
+                className="text-xs font-semibold rounded-lg h-7 px-2 text-foreground hover:bg-amber-500/20"
+              >
+                30 ngày
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleSetLastDays(90)}
+                variant="ghost"
+                size="sm"
+                className="text-xs font-semibold rounded-lg h-7 px-2 text-foreground hover:bg-amber-500/20"
+              >
+                90 ngày
+              </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full lg:w-auto">
+          {/* Custom Date Range Selectors */}
+          <div className="flex items-center gap-2 shrink-0 bg-background/80 border border-border p-1.5 rounded-xl shadow-xs">
+            <Calendar className="w-3.5 h-3.5 text-amber-500 ml-1" />
             <span className="text-xs text-muted-foreground font-semibold">Từ:</span>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 cursor-pointer"
             />
             <span className="text-xs text-muted-foreground font-semibold">đến:</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="px-2 py-1 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 cursor-pointer"
             />
           </div>
         </div>
@@ -301,6 +349,183 @@ export function AnalyticsCharts() {
         </Card>
       </div>
 
+      {/* Combined Chart (Left) + Detailed Analysis Panel (Right) */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <Card className="lg:col-span-7 p-6 rounded-2xl border border-border/80 bg-card h-96">
+            <Skeleton className="h-full w-full" />
+          </Card>
+          <Card className="lg:col-span-5 p-6 rounded-2xl border border-border/80 bg-card h-96">
+            <Skeleton className="h-full w-full" />
+          </Card>
+        </div>
+      ) : dailyChartData.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT SIDE: Combined Chart (Issuance, Redemption & Conversion Rate %) */}
+          <Card className="lg:col-span-7 p-5 sm:p-6 rounded-2xl border border-border/80 bg-card shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/60">
+              <div>
+                <h4 className="font-extrabold text-base text-foreground flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-amber-500" />
+                  Báo Cáo Biểu Đồ Tổng Hợp (Phát Hành, Quy Đổi & Xu Hướng %)
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Thống kê kết hợp số lượng coupon & đường tỷ lệ quy đổi trong giai đoạn {startDate} → {endDate}
+                </p>
+              </div>
+            </div>
+
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={dailyChartData} margin={{ top: 15, right: 10, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickLine={false} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 100]}
+                  unit="%"
+                  tick={{ fontSize: 11 }}
+                  tickLine={false}
+                />
+                <Tooltip
+                  formatter={(value: any, name: any) => {
+                    if (name === "Tỷ lệ quy đổi %") return [`${value}%`, name];
+                    return [value?.toLocaleString("vi-VN"), name];
+                  }}
+                  contentStyle={{
+                    backgroundColor: "rgba(15, 23, 42, 0.9)",
+                    border: "none",
+                    borderRadius: "10px",
+                    color: "#fff",
+                    fontSize: "12px",
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }} />
+                <Bar yAxisId="left" dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                <Bar yAxisId="left" dataKey="postedBills" fill="#10b981" radius={[4, 4, 0, 0]} name="Hóa đơn quy đổi" />
+                <Bar yAxisId="left" dataKey="cancelled" fill="#ef4444" radius={[4, 4, 0, 0]} name="Đã hủy" />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="utilizationRate"
+                  stroke="#a855f7"
+                  name="Tỷ lệ quy đổi %"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: "#a855f7", strokeWidth: 2, stroke: "#ffffff" }}
+                  activeDot={{ r: 7 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+
+          {/* RIGHT SIDE: Detailed Analytics Breakdown Panel */}
+          <Card className="lg:col-span-5 p-5 sm:p-6 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-card via-card to-amber-500/5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-amber-500/20">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base text-foreground">Phân Tích Chi Tiết Biểu Đồ</h4>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Dữ liệu tổng hợp {daysCount} ngày ({startDate} → {endDate})
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Analysis Stats List */}
+            <div className="space-y-3.5">
+              {/* Daily Average Box */}
+              <div className="p-3.5 rounded-xl bg-secondary/50 border border-border/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-blue-500" />
+                    Mức Độ Hoạt Động Trung Bình / Ngày:
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                  <div className="bg-background p-2.5 rounded-lg border border-border/60">
+                    <span className="text-muted-foreground block text-[11px]">Phát hành TB:</span>
+                    <strong className="text-blue-600 dark:text-blue-400 text-sm font-extrabold">
+                      {avgIssuedPerDay.toLocaleString()}
+                    </strong>{" "}
+                    <span className="text-[10px] text-muted-foreground">voucher/ngày</span>
+                  </div>
+                  <div className="bg-background p-2.5 rounded-lg border border-border/60">
+                    <span className="text-muted-foreground block text-[11px]">Quy đổi TB:</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400 text-sm font-extrabold">
+                      {avgPostedPerDay.toLocaleString()}
+                    </strong>{" "}
+                    <span className="text-[10px] text-muted-foreground">HĐ/ngày</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Peak Performance Day Box */}
+              <div className="p-3.5 rounded-xl bg-secondary/50 border border-border/80 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <Flame className="w-4 h-4 text-amber-500" />
+                  <span>Ngày Peak Cao Điểm Nhất:</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  {peakIssuedDay && (
+                    <div className="flex justify-between items-center bg-background p-2 rounded-lg border border-border/60">
+                      <span className="text-muted-foreground">Phát hành nhiều nhất:</span>
+                      <div className="text-right">
+                        <strong className="text-foreground font-bold">{peakIssuedDay.date}</strong>
+                        <span className="ml-1.5 text-blue-600 font-extrabold">({peakIssuedDay.totalIssued.toLocaleString()} vch)</span>
+                      </div>
+                    </div>
+                  )}
+                  {peakRateDay && (
+                    <div className="flex justify-between items-center bg-background p-2 rounded-lg border border-border/60">
+                      <span className="text-muted-foreground">Tỷ lệ quy đổi cao nhất:</span>
+                      <div className="text-right">
+                        <strong className="text-foreground font-bold">{peakRateDay.date}</strong>
+                        <span className="ml-1.5 text-purple-600 dark:text-purple-400 font-extrabold">({peakRateDay.utilizationRate}%)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quality & Cancellation Assessment Box */}
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                    <CheckCircle2 className="w-4 h-4 text-amber-600" />
+                    Đánh Giá Chất Lượng Vận Hành:
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] font-extrabold">
+                    {overallUtilizationRate >= 90 ? "RẤT TỐT" : overallUtilizationRate >= 75 ? "ĐẠT YÊU CẦU" : "CẦN LƯU Ý"}
+                  </span>
+                </div>
+                <p className="text-xs text-foreground/90 leading-relaxed font-medium">
+                  {overallUtilizationRate >= 90
+                    ? `🔥 Tỷ lệ quy đổi cực kỳ cao (${overallUtilizationRate}%), phản ánh trải nghiệm khách hàng tại nhà hàng đạt hiệu quả vượt trội.`
+                    : overallUtilizationRate >= 75
+                    ? `✅ Tỷ lệ quy đổi đạt ${overallUtilizationRate}%, lưu lượng khách hàng sử dụng coupon ổn định.`
+                    : `⚠️ Tỷ lệ quy đổi hiện ở mức ${overallUtilizationRate}%. Cần rà soát quy trình hướng dẫn nhận coupon tại bàn.`}
+                </p>
+                <div className="flex items-center justify-between pt-1 border-t border-amber-500/20 text-[11px] text-muted-foreground">
+                  <span>Coupon bị hủy / rách:</span>
+                  <strong className="text-red-500 font-bold">
+                    {totalCancelledAll.toLocaleString()} ({cancellationRate}%)
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : (
+        <Card className="p-12 text-center text-muted-foreground rounded-2xl border border-border">
+          Chưa có số liệu voucher trong khoảng thời gian được chọn.
+        </Card>
+      )}
+
       {/* Admin Restaurant Comparison Section */}
       {isAdmin && (
         <Card className="p-6 rounded-2xl border border-border/80 bg-card shadow-sm space-y-4">
@@ -367,87 +592,11 @@ export function AnalyticsCharts() {
         </Card>
       )}
 
-      {/* Main Interactive Charts */}
-      {isLoading ? (
+      {/* Secondary Charts: Pie Chart & Restaurant Comparison Bar Chart */}
+      {!isLoading && dailyChartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-6 rounded-xl border border-border/80 bg-card h-80">
-            <Skeleton className="h-full w-full" />
-          </Card>
-          <Card className="p-6 rounded-xl border border-border/80 bg-card h-80">
-            <Skeleton className="h-full w-full" />
-          </Card>
-        </div>
-      ) : dailyChartData.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: Daily Issuance & Redemption */}
-          <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="font-bold text-foreground flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                Số Liệu Phát Hành & Quy Đổi Hàng Ngày
-              </h4>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11 }} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "none",
-                    borderRadius: "8px",
-                    color: "#fff",
-                    fontSize: "12px",
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
-                <Bar dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
-                <Bar dataKey="postedBills" fill="#10b981" radius={[4, 4, 0, 0]} name="Hóa đơn quy đổi" />
-                <Bar dataKey="cancelled" fill="#ef4444" radius={[4, 4, 0, 0]} name="Đã hủy" />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Chart 2: Utilization Rate Trend */}
-          <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="font-bold text-foreground flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                Xu Hướng Tỷ Lệ Quy Đổi (%)
-              </h4>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} tickLine={false} />
-                <Tooltip
-                  formatter={(value) => [`${value}%`, "Tỷ lệ quy đổi"]}
-                  contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "none",
-                    borderRadius: "8px",
-                    color: "#fff",
-                    fontSize: "12px",
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
-                <Line
-                  type="monotone"
-                  dataKey="utilizationRate"
-                  stroke="#a855f7"
-                  name="Tỷ lệ quy đổi %"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: "#a855f7" }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Chart 3: Coupon Category Distribution (Pie Chart) */}
-          <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
+          {/* Coupon Category Distribution (Pie Chart) */}
+          <Card className="p-6 rounded-2xl border border-border/80 bg-card shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-foreground flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-amber-500" />
@@ -491,8 +640,8 @@ export function AnalyticsCharts() {
             )}
           </Card>
 
-          {/* Chart 4: Restaurant Comparison Bar Chart */}
-          <Card className="p-6 rounded-xl border border-border/80 bg-card shadow-sm">
+          {/* Restaurant Comparison Bar Chart */}
+          <Card className="p-6 rounded-2xl border border-border/80 bg-card shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-foreground flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-amber-500" />
@@ -520,12 +669,9 @@ export function AnalyticsCharts() {
             </ResponsiveContainer>
           </Card>
         </div>
-      ) : (
-        <Card className="p-12 text-center text-muted-foreground rounded-xl border border-border">
-          Chưa có số liệu voucher trong khoảng thời gian được chọn.
-        </Card>
       )}
     </div>
   );
 }
+
 

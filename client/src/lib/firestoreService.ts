@@ -311,6 +311,70 @@ export async function getVouchersByDateRange(
 }
 
 /**
+ * Get aggregated voucher metrics over a date range
+ */
+export async function getAggregatedVoucherByDateRange(
+  restaurantId: string | null,
+  startDate: string,
+  endDate: string
+): Promise<VoucherRecord | null> {
+  const records = await getVouchersByDateRange(restaurantId, startDate, endDate);
+  if (!records || records.length === 0) {
+    return null;
+  }
+
+  let totalPotato = 0;
+  let totalBeer = 0;
+  let totalBakery = 0;
+  let totalCancelled = 0;
+  let totalPostedBills = 0;
+  let totalIssued = 0;
+  let allBillImages: string[] = [];
+  let allBillNumbers: string[] = [];
+
+  records.forEach((data) => {
+    const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+    const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+    const bakery = data.bakeryCoupons ?? 0;
+    const cancelled = data.cancelled || 0;
+    const posted = data.postedBills || (potato + beer + bakery);
+    const issued = data.totalIssued || (potato + beer + bakery + cancelled);
+
+    totalPotato += potato;
+    totalBeer += beer;
+    totalBakery += bakery;
+    totalCancelled += cancelled;
+    totalPostedBills += posted;
+    totalIssued += issued;
+
+    if (data.billImages && Array.isArray(data.billImages)) {
+      allBillImages.push(...data.billImages);
+    }
+    if (data.billNumber) {
+      allBillNumbers.push(`${data.restaurantName || data.restaurantId} (${data.date}): ${data.billNumber}`);
+    }
+  });
+
+  const rate = totalIssued > 0 ? Math.round((totalPostedBills / totalIssued) * 100) : 0;
+
+  return {
+    id: `aggregate_${startDate}_${endDate}`,
+    date: startDate === endDate ? startDate : `${startDate} → ${endDate}`,
+    restaurantId: restaurantId || "all",
+    restaurantName: !restaurantId || restaurantId === "all" ? "Tất Cả Nhà Hàng" : restaurantId,
+    potatoCoupons: totalPotato,
+    beerCoupons: totalBeer,
+    bakeryCoupons: totalBakery,
+    cancelled: totalCancelled,
+    postedBills: totalPostedBills,
+    totalIssued: totalIssued,
+    utilizationRate: rate,
+    billNumber: allBillNumbers.length > 0 ? allBillNumbers.join("; ") : undefined,
+    billImages: allBillImages.length > 0 ? allBillImages : undefined,
+  };
+}
+
+/**
  * Upsert (create or update) a voucher record
  */
 export async function upsertVoucher(data: {

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ticket, XCircle, Percent, Beer, Calendar, Camera, Eye, Download, FileText } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getVoucherByDate, getLocalDateString, VoucherRecord } from "@/lib/firestoreService";
+import { getAggregatedVoucherByDateRange, getLocalDateString, VoucherRecord } from "@/lib/firestoreService";
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { downloadImage } from "@/lib/imageUtils";
 
@@ -31,23 +31,29 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
     return isAdmin ? "all" : userRestaurantId;
   });
 
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return getLocalDateString(d);
+  });
+
+  const [endDate, setEndDate] = useState<string>(() => getLocalDateString());
+
   useEffect(() => {
     if (!isAdmin) {
       setSelectedRestId(userRestaurantId);
     }
   }, [user, isAdmin, userRestaurantId]);
+
   const [todayRecord, setTodayRecord] = useState<VoucherRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-
-  const targetDate = selectedDate || getLocalDateString();
-  const isAll = selectedRestId === "all";
 
   useEffect(() => {
     let isMounted = true;
     async function fetchKPI() {
       setIsLoading(true);
-      const record = await getVoucherByDate(selectedRestId, targetDate, isAll);
+      const record = await getAggregatedVoucherByDateRange(selectedRestId, startDate, endDate);
       if (isMounted) {
         setTodayRecord(record);
         setIsLoading(false);
@@ -57,7 +63,7 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
     return () => {
       isMounted = false;
     };
-  }, [selectedRestId, targetDate, isAll, refreshTrigger]);
+  }, [selectedRestId, startDate, endDate, refreshTrigger]);
 
   if (isLoading) {
     return (
@@ -211,15 +217,21 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
 
   return (
     <div className="space-y-3">
-      {/* Date & Restaurant Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-muted-foreground bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 p-3 sm:px-4 sm:py-2.5 rounded-2xl shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-          <span>
-            Ngày: <strong className="text-foreground font-bold">{targetDate}</strong>
-          </span>
+      {/* Date Range & Restaurant Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs text-muted-foreground bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 p-3 sm:px-4 sm:py-2.5 rounded-2xl shadow-xs">
+        {/* Left Section: Info badge & Restaurant filter */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              Thống kê:{" "}
+              <strong className="text-foreground font-extrabold">
+                {startDate === endDate ? startDate : `${startDate} → ${endDate}`}
+              </strong>
+            </span>
+          </div>
 
-          <div className="flex items-center gap-1.5 ml-0 sm:ml-3 border-l border-amber-500/30 pl-3">
+          <div className="flex items-center gap-1.5 border-l border-amber-500/30 pl-2.5">
             <span className="font-semibold text-foreground">Xem số liệu:</span>
             {isAdmin ? (
               <select
@@ -241,17 +253,85 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
           </div>
         </div>
 
-        {onDateChange && (
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden sm:inline font-semibold">Đổi ngày:</span>
+        {/* Right Section: Quick Presets & Date Range Pickers */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Presets */}
+          <div className="flex items-center gap-1 bg-background/80 dark:bg-card/80 border border-amber-500/30 p-0.5 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                const end = new Date();
+                const start = new Date();
+                start.setDate(start.getDate() - 30);
+                setStartDate(getLocalDateString(start));
+                setEndDate(getLocalDateString(end));
+              }}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer"
+            >
+              1 Tháng (Mặc định)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const end = new Date();
+                const start = new Date(end.getFullYear(), end.getMonth(), 1);
+                setStartDate(getLocalDateString(start));
+                setEndDate(getLocalDateString(end));
+              }}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
+            >
+              Tháng Này
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const end = new Date();
+                const start = new Date();
+                start.setDate(start.getDate() - 7);
+                setStartDate(getLocalDateString(start));
+                setEndDate(getLocalDateString(end));
+              }}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
+            >
+              7 Ngày
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const today = getLocalDateString();
+                setStartDate(today);
+                setEndDate(today);
+                if (onDateChange) onDateChange(today);
+              }}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-amber-500/10 transition-all cursor-pointer"
+            >
+              Hôm Nay
+            </button>
+          </div>
+
+          {/* Date range pickers */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="font-semibold text-foreground">Từ:</span>
             <input
               type="date"
-              value={targetDate}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="px-2.5 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (onDateChange) onDateChange(e.target.value);
+              }}
+              className="px-2 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
+            />
+            <span className="font-semibold text-foreground">Đến:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+              }}
+              className="px-2 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
             />
           </div>
-        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
