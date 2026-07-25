@@ -1,4 +1,4 @@
-import { getSetting } from "./firestoreService";
+import { getSetting, checkUnupdatedRestaurants } from "./firestoreService";
 
 export function generateAnalysisText(record: {
   restaurantName: string;
@@ -296,3 +296,175 @@ export async function sendStoredMSTeamsReport(record: {
     return { success: false, message: error.message || "Lỗi gửi webhook MS Teams" };
   }
 }
+
+/**
+ * Generate Adaptive Card object for missing report alert
+ */
+export function getMissingReportAdaptiveCard(status: {
+  checkDate: string;
+  missing: Array<{ restaurantId: string; restaurantName: string }>;
+  updated: Array<{ restaurantId: string; restaurantName: string; postedBills?: number }>;
+  totalRestaurants: number;
+}, timeStr: string) {
+  const dateParts = status.checkDate.split("-");
+  const formattedCheckDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+  const missingListText = status.missing.length > 0
+    ? status.missing.map(m => `• **${m.restaurantName}**: CHƯA cập nhật lần nào`).join("\n\n")
+    : "🟢 Tất cả nhà hàng đã gửi báo cáo đầy đủ!";
+
+  const updatedListText = status.updated.length > 0
+    ? status.updated.map(u => `• **${u.restaurantName}**: Đã cập nhật (${u.postedBills || 0} phiếu)`).join("\n\n")
+    : "Chưa có nhà hàng nào cập nhật.";
+
+  return {
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    type: "AdaptiveCard",
+    version: "1.2",
+    body: [
+      {
+        type: "TextBlock",
+        size: "Large",
+        weight: "Bolder",
+        text: `⚠️ CẢNH BÁO CHƯA CẬP NHẬT BÁO CÁO — ${timeStr}`,
+        color: status.missing.length > 0 ? "Attention" : "Good",
+        wrap: true
+      },
+      {
+        type: "TextBlock",
+        text: `📅 **Ngày kiểm tra:** ${formattedCheckDate}  |  📊 **Tổng nhà hàng:** ${status.totalRestaurants}`,
+        isSubtle: true,
+        wrap: true
+      },
+      {
+        type: "Container",
+        style: status.missing.length > 0 ? "attention" : "good",
+        items: [
+          {
+            type: "TextBlock",
+            text: status.missing.length > 0
+              ? `🔴 KHẨN (${status.missing.length}/${status.totalRestaurants} nhà hàng chưa gửi số liệu ngày ${formattedCheckDate}):`
+              : "🟢 HOÀN THÀNH (100% nhà hàng đã cập nhật):",
+            weight: "Bolder",
+            color: status.missing.length > 0 ? "Attention" : "Good",
+            wrap: true
+          },
+          {
+            type: "TextBlock",
+            text: missingListText,
+            wrap: true
+          }
+        ]
+      },
+      {
+        type: "Container",
+        style: "emphasis",
+        items: [
+          {
+            type: "TextBlock",
+            text: `🟢 ĐÃ CẬP NHẬT (${status.updated.length}/${status.totalRestaurants}):`,
+            weight: "Bolder",
+            wrap: true
+          },
+          {
+            type: "TextBlock",
+            text: updatedListText,
+            wrap: true
+          }
+        ]
+      }
+    ],
+    actions: [
+      {
+        type: "Action.OpenUrl",
+        title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
+        url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+      }
+    ]
+  };
+}
+
+/**
+ * Send daily missing report alert to MS Teams / Power Automate
+ */
+export async function sendMissingReportAlert(
+  customWebhookUrl?: string,
+  checkDate?: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  let webhookUrl = customWebhookUrl;
+  if (!webhookUrl) {
+    webhookUrl = (await getSetting("ms_teams_webhook")) || "";
+  }
+
+  if (!webhookUrl || !webhookUrl.trim()) {
+    return { success: false, message: "Chưa cấu hình Webhook URL MS Teams trong Cài Đặt Admin!" };
+  }
+
+  const status = await checkUnupdatedRestaurants(checkDate);
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+
+  const adaptiveCardContent = getMissingReportAdaptiveCard(status, timeStr);
+
+  const adaptiveCardPayload = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        contentUrl: null,
+        content: adaptiveCardContent
+      }
+    ]
+  };
+
+  const url = webhookUrl.trim();
+  const isPowerAutomate =
+    url.includes("logic.azure.com") ||
+    url.includes("powerautomate") ||
+    url.includes("powerplatform") ||
+    url.includes("flow.microsoft.com");
+
+  const payloadsToTry = isPowerAutomate
+    ? [adaptiveCardContent, adaptiveCardPayload]
+    : [adaptiveCardPayload, adaptiveCardContent];
+
+  for (const payload of payloadsToTry) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok || res.status === 200 || res.status === 202) {
+        return {
+          success: true,
+          message: `Đã gửi cảnh báo ${status.missing.length} nhà hàng chưa cập nhật lên MS Teams thành công!`
+        };
+      }
+    } catch (err: any) {
+      console.warn("Direct fetch error:", err);
+    }
+  }
+
+  // Fallback via backend proxy route
+  try {
+    const proxyRes = await fetch("/api/send-msteams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        webhookUrl: url,
+        customPayload: adaptiveCardContent
+      }),
+    });
+    const proxyData = await proxyRes.json();
+    if (proxyRes.ok && proxyData.success) {
+      return { success: true, message: `Đã gửi cảnh báo MS Teams thành công qua Server Proxy!` };
+    }
+  } catch (err: any) {
+    console.error("Proxy error:", err);
+  }
+
+  return { success: false, message: "Không thể gửi cảnh báo lên MS Teams. Vui lòng kiểm tra lại Webhook URL." };
+}
+

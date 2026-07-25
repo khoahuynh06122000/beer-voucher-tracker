@@ -338,3 +338,70 @@ export async function setSetting(key: string, value: string): Promise<void> {
   const docRef = doc(db, "settings", key);
   await setDoc(docRef, { value, updatedAt: new Date().toISOString() });
 }
+
+export interface RestaurantStatus {
+  restaurantId: string;
+  restaurantName: string;
+  hasUpdated: boolean;
+  postedBills?: number;
+  totalIssued?: number;
+  updatedAt?: string;
+}
+
+/**
+ * Check which restaurants have missing reports for a target date (defaults to yesterday)
+ */
+export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
+  checkDate: string;
+  missing: RestaurantStatus[];
+  updated: RestaurantStatus[];
+  totalRestaurants: number;
+}> {
+  let dateToQuery = checkDate;
+  if (!dateToQuery) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    dateToQuery = getLocalDateString(yesterday);
+  }
+
+  const restaurantKeys = Object.keys(PRESET_USERS).filter((k) => k !== "admin");
+
+  const missing: RestaurantStatus[] = [];
+  const updated: RestaurantStatus[] = [];
+
+  for (const key of restaurantKeys) {
+    const preset = PRESET_USERS[key];
+    try {
+      const record = await getVoucherByDate(key, dateToQuery, false);
+      if (record && record.postedBills !== undefined && record.postedBills > 0) {
+        updated.push({
+          restaurantId: key,
+          restaurantName: preset.restaurantName,
+          hasUpdated: true,
+          postedBills: record.postedBills,
+          totalIssued: record.totalIssued,
+          updatedAt: record.updatedAt,
+        });
+      } else {
+        missing.push({
+          restaurantId: key,
+          restaurantName: preset.restaurantName,
+          hasUpdated: false,
+        });
+      }
+    } catch (e) {
+      missing.push({
+        restaurantId: key,
+        restaurantName: preset.restaurantName,
+        hasUpdated: false,
+      });
+    }
+  }
+
+  return {
+    checkDate: dateToQuery,
+    missing,
+    updated,
+    totalRestaurants: restaurantKeys.length,
+  };
+}

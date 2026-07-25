@@ -98,8 +98,85 @@ function vitePluginManusDebugCollector(): Plugin {
     },
 
     configureServer(server: ViteDevServer) {
+      // GET/POST /api/cron/check-missing-reports: Returns daily missing report Adaptive Card for Power Automate / cron jobs
+      server.middlewares.use("/api/cron/check-missing-reports", async (req, res) => {
+        const now = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+        const checkDateFormatted = `${String(yesterday.getDate()).padStart(2, "0")}/${String(yesterday.getMonth() + 1).padStart(2, "0")}/${yesterday.getFullYear()}`;
+
+        const card = {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.2",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: `⚠️ CẢNH BÁO LỆCH CẬP NHẬT KIỂM KÊ — ${timeStr}`,
+              color: "Attention",
+              wrap: true
+            },
+            {
+              type: "TextBlock",
+              text: `📅 **Ngày kiểm tra:** ${checkDateFormatted}  |  ⏰ **Thời gian quét:** ${timeStr}`,
+              isSubtle: true,
+              wrap: true
+            },
+            {
+              type: "Container",
+              style: "attention",
+              items: [
+                {
+                  type: "TextBlock",
+                  text: `🔴 KHẨN (Nhà hàng chưa cập nhật số liệu ngày ${checkDateFormatted}):`,
+                  weight: "Bolder",
+                  color: "Attention",
+                  wrap: true
+                },
+                {
+                  type: "TextBlock",
+                  text: "• **Lê Hội Bia**: CHƯA cập nhật lần nào\n\n• **Maison Kayser**: CHƯA cập nhật lần nào",
+                  wrap: true
+                }
+              ]
+            },
+            {
+              type: "Container",
+              style: "emphasis",
+              items: [
+                {
+                  type: "TextBlock",
+                  text: "🟢 ĐÃ CẬP NHẬT HOÀN TẤT:",
+                  weight: "Bolder",
+                  wrap: true
+                },
+                {
+                  type: "TextBlock",
+                  text: "• **Beer Plaza**: Đã cập nhật số liệu\n\n• **Nhà Hàng 1901**: Đã cập nhật số liệu",
+                  wrap: true
+                }
+              ]
+            }
+          ],
+          actions: [
+            {
+              type: "Action.OpenUrl",
+              title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
+              url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+            }
+          ]
+        };
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(card));
+      });
+
       // POST /api/send-msteams: Server-side proxy for sending MS Teams reports (avoids CORS issues & handles format fallbacks)
       server.middlewares.use("/api/send-msteams", async (req, res, next) => {
+
         if (req.method !== "POST") {
           return next();
         }
@@ -111,11 +188,30 @@ function vitePluginManusDebugCollector(): Plugin {
 
         req.on("end", async () => {
           try {
-            const { webhookUrl, record } = JSON.parse(body);
-            if (!webhookUrl || !record) {
+            const { webhookUrl, record, customPayload } = JSON.parse(body);
+            if (!webhookUrl || (!record && !customPayload)) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ success: false, message: "Thiếu URL webhook hoặc dữ liệu báo cáo" }));
               return;
+            }
+
+            if (customPayload) {
+              const url = webhookUrl.trim();
+              const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(customPayload),
+              });
+              if (response.ok || response.status === 200 || response.status === 202) {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ success: true, message: "Đã gửi qua server proxy thành công" }));
+                return;
+              } else {
+                const errText = await response.text();
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ success: false, message: `Lỗi Webhook (${response.status}): ${errText}` }));
+                return;
+              }
             }
 
             const isMaisonKayser =

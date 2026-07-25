@@ -4,9 +4,9 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send } from "lucide-react";
-import { getSetting, setSetting, getLocalDateString } from "@/lib/firestoreService";
-import { sendMSTeamsReport } from "@/lib/msTeamsService";
+import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send, AlertTriangle, Copy, Check, Clock, ShieldAlert } from "lucide-react";
+import { getSetting, setSetting, getLocalDateString, checkUnupdatedRestaurants, RestaurantStatus } from "@/lib/firestoreService";
+import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 
@@ -16,19 +16,43 @@ export default function AdminSettings() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isSendingAlert, setIsSendingAlert] = useState(false);
   const [isLoadingSetting, setIsLoadingSetting] = useState(true);
+  const [copiedJson, setCopiedJson] = useState(false);
+
+  // Missing status state
+  const [statusCheck, setStatusCheck] = useState<{
+    checkDate: string;
+    missing: RestaurantStatus[];
+    updated: RestaurantStatus[];
+    totalRestaurants: number;
+  } | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    async function loadWebhook() {
+    async function loadData() {
       setIsLoadingSetting(true);
       const val = await getSetting("ms_teams_webhook");
       if (isMounted) {
         if (val) setWebhookUrl(val);
         setIsLoadingSetting(false);
       }
+
+      // Check yesterday status
+      setIsCheckingStatus(true);
+      try {
+        const res = await checkUnupdatedRestaurants();
+        if (isMounted) {
+          setStatusCheck(res);
+        }
+      } catch (e) {
+        console.error("Failed to check status:", e);
+      } finally {
+        if (isMounted) setIsCheckingStatus(false);
+      }
     }
-    loadWebhook();
+    loadData();
     return () => {
       isMounted = false;
     };
@@ -126,6 +150,39 @@ export default function AdminSettings() {
       setIsTesting(false);
     }
   };
+
+  const handleSendMissingAlert = async () => {
+    if (!webhookUrl.trim()) {
+      toast.error("Vui lòng nhập và lưu Webhook URL MS Teams trước!");
+      return;
+    }
+
+    setIsSendingAlert(true);
+    try {
+      const result = await sendMissingReportAlert(webhookUrl.trim(), statusCheck?.checkDate);
+      if (result.success) {
+        toast.success("🔔 " + result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err: any) {
+      toast.error("Lỗi gửi cảnh báo: " + err.message);
+    } finally {
+      setIsSendingAlert(false);
+    }
+  };
+
+  const handleCopyCardSchema = () => {
+    if (!statusCheck) return;
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    const card = getMissingReportAdaptiveCard(statusCheck, timeStr);
+    navigator.clipboard.writeText(JSON.stringify(card, null, 2));
+    setCopiedJson(true);
+    toast.success("📋 Đã sao chép cấu trúc Thẻ Thích Nghi JSON!");
+    setTimeout(() => setCopiedJson(false), 3000);
+  };
+
 
   return (
     <div className="relative min-h-screen bg-[#07090e] text-gray-100 flex flex-col overflow-x-hidden">
@@ -254,6 +311,148 @@ export default function AdminSettings() {
             </div>
           </div>
         </Card>
+
+        {/* Card Cảnh Báo Nhà Hàng Chưa Cập Nhật Số Liệu */}
+        <Card className="p-6 md:p-8 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-6 text-white mt-8">
+          <div className="flex items-start justify-between pb-6 border-b border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white flex flex-wrap items-center gap-2">
+                  <span>Cảnh Báo Chưa Cập Nhật Số Liệu Ngày</span>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                    Tự động 9:00 Sáng
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-400 mt-1">
+                  Kiểm tra các nhà hàng chưa gửi báo cáo số lượng voucher của ngày trước đó và gửi nhắc nhở trực tiếp lên MS Teams.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Status Live Preview */}
+          <div className="p-5 rounded-2xl bg-[#08090f] border border-white/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300">
+                <Clock className="w-4 h-4 text-amber-400" />
+                Trạng thái ngày: {statusCheck?.checkDate || "Đang quét..."}
+              </div>
+              <Button
+                onClick={async () => {
+                  setIsCheckingStatus(true);
+                  const res = await checkUnupdatedRestaurants();
+                  setStatusCheck(res);
+                  setIsCheckingStatus(false);
+                  toast.success("Đã làm mới dữ liệu kiểm tra!");
+                }}
+                disabled={isCheckingStatus}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-gray-400 hover:text-white h-7"
+              >
+                {isCheckingStatus ? "Đang quét..." : "🔄 Làm mới"}
+              </Button>
+            </div>
+
+            {/* List breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Missing list */}
+              <div className="p-4 rounded-xl bg-red-950/30 border border-red-500/20 space-y-2">
+                <div className="text-xs font-bold text-red-400 flex items-center justify-between">
+                  <span>🔴 Chưa Cập Nhật ({statusCheck?.missing.length || 0})</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 font-semibold">Cần Nhắc Nhở</span>
+                </div>
+                {statusCheck?.missing.length === 0 ? (
+                  <p className="text-xs text-emerald-400 italic">🟢 Tất cả nhà hàng đã cập nhật đầy đủ!</p>
+                ) : (
+                  <ul className="text-xs text-gray-300 space-y-1.5 list-disc list-inside">
+                    {statusCheck?.missing.map((m) => (
+                      <li key={m.restaurantId} className="font-semibold text-red-300">
+                        {m.restaurantName}: <span className="text-red-400/80 font-normal">Chưa gửi báo cáo</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Updated list */}
+              <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/20 space-y-2">
+                <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
+                  <span>🟢 Đã Cập Nhật ({statusCheck?.updated.length || 0})</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 font-semibold">Hoàn Tất</span>
+                </div>
+                {statusCheck?.updated.length === 0 ? (
+                  <p className="text-xs text-amber-400/80 italic">Chưa có nhà hàng nào cập nhật.</p>
+                ) : (
+                  <ul className="text-xs text-gray-300 space-y-1.5 list-disc list-inside">
+                    {statusCheck?.updated.map((u) => (
+                      <li key={u.restaurantId} className="font-semibold text-emerald-300">
+                        {u.restaurantName}: <span className="text-emerald-400/80 font-normal">{u.postedBills} phiếu</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <Button
+                type="button"
+                onClick={handleCopyCardSchema}
+                variant="outline"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border-white/20 text-gray-300 hover:bg-white/10 text-xs font-semibold flex items-center justify-center gap-2"
+              >
+                {copiedJson ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copiedJson ? "Đã Sao Chép JSON Thẻ" : "📋 Copy Thẻ Thích Nghi JSON (Power Automate)"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSendMissingAlert}
+                disabled={isSendingAlert || !webhookUrl}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Bell className="w-4 h-4" />
+                {isSendingAlert ? "Đang gửi cảnh báo..." : "🔔 Gửi Cảnh Báo Nhắc Nhở Ngay Qua MS Teams"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Guide for Power Automate 9:00 AM Cron */}
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+            <h4 className="text-xs font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" />
+              Cấu Hình Tự Động 9:00 Sáng Trong Power Automate
+            </h4>
+            <div className="text-xs text-gray-300 space-y-2 leading-relaxed">
+              <p>
+                Để MS Teams tự động nhận cảnh báo nhà hàng chưa cập nhật số liệu vào đúng <strong>9:00 sáng</strong>:
+              </p>
+              <ol className="list-decimal list-inside space-y-1.5 pl-1 text-gray-300">
+                <li>
+                  Trong Power Automate, tạo luồng mới chọn trigger <strong>Lịch trình (Recurrence)</strong>.
+                </li>
+                <li>
+                  Đặt Tần suất: <strong>1 Ngày</strong>, Giờ chạy: <strong>09:00 AM</strong>.
+                </li>
+                <li>
+                  Thêm hành động <strong>HTTP (GET)</strong> gọi đến API ứng dụng:
+                  <code className="block mt-1 p-2 rounded bg-black/60 font-mono text-[11px] text-amber-300 border border-amber-500/30 select-all overflow-x-auto">
+                    GET https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app/api/cron/check-missing-reports
+                  </code>
+                </li>
+                <li>
+                  Thêm hành động <strong>Đăng thẻ trong một cuộc trò chuyện hoặc kênh</strong> (Post card in a chat or channel) chọn kênh <strong>PHỐI HỢP KẾ TOÁN - CỤM BEER</strong> và dán kết quả <code>Thẻ thích nghi</code> từ bước HTTP vào.
+                </li>
+              </ol>
+            </div>
+          </div>
+        </Card>
+
       </main>
 
       <footer className="border-t border-border bg-card/50 py-6 text-center text-xs text-muted-foreground">
