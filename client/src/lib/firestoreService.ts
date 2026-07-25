@@ -119,6 +119,16 @@ export async function getUserProfile(uid: string, email?: string): Promise<UserP
   }
 }
 
+function cleanUndefinedFields<T extends Record<string, any>>(obj: T): Partial<T> {
+  const newObj: any = {};
+  Object.keys(obj).forEach((key) => {
+    if (obj[key] !== undefined) {
+      newObj[key] = obj[key];
+    }
+  });
+  return newObj;
+}
+
 /**
  * Save user profile explicitly
  */
@@ -129,7 +139,7 @@ export async function createUserProfile(uid: string, profile: Omit<UserProfile, 
     ...profile,
     createdAt: new Date().toISOString(),
   };
-  await setDoc(userRef, newProfile);
+  await setDoc(userRef, cleanUndefinedFields(newProfile) as UserProfile);
   return newProfile;
 }
 
@@ -331,8 +341,10 @@ export async function upsertVoucher(data: {
     updatedAt: new Date().toISOString(),
   };
 
-  await setDoc(docRef, record, { merge: true });
-  return { id: docId, ...record };
+  const cleanedRecord = cleanUndefinedFields(record) as VoucherRecord;
+
+  await setDoc(docRef, cleanedRecord, { merge: true });
+  return { id: docId, ...cleanedRecord };
 }
 
 /**
@@ -366,8 +378,10 @@ export async function appendBillImagesToVoucher(
     updatedData.billNumber = billNumber;
   }
 
-  await setDoc(docRef, updatedData, { merge: true });
-  return { ...currentRecord, ...updatedData, id: docId } as VoucherRecord;
+  const cleanedData = cleanUndefinedFields(updatedData as Record<string, any>);
+
+  await setDoc(docRef, cleanedData, { merge: true });
+  return { ...currentRecord, ...cleanedData, id: docId } as VoucherRecord;
 }
 
 /**
