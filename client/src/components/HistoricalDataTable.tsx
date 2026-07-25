@@ -199,6 +199,9 @@ export function HistoricalDataTable() {
                 🍺 Coupon Beer
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                🥐 Voucher Bánh
+              </TableHead>
+              <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 ❌ Coupon Hủy
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
@@ -237,14 +240,18 @@ export function HistoricalDataTable() {
                     <TableCell className="py-3 px-4 text-right">
                       <Skeleton className="h-4 w-12 ml-auto" />
                     </TableCell>
+                    <TableCell className="py-3 px-4 text-right">
+                      <Skeleton className="h-4 w-12 ml-auto" />
+                    </TableCell>
                   </TableRow>
                 ))}
               </>
             ) : records && records.length > 0 ? (
               records.map((record, idx) => {
                 const rate = record.utilizationRate;
-                const potato = record.potatoCoupons ?? Math.round(record.postedBills / 2);
-                const beer = record.beerCoupons ?? (record.postedBills - potato);
+                const bakery = record.bakeryCoupons ?? 0;
+                const potato = record.potatoCoupons ?? (bakery > 0 ? 0 : Math.round(record.postedBills / 2));
+                const beer = record.beerCoupons ?? (bakery > 0 ? 0 : record.postedBills - potato);
 
                 return (
                   <TableRow
@@ -264,6 +271,9 @@ export function HistoricalDataTable() {
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-blue-600 dark:text-blue-400">
                       {beer.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-emerald-600 dark:text-emerald-400">
+                      {bakery.toLocaleString()}
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-red-600 dark:text-red-400">
                       {record.cancelled.toLocaleString()}
@@ -290,7 +300,7 @@ export function HistoricalDataTable() {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={user?.role === "admin" ? 7 : 6}
+                  colSpan={user?.role === "admin" ? 8 : 7}
                   className="py-12 px-4 text-center text-muted-foreground text-sm"
                 >
                   Không có dữ liệu trong khoảng thời gian đã chọn.

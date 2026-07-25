@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { VoucherEntryForm } from "@/components/VoucherEntryForm";
 import { KPIDashboard } from "@/components/KPIDashboard";
 import { HistoricalDataTable } from "@/components/HistoricalDataTable";
+import { AnalyticsCharts } from "@/components/AnalyticsCharts";
 import { useLocation } from "wouter";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
-import { DraftBeerGlass } from "@/components/DraftBeerGlass";
+import { getLocalDateString } from "@/lib/firestoreService";
 import {
   Beer,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
   LogOut,
   ShieldCheck,
   Sparkles,
+  BarChart3,
   Sun,
   Moon,
 } from "lucide-react";
@@ -28,7 +30,20 @@ export default function Home() {
   const { theme, toggleTheme } = useTheme();
   const [, setLocation] = useLocation();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "entry" | "analytics" | "history">("dashboard");
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateString());
+
+  const isAdmin = user?.role === "admin";
+
+  const [activeTab, setActiveTab] = useState<"dashboard" | "entry" | "analytics" | "history">(
+    isAdmin ? "analytics" : "dashboard"
+  );
+
+  const handleFormSuccess = (savedDate?: string) => {
+    setRefreshTrigger((t) => t + 1);
+    if (savedDate) {
+      setSelectedDate(savedDate);
+    }
+  };
 
   if (loading) {
     return (
@@ -48,6 +63,19 @@ export default function Home() {
   if (!isAuthenticated) {
     return <LandingCover />;
   }
+
+  // Tabs navigation config for Admin vs Non-Admin
+  const navTabs = isAdmin
+    ? [
+        { id: "analytics", label: "Phân Tích Báo Cáo Toàn Diện", icon: BarChart3 },
+        { id: "dashboard", label: "Tổng Quan KPI Hôm Nay", icon: LayoutDashboard },
+        { id: "history", label: "Lịch Sử Tất Cả Nhà Hàng", icon: History },
+      ]
+    : [
+        { id: "dashboard", label: "Bảng Điều Khiển KPI", icon: LayoutDashboard },
+        { id: "entry", label: "Nhập Số Liệu Mới", icon: PlusCircle },
+        { id: "history", label: "Lịch Sử Dữ Liệu", icon: History },
+      ];
 
   return (
     <div className="relative min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden">
@@ -76,7 +104,9 @@ export default function Home() {
               </div>
               <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Đã kết nối dữ liệu nhà hàng</span>
+                <span>
+                  {isAdmin ? "Hệ thống Báo cáo Quản trị Admin" : "Đã kết nối dữ liệu nhà hàng"}
+                </span>
               </span>
             </div>
           </div>
@@ -86,9 +116,9 @@ export default function Home() {
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/80 border border-border/60 text-xs font-semibold">
               <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>{user?.name || "Người dùng"}</span>
-              {user?.role === "admin" && (
+              {isAdmin && (
                 <span className="px-2 py-0.5 text-[10px] uppercase font-bold bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-md">
-                  Admin
+                  Admin Quản Lý
                 </span>
               )}
             </div>
@@ -105,7 +135,7 @@ export default function Home() {
               </Button>
             )}
 
-            {user?.role === "admin" && (
+            {isAdmin && (
               <Button
                 onClick={() => setLocation("/admin")}
                 variant="outline"
@@ -132,11 +162,7 @@ export default function Home() {
         {/* Dashboard Navigation Tabs */}
         <div className="border-t border-border/40 bg-secondary/30 backdrop-blur-md">
           <div className="container flex items-center gap-2 overflow-x-auto py-1.5">
-            {[
-              { id: "dashboard", label: "Bảng Điều Khiển KPI", icon: LayoutDashboard },
-              { id: "entry", label: "Nhập Số Liệu Mới", icon: PlusCircle },
-              { id: "history", label: "Lịch Sử Dữ Liệu", icon: History },
-            ].map((tab) => {
+            {navTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
@@ -160,7 +186,48 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="relative z-10 container py-8 flex-1 space-y-8">
-        {/* Tab 1: Dashboard View (Main overview) */}
+        {/* Admin Comprehensive Analytics View */}
+        {activeTab === "analytics" && (
+          <div className="space-y-8">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-6 rounded-full bg-amber-500" />
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+                      <span>Báo Cáo Hiệu Suất Voucher Toàn Diện</span>
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      Phân tích tổng quan chỉ số quy đổi, so sánh hiệu suất giữa các nhà hàng
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <KPIDashboard
+                refreshTrigger={refreshTrigger}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
+            </section>
+
+            <section className="space-y-4">
+              <AnalyticsCharts />
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-6 rounded-full bg-amber-500" />
+                <h2 className="text-2xl font-bold text-foreground tracking-tight">
+                  Bảng Chi Tiết Lịch Sử Tất Cả Nhà Hàng
+                </h2>
+              </div>
+              <HistoricalDataTable />
+            </section>
+          </div>
+        )}
+
+        {/* Regular Dashboard View */}
         {activeTab === "dashboard" && (
           <div className="space-y-8">
             <section className="space-y-4">
@@ -178,18 +245,31 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <KPIDashboard refreshTrigger={refreshTrigger} />
+              <KPIDashboard
+                refreshTrigger={refreshTrigger}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </section>
 
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 rounded-full bg-amber-500" />
-                <h2 className="text-xl font-bold text-foreground tracking-tight">
-                  Nhập Liệu Phiếu Voucher
-                </h2>
-              </div>
-              <VoucherEntryForm onSuccess={() => setRefreshTrigger((t) => t + 1)} />
-            </section>
+            {/* ONLY render entry form if user is NOT admin */}
+            {!isAdmin && (
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-6 rounded-full bg-amber-500" />
+                  <h2 className="text-xl font-bold text-foreground tracking-tight">
+                    Nhập Liệu Phiếu Voucher
+                  </h2>
+                </div>
+                <VoucherEntryForm onSuccess={handleFormSuccess} />
+              </section>
+            )}
+
+            {isAdmin && (
+              <section className="space-y-4">
+                <AnalyticsCharts />
+              </section>
+            )}
 
             <section className="space-y-4">
               <div className="flex items-center gap-2">
@@ -203,19 +283,23 @@ export default function Home() {
           </div>
         )}
 
-        {/* Tab 2: Entry Form Only */}
-        {activeTab === "entry" && (
+        {/* Entry Form Tab (Non-Admin only) */}
+        {activeTab === "entry" && !isAdmin && (
           <div className="max-w-4xl mx-auto space-y-6">
             <section>
-              <VoucherEntryForm onSuccess={() => setRefreshTrigger((t) => t + 1)} />
+              <VoucherEntryForm onSuccess={handleFormSuccess} />
             </section>
             <section>
-              <KPIDashboard refreshTrigger={refreshTrigger} />
+              <KPIDashboard
+                refreshTrigger={refreshTrigger}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </section>
           </div>
         )}
 
-        {/* Tab 3: History Only */}
+        {/* History Tab */}
         {activeTab === "history" && (
           <div className="space-y-6">
             <HistoricalDataTable />
@@ -234,4 +318,5 @@ export default function Home() {
     </div>
   );
 }
+
 

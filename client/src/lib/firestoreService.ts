@@ -27,6 +27,7 @@ export interface VoucherRecord {
   restaurantName?: string;
   potatoCoupons: number;
   beerCoupons: number;
+  bakeryCoupons?: number;
   cancelled: number;
   postedBills: number;
   totalIssued: number;
@@ -54,6 +55,12 @@ export const PRESET_USERS: Record<string, Omit<UserProfile, "uid">> = {
     role: "restaurant",
     restaurantName: "Beer Plaza",
     email: "beerplaza@beervoucher.app",
+  },
+  maisonkayser: {
+    username: "maisonkayser",
+    role: "restaurant",
+    restaurantName: "Maison Kayser",
+    email: "maisonkayser@beervoucher.app",
   },
   admin: {
     username: "admin",
@@ -122,34 +129,105 @@ export async function createUserProfile(uid: string, profile: Omit<UserProfile, 
 }
 
 /**
- * Get voucher for a specific restaurant and date
+ * Get local date string in YYYY-MM-DD format based on client local timezone
+ */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get voucher for a specific restaurant and date.
+ * If isAdmin or restaurantId === 'all', aggregates vouchers across all restaurants for that date.
  */
 export async function getVoucherByDate(
   restaurantId: string,
-  date: string
+  date: string,
+  isAdmin: boolean = false
 ): Promise<VoucherRecord | null> {
   try {
-    const docId = `${restaurantId}_${date}`;
-    const docRef = doc(db, "vouchers", docId);
-    const snap = await getDoc(docRef);
+    const vouchersRef = collection(db, "vouchers");
 
-    if (snap.exists()) {
-      return { id: snap.id, ...snap.data() } as VoucherRecord;
+    if (isAdmin || restaurantId === "all") {
+      const q = query(vouchersRef, where("date", "==", date));
+      const querySnap = await getDocs(q);
+
+      if (querySnap.empty) {
+        return null;
+      }
+
+      let totalPotato = 0;
+      let totalBeer = 0;
+      let totalCancelled = 0;
+      let totalPostedBills = 0;
+      let totalIssued = 0;
+
+      querySnap.forEach((doc) => {
+        const data = doc.data() as VoucherRecord;
+        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+        totalPotato += potato;
+        totalBeer += beer;
+        totalCancelled += data.cancelled || 0;
+        totalPostedBills += data.postedBills || (potato + beer);
+        totalIssued += data.totalIssued || (potato + beer + (data.cancelled || 0));
+      });
+
+      const rate = totalIssued > 0 ? Math.round((totalPostedBills / totalIssued) * 100) : 0;
+
+      return {
+        id: `all_${date}`,
+        date,
+        restaurantId: "all",
+        restaurantName: "Tất Cả Nhà Hàng",
+        potatoCoupons: totalPotato,
+        beerCoupons: totalBeer,
+        cancelled: totalCancelled,
+        postedBills: totalPostedBills,
+        totalIssued,
+        utilizationRate: rate,
+      };
+    } else {
+      const docId = `${restaurantId}_${date}`;
+      const docRef = doc(db, "vouchers", docId);
+      const snap = await getDoc(docRef);
+
+      if (snap.exists()) {
+        const data = snap.data() as VoucherRecord;
+        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+        return {
+          id: snap.id,
+          ...data,
+          potatoCoupons: potato,
+          beerCoupons: beer,
+        } as VoucherRecord;
+      }
+
+      // Fallback query by restaurantId and date
+      const q = query(
+        vouchersRef,
+        where("restaurantId", "==", restaurantId),
+        where("date", "==", date)
+      );
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        const firstDoc = querySnap.docs[0];
+        const data = firstDoc.data() as VoucherRecord;
+        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+        return {
+          id: firstDoc.id,
+          ...data,
+          potatoCoupons: potato,
+          beerCoupons: beer,
+        } as VoucherRecord;
+      }
+
+      return null;
     }
-
-    // Fallback query
-    const q = query(
-      collection(db, "vouchers"),
-      where("restaurantId", "==", restaurantId),
-      where("date", "==", date)
-    );
-    const querySnap = await getDocs(q);
-    if (!querySnap.empty) {
-      const firstDoc = querySnap.docs[0];
-      return { id: firstDoc.id, ...firstDoc.data() } as VoucherRecord;
-    }
-
-    return null;
   } catch (error) {
     console.error("Error getting voucher by date:", error);
     return null;
@@ -159,13 +237,16 @@ export async function getVoucherByDate(
 /**
  * Get today's voucher
  */
-export async function getTodayVoucher(restaurantId: string): Promise<VoucherRecord | null> {
-  const today = new Date().toISOString().split("T")[0];
-  return getVoucherByDate(restaurantId, today);
+export async function getTodayVoucher(
+  restaurantId: string,
+  isAdmin: boolean = false
+): Promise<VoucherRecord | null> {
+  const today = getLocalDateString();
+  return getVoucherByDate(restaurantId, today, isAdmin);
 }
 
 /**
- * Get vouchers in a date range
+ * Get vouchers in a date range (index-safe in-memory filtering)
  */
 export async function getVouchersByDateRange(
   restaurantId: string | null,
@@ -174,27 +255,26 @@ export async function getVouchersByDateRange(
 ): Promise<VoucherRecord[]> {
   try {
     const vouchersRef = collection(db, "vouchers");
-    let q;
-
-    if (restaurantId && restaurantId !== "all") {
-      q = query(
-        vouchersRef,
-        where("restaurantId", "==", restaurantId),
-        where("date", ">=", startDate),
-        where("date", "<=", endDate)
-      );
-    } else {
-      q = query(
-        vouchersRef,
-        where("date", ">=", startDate),
-        where("date", "<=", endDate)
-      );
-    }
+    const q = query(
+      vouchersRef,
+      where("date", ">=", startDate),
+      where("date", "<=", endDate)
+    );
 
     const querySnap = await getDocs(q);
     const results: VoucherRecord[] = [];
     querySnap.forEach((d) => {
-      results.push({ id: d.id, ...d.data() } as VoucherRecord);
+      const data = d.data() as VoucherRecord;
+      if (!restaurantId || restaurantId === "all" || data.restaurantId === restaurantId) {
+        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+        results.push({
+          id: d.id,
+          ...data,
+          potatoCoupons: potato,
+          beerCoupons: beer,
+        });
+      }
     });
 
     // Sort by date descending

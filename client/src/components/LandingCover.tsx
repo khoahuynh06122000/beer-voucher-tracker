@@ -488,6 +488,7 @@ export function LandingCover() {
                         { key: "lehoibia", l: "🍺 Lễ Hội Bia" },
                         { key: "1901", l: "🍷 Nhà Hàng 1901" },
                         { key: "beerplaza", l: "🏰 Beer Plaza" },
+                        { key: "maisonkayser", l: "🥐 Maison Kayser" },
                         { key: "admin", l: "🏢 Ban Quản Lý" },
                       ].map((acc) => (
                         <button
