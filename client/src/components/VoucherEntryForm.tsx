@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Ticket, XCircle, CheckCircle2, Save, Beer, Building2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVoucherByDate, upsertVoucher, getLocalDateString } from "@/lib/firestoreService";
+import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
 
 interface VoucherEntryFormProps {
   onSuccess?: (date?: string) => void;
@@ -92,7 +93,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
 
     setIsSubmitting(true);
     try {
-      await upsertVoucher({
+      const savedRecord = await upsertVoucher({
         date,
         restaurantId,
         restaurantName,
@@ -105,6 +106,16 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
         createdBy: user?.username || "user",
       });
       toast.success(`Đã lưu thành công số liệu ngày ${date} cho ${restaurantName}!`);
+
+      // Trigger automatic MS Teams Report & Analysis send
+      sendStoredMSTeamsReport(savedRecord).then((res) => {
+        if (res.success) {
+          toast.success("📢 " + res.message);
+        } else {
+          console.warn("MS Teams send note:", res.message);
+        }
+      });
+
       onSuccess?.(date);
     } catch (err: any) {
       toast.error(err.message || "Không thể lưu số liệu voucher.");

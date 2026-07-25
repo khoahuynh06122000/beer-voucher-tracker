@@ -4,8 +4,9 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle } from "lucide-react";
-import { getSetting, setSetting } from "@/lib/firestoreService";
+import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send } from "lucide-react";
+import { getSetting, setSetting, getLocalDateString } from "@/lib/firestoreService";
+import { sendMSTeamsReport } from "@/lib/msTeamsService";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 
@@ -14,6 +15,7 @@ export default function AdminSettings() {
   const [, setLocation] = useLocation();
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [isLoadingSetting, setIsLoadingSetting] = useState(true);
 
   useEffect(() => {
@@ -88,6 +90,40 @@ export default function AdminSettings() {
       toast.error(err?.message || "Không thể lưu cài đặt");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestSend = async () => {
+    if (!webhookUrl.trim()) {
+      toast.error("Vui lòng nhập URL Webhook để thử nghiệm");
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const today = getLocalDateString();
+      const testRecord = {
+        restaurantName: "Lễ Hội Bia (Thử Nghiệm)",
+        date: today,
+        potatoCoupons: 45,
+        beerCoupons: 85,
+        cancelled: 3,
+        postedBills: 130,
+        totalIssued: 133,
+        utilizationRate: 98,
+        createdBy: user?.name || "Admin Test",
+      };
+
+      const result = await sendMSTeamsReport(webhookUrl.trim(), testRecord);
+      if (result.success) {
+        toast.success("🎉 " + result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err: any) {
+      toast.error("Lỗi khi gửi báo cáo thử nghiệm: " + err.message);
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -178,11 +214,22 @@ export default function AdminSettings() {
               </ol>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                onClick={handleTestSend}
+                disabled={isTesting || isSaving || isLoadingSetting}
+                variant="outline"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-lg border-blue-500/40 text-blue-400 hover:bg-blue-500/10 font-semibold text-sm transition-all flex items-center justify-center gap-2"
+              >
+                <Send className="w-4 h-4 text-blue-400" />
+                {isTesting ? "Đang gửi thử..." : "Thử Gửi Báo Cáo Mẫu Qua MS Teams"}
+              </Button>
+
               <Button
                 type="submit"
-                disabled={isSaving || isLoadingSetting}
-                className="px-6 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                disabled={isSaving || isTesting || isLoadingSetting}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 {isSaving ? "Đang lưu..." : "Lưu Cấu Hình Webhook"}

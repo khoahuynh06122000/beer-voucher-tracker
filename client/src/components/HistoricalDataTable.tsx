@@ -10,9 +10,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { History, RefreshCw, Download } from "lucide-react";
+import { History, RefreshCw, Download, Send } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVouchersByDateRange, VoucherRecord } from "@/lib/firestoreService";
+import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
 import { toast } from "sonner";
 
 export function HistoricalDataTable() {
@@ -29,8 +30,26 @@ export function HistoricalDataTable() {
 
   const [records, setRecords] = useState<VoucherRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sendingRowId, setSendingRowId] = useState<string | null>(null);
 
   const restaurantId = user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
+
+  const handleSendRowReport = async (record: VoucherRecord) => {
+    const rowId = record.id || `${record.restaurantId}_${record.date}`;
+    setSendingRowId(rowId);
+    try {
+      const res = await sendStoredMSTeamsReport(record);
+      if (res.success) {
+        toast.success("📢 " + res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error("Không thể gửi báo cáo MS Teams: " + err.message);
+    } finally {
+      setSendingRowId(null);
+    }
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -210,6 +229,9 @@ export function HistoricalDataTable() {
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Tỷ lệ quy đổi
               </TableHead>
+              <TableHead className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Báo Cáo Teams
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -294,13 +316,26 @@ export function HistoricalDataTable() {
                         {rate}%
                       </span>
                     </TableCell>
+                    <TableCell className="py-3.5 px-4 text-center">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleSendRowReport(record)}
+                        disabled={sendingRowId === (record.id || `${record.restaurantId}_${record.date}`)}
+                        className="h-8 px-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 dark:text-blue-400 gap-1 rounded-lg"
+                        title="Gửi báo cáo này đến nhóm MS Teams"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Gửi Teams</span>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={user?.role === "admin" ? 8 : 7}
+                  colSpan={user?.role === "admin" ? 9 : 8}
                   className="py-12 px-4 text-center text-muted-foreground text-sm"
                 >
                   Không có dữ liệu trong khoảng thời gian đã chọn.
