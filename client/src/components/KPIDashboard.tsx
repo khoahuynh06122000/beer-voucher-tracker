@@ -19,6 +19,8 @@ import {
   ArrowDownRight,
   ChevronRight,
   PieChart as PieChartIcon,
+  Sun,
+  Moon,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -33,6 +35,7 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   getAggregatedVoucherByDateRange,
   getVouchersByDateRange,
@@ -106,6 +109,7 @@ export function KPIDashboard({
   onRestaurantChange,
 }: KPIDashboardProps) {
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const isAdmin = user?.role === "admin";
   const userRestaurantId = user?.username || user?.id || "lehoibia";
 
@@ -562,7 +566,7 @@ export function KPIDashboard({
             </button>
           </div>
 
-          {/* Date range pickers */}
+          {/* Date range pickers & Theme Toggle */}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="font-semibold text-foreground">Từ:</span>
             <input
@@ -583,6 +587,27 @@ export function KPIDashboard({
               }}
               className="px-2 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
             />
+
+            {toggleTheme && (
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="ml-1 p-1.5 px-2.5 rounded-xl bg-card border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 transition-all flex items-center gap-1.5 text-xs font-extrabold cursor-pointer shadow-xs"
+                title={theme === "dark" ? "Chuyển sang Giao diện Sáng (Eye-care Light)" : "Chuyển sang Giao diện Tối (Dịu mắt Slate Dark)"}
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Chế Độ Sáng</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-slate-700" />
+                    <span className="hidden sm:inline">Chế Độ Tối</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -982,10 +1007,10 @@ export function KPIDashboard({
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.9)",
-                      borderColor: "#334155",
+                      backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                      borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
                       borderRadius: "12px",
-                      color: "#fff",
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
                       fontSize: "12px",
                     }}
                   />
@@ -1031,10 +1056,10 @@ export function KPIDashboard({
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.9)",
-                      borderColor: "#334155",
+                      backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                      borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
                       borderRadius: "12px",
-                      color: "#fff",
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
                       fontSize: "12px",
                     }}
                   />
