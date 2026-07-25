@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send, AlertTriangle, Copy, Check, Clock, ShieldAlert } from "lucide-react";
+import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send, AlertTriangle, Copy, Check, Clock, ShieldAlert, BookOpen } from "lucide-react";
 import { getSetting, setSetting, getLocalDateString, checkUnupdatedRestaurants, RestaurantStatus } from "@/lib/firestoreService";
 import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
 
@@ -207,15 +207,27 @@ export default function AdminSettings() {
             </div>
           </div>
 
-          <Button
-            onClick={() => setLocation("/")}
-            variant="outline"
-            size="sm"
-            className="text-xs font-bold gap-1.5 rounded-xl border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Quay Lại Trang Chủ
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setLocation("/guide")}
+              variant="outline"
+              size="sm"
+              className="text-xs font-bold gap-1.5 rounded-xl border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+              Xem Hướng Dẫn / In PDF
+            </Button>
+
+            <Button
+              onClick={() => setLocation("/")}
+              variant="outline"
+              size="sm"
+              className="text-xs font-bold gap-1.5 rounded-xl border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Quay Lại Trang Chủ
+            </Button>
+          </div>
         </div>
       </header>
 

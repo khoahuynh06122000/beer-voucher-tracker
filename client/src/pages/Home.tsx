@@ -21,6 +21,7 @@ import {
   BarChart3,
   Sun,
   Moon,
+  BookOpen,
 } from "lucide-react";
 
 import { LandingCover } from "@/components/LandingCover";
@@ -134,6 +135,17 @@ export default function Home() {
                 {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-amber-600" />}
               </Button>
             )}
+
+            <Button
+              onClick={() => setLocation("/guide")}
+              variant="outline"
+              size="sm"
+              className="text-xs font-bold gap-1.5 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+              title="Xem Hướng Dẫn Sử Dụng & Xuất File PDF"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden md:inline">Hướng Dẫn / In PDF</span>
+            </Button>
 
             {isAdmin && (
               <Button
