@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Ticket, XCircle, CheckCircle2, Save, Beer, Building2 } from "lucide-react";
+import { Ticket, XCircle, CheckCircle2, Save, Beer, Building2, Camera, Image as ImageIcon, Trash2, Eye, FileText, Download } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVoucherByDate, upsertVoucher, getLocalDateString } from "@/lib/firestoreService";
 import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
+import { compressImage, downloadImage } from "@/lib/imageUtils";
+import { ImagePreviewModal } from "./ImagePreviewModal";
 
 interface VoucherEntryFormProps {
   onSuccess?: (date?: string) => void;
@@ -31,6 +33,9 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
   const [beerCoupons, setBeerCoupons] = useState<string>("");
   const [bakeryCoupons, setBakeryCoupons] = useState<string>("");
   const [cancelled, setCancelled] = useState<string>("");
+  const [billNumber, setBillNumber] = useState<string>("");
+  const [billImages, setBillImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeRestaurant = RESTAURANTS.find((r) => r.id === selectedRestaurantId) || {
@@ -54,11 +59,15 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
           setBeerCoupons(record.beerCoupons?.toString() || "");
           setBakeryCoupons(record.bakeryCoupons?.toString() || "");
           setCancelled(record.cancelled?.toString() || "");
+          setBillNumber(record.billNumber || "");
+          setBillImages(record.billImages || []);
         } else {
           setPotatoCoupons("");
           setBeerCoupons("");
           setBakeryCoupons("");
           setCancelled("");
+          setBillNumber("");
+          setBillImages([]);
         }
       }
     }
@@ -68,20 +77,46 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
     };
   }, [restaurantId, date]);
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newCompressedImages: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const compressed = await compressImage(files[i]);
+        newCompressedImages.push(compressed);
+      } catch (err) {
+        console.error("Lỗi nén ảnh:", err);
+      }
+    }
+
+    if (newCompressedImages.length > 0) {
+      setBillImages((prev) => [...prev, ...newCompressedImages]);
+      toast.success(`Đã thêm ${newCompressedImages.length} ảnh Bill/Vé đối soát!`);
+    }
+    e.target.value = "";
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setBillImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    toast.info("Đã xóa ảnh được chọn.");
+  };
+
   const potatoNum = parseInt(potatoCoupons) || 0;
   const beerNum = parseInt(beerCoupons) || 0;
   const bakeryNum = parseInt(bakeryCoupons) || 0;
   const cancelledNum = parseInt(cancelled) || 0;
 
   const postedBillsNum = isMaisonKayser ? bakeryNum : potatoNum + beerNum;
-  const totalIssuedNum = isMaisonKayser ? bakeryNum + cancelledNum : potatoNum + beerNum + cancelledNum;
+  const totalIssuedNum = isMaisonKayser ? bakeryNum : potatoNum + beerNum + cancelledNum;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isMaisonKayser) {
-      if (!bakeryCoupons && !cancelled) {
-        toast.error("Vui lòng nhập số liệu voucher bánh hoặc coupon hủy.");
+      if (!bakeryCoupons) {
+        toast.error("Vui lòng nhập số liệu voucher bánh.");
         return;
       }
     } else {
@@ -100,10 +135,12 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
         potatoCoupons: isMaisonKayser ? 0 : potatoNum,
         beerCoupons: isMaisonKayser ? 0 : beerNum,
         bakeryCoupons: isMaisonKayser ? bakeryNum : 0,
-        cancelled: cancelledNum,
+        cancelled: isMaisonKayser ? 0 : cancelledNum,
         postedBills: postedBillsNum,
         totalIssued: totalIssuedNum,
         createdBy: user?.username || "user",
+        billNumber: billNumber.trim() || undefined,
+        billImages: billImages.length > 0 ? billImages : undefined,
       });
       toast.success(`Đã lưu thành công số liệu ngày ${date} cho ${restaurantName}!`);
 
@@ -128,46 +165,33 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
     totalIssuedNum > 0 ? Math.round((postedBillsNum / totalIssuedNum) * 100) : 0;
 
   return (
-    <Card className="p-4 sm:p-6 md:p-8 rounded-2xl border border-border/80 bg-card shadow-sm space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border/60">
-        <div>
-          <h3 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
-            <Ticket className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>Nhập Số Liệu Coupon ({restaurantName})</span>
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            {isMaisonKayser ? (
-              <span>
-                Maison Kayser: <strong className="text-amber-600 dark:text-amber-400 font-bold">Chỉ phát hành 1 Voucher Bánh (Tổng = Bánh + Hủy)</strong>
-              </span>
-            ) : (
-              <span>
-                Công thức: <strong className="text-amber-600 dark:text-amber-400 font-bold">Tổng = Khoai Tây + Beer + Hủy</strong>
-              </span>
-            )}
-          </p>
-        </div>
+    <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-4">
+      {/* Form Header */}
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60">
+        <h3 className="text-base sm:text-lg font-extrabold text-foreground flex items-center gap-2">
+          <Ticket className="w-5 h-5 text-amber-500 shrink-0" />
+          <span>Nhập Số Liệu ({restaurantName})</span>
+        </h3>
 
         {totalIssuedNum > 0 && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl flex items-center gap-2 self-start sm:self-center">
-            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Tỷ lệ quy đổi:</span>
-            <span className="text-sm font-black text-emerald-800 dark:text-emerald-200">{calculatedRate}%</span>
+          <div className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+            Đổi số: {calculatedRate}%
           </div>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Selection Row: Restaurant & Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {isAdmin && (
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-amber-500" />
-                Chọn Nhà Hàng Nhập Liệu (*)
+              <label className="block text-xs font-bold text-muted-foreground mb-1">
+                Nhà hàng
               </label>
               <select
                 value={selectedRestaurantId}
                 onChange={(e) => setSelectedRestaurantId(e.target.value)}
-                className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-semibold text-base focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all touch-manipulation"
+                className="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               >
                 {RESTAURANTS.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -179,327 +203,187 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Ngày Ghi Nhận Số Liệu (*)
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-muted-foreground">
+                Ngày ghi nhận
               </label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setDate(getLocalDateString())}
-                  className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 transition-all"
-                >
-                  Hôm nay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const y = new Date();
-                    y.setDate(y.getDate() - 1);
-                    const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
-                    setDate(yStr);
-                  }}
-                  className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-secondary text-muted-foreground border border-border hover:bg-secondary/80 active:scale-95 transition-all"
-                >
-                  Hôm qua
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setDate(getLocalDateString())}
+                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline"
+              >
+                Hôm nay
+              </button>
             </div>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-semibold text-base focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all touch-manipulation"
+              className="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               required
             />
           </div>
         </div>
 
-        {/* Input Cards Grid with Quick Touch Steppers for Mobile */}
+        {/* Numeric Coupon Inputs */}
         {isMaisonKayser ? (
-          /* Maison Kayser: Bakery Voucher & Cancelled Voucher Only */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 sm:p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                <span className="text-xl">🥐</span>
-                Số Voucher Bánh (Maison Kayser)
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={bakeryCoupons}
-                  onChange={(e) => setBakeryCoupons(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-13 px-4 rounded-xl bg-background border border-border text-foreground font-black text-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all touch-manipulation"
-                  min="0"
-                />
-                {bakeryCoupons && (
-                  <button
-                    type="button"
-                    onClick={() => setBakeryCoupons("")}
-                    className="absolute right-3 text-xs font-bold text-muted-foreground hover:text-red-500 px-2 py-1 rounded bg-secondary"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-              {/* Quick Stepper Buttons for Mobile */}
-              <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
-                {[-10, -1, 1, 5, 10, 50].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseInt(bakeryCoupons) || 0;
-                      setBakeryCoupons(Math.max(0, cur + step).toString());
-                    }}
-                    className={`flex-1 min-w-[42px] h-9 rounded-lg font-bold text-xs transition-all active:scale-95 border ${
-                      step < 0
-                        ? "bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20"
-                        : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20"
-                    }`}
-                  >
-                    {step > 0 ? `+${step}` : step}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Số lượng voucher bánh phát hành &amp; thu về trong ngày</p>
-            </div>
-
-            <div className="p-4 sm:p-5 rounded-2xl bg-red-500/5 border border-red-500/20 space-y-3">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
-                <XCircle className="w-4 h-4 text-red-500" />
-                Số Coupon Hủy
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={cancelled}
-                  onChange={(e) => setCancelled(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-13 px-4 rounded-xl bg-background border border-border text-foreground font-black text-2xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all touch-manipulation"
-                  min="0"
-                />
-                {cancelled && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelled("")}
-                    className="absolute right-3 text-xs font-bold text-muted-foreground hover:text-red-500 px-2 py-1 rounded bg-secondary"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-              {/* Quick Stepper Buttons for Mobile */}
-              <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
-                {[-5, -1, 1, 2, 5, 10].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseInt(cancelled) || 0;
-                      setCancelled(Math.max(0, cur + step).toString());
-                    }}
-                    className={`flex-1 min-w-[42px] h-9 rounded-lg font-bold text-xs transition-all active:scale-95 border ${
-                      step < 0
-                        ? "bg-muted text-muted-foreground border-border hover:bg-secondary"
-                        : "bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20"
-                    }`}
-                  >
-                    {step > 0 ? `+${step}` : step}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Số lượng voucher bị rách, hỏng hoặc hủy bỏ</p>
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-1">
+              🥐 Voucher Bánh (Maison Kayser)
+            </label>
+            <input
+              type="number"
+              value={bakeryCoupons}
+              onChange={(e) => setBakeryCoupons(e.target.value)}
+              placeholder="0"
+              className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-black text-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              min="0"
+            />
           </div>
         ) : (
-          /* Standard Restaurants: Potato, Beer & Cancelled */
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Potato Coupons */}
-            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                <span className="text-base">🍟</span>
-                Số Coupon Khoai Tây
+          <div className="grid grid-cols-3 gap-2.5">
+            <div>
+              <label className="block text-xs font-bold text-amber-600 dark:text-amber-400 mb-1 truncate">
+                🍟 Khoai Tây
               </label>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={potatoCoupons}
-                  onChange={(e) => setPotatoCoupons(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-black text-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all touch-manipulation"
-                  min="0"
-                />
-                {potatoCoupons && (
-                  <button
-                    type="button"
-                    onClick={() => setPotatoCoupons("")}
-                    className="absolute right-3 text-xs font-bold text-muted-foreground hover:text-red-500 px-2 py-1 rounded bg-secondary"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-              {/* Stepper Buttons */}
-              <div className="flex items-center gap-1 pt-1 overflow-x-auto no-scrollbar">
-                {[-10, -1, 1, 5, 10, 50].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseInt(potatoCoupons) || 0;
-                      setPotatoCoupons(Math.max(0, cur + step).toString());
-                    }}
-                    className={`flex-1 min-w-[38px] h-8 rounded-lg font-bold text-xs transition-all active:scale-95 border ${
-                      step < 0
-                        ? "bg-red-500/10 text-red-600 border-red-500/20"
-                        : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
-                    }`}
-                  >
-                    {step > 0 ? `+${step}` : step}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Số lượng coupon khoai tây thu về</p>
+              <input
+                type="number"
+                value={potatoCoupons}
+                onChange={(e) => setPotatoCoupons(e.target.value)}
+                placeholder="0"
+                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                min="0"
+              />
             </div>
 
-            {/* Beer Coupons */}
-            <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 space-y-2.5">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
-                <Beer className="w-4 h-4 text-blue-500" />
-                Số Coupon Beer
+            <div>
+              <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 truncate">
+                🍺 Beer
               </label>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={beerCoupons}
-                  onChange={(e) => setBeerCoupons(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-black text-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all touch-manipulation"
-                  min="0"
-                />
-                {beerCoupons && (
-                  <button
-                    type="button"
-                    onClick={() => setBeerCoupons("")}
-                    className="absolute right-3 text-xs font-bold text-muted-foreground hover:text-red-500 px-2 py-1 rounded bg-secondary"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-              {/* Stepper Buttons */}
-              <div className="flex items-center gap-1 pt-1 overflow-x-auto no-scrollbar">
-                {[-10, -1, 1, 5, 10, 50].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseInt(beerCoupons) || 0;
-                      setBeerCoupons(Math.max(0, cur + step).toString());
-                    }}
-                    className={`flex-1 min-w-[38px] h-8 rounded-lg font-bold text-xs transition-all active:scale-95 border ${
-                      step < 0
-                        ? "bg-red-500/10 text-red-600 border-red-500/20"
-                        : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
-                    }`}
-                  >
-                    {step > 0 ? `+${step}` : step}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Số lượng coupon beer thu về</p>
+              <input
+                type="number"
+                value={beerCoupons}
+                onChange={(e) => setBeerCoupons(e.target.value)}
+                placeholder="0"
+                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                min="0"
+              />
             </div>
 
-            {/* Cancelled Coupons */}
-            <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/20 space-y-2.5">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
-                <XCircle className="w-4 h-4 text-red-500" />
-                Số Coupon Hủy
+            <div>
+              <label className="block text-xs font-bold text-red-600 dark:text-red-400 mb-1 truncate">
+                ❌ Hủy / Rách
               </label>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={cancelled}
-                  onChange={(e) => setCancelled(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-12 px-3.5 rounded-xl bg-background border border-border text-foreground font-black text-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all touch-manipulation"
-                  min="0"
-                />
-                {cancelled && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelled("")}
-                    className="absolute right-3 text-xs font-bold text-muted-foreground hover:text-red-500 px-2 py-1 rounded bg-secondary"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-              {/* Stepper Buttons */}
-              <div className="flex items-center gap-1 pt-1 overflow-x-auto no-scrollbar">
-                {[-5, -1, 1, 2, 5, 10].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseInt(cancelled) || 0;
-                      setCancelled(Math.max(0, cur + step).toString());
-                    }}
-                    className={`flex-1 min-w-[38px] h-8 rounded-lg font-bold text-xs transition-all active:scale-95 border ${
-                      step < 0
-                        ? "bg-muted text-muted-foreground border-border"
-                        : "bg-red-500/10 text-red-600 border-red-500/20"
-                    }`}
-                  >
-                    {step > 0 ? `+${step}` : step}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">Số lượng coupon rách/hỏng/hủy</p>
+              <input
+                type="number"
+                value={cancelled}
+                onChange={(e) => setCancelled(e.target.value)}
+                placeholder="0"
+                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                min="0"
+              />
             </div>
           </div>
         )}
 
-        {/* Calculation Summary Box */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="space-y-1 text-center sm:text-left">
-            <div className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-2 justify-center sm:justify-start">
-              <CheckCircle2 className="w-4 h-4 text-amber-500" />
-              Tổng Số Coupon Tự Động Tính
+        {/* Compact Bill Code & Attachment Section */}
+        <div className="p-3.5 rounded-xl bg-secondary/30 border border-border/70 space-y-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+            {/* Bill Number */}
+            <div>
+              <label className="block text-[11px] font-bold text-muted-foreground mb-1">
+                Mã / Số Bill POS (Tuỳ chọn)
+              </label>
+              <input
+                type="text"
+                value={billNumber}
+                onChange={(e) => setBillNumber(e.target.value)}
+                placeholder="Ví dụ: BILL-001"
+                className="w-full h-9 px-3 rounded-lg bg-background border border-border text-foreground font-medium text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
             </div>
-            <div className="text-xs text-muted-foreground font-medium">
-              {isMaisonKayser
-                ? `= ${bakeryNum} (Voucher Bánh) + ${cancelledNum} (Hủy)`
-                : `= ${potatoNum} (Khoai) + ${beerNum} (Beer) + ${cancelledNum} (Hủy)`}
+
+            {/* Direct Camera / Image Upload */}
+            <div>
+              <label className="block text-[11px] font-bold text-muted-foreground mb-1">
+                Đính kèm / Chụp ảnh Bill
+              </label>
+              <label className="cursor-pointer block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <div className="flex items-center justify-center gap-2 h-9 px-3 rounded-lg bg-amber-500 text-black font-extrabold text-xs hover:bg-amber-600 transition-all shadow-xs">
+                  <Camera className="w-4 h-4" />
+                  <span>{billImages.length > 0 ? `Thêm ảnh (${billImages.length})` : "Chụp / Tải ảnh Bill"}</span>
+                </div>
+              </label>
             </div>
           </div>
 
-          <div className="flex items-center gap-5 text-right">
-            <div className="text-center sm:text-right">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase block">Tổng Coupon</span>
-              <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{totalIssuedNum}</span>
+          {/* Uploaded Thumbnails Row */}
+          {billImages.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pt-1">
+              {billImages.map((imgUrl, idx) => (
+                <div
+                  key={idx}
+                  className="relative group w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-background"
+                >
+                  <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIndex(idx)}
+                      className="p-1 rounded bg-white/20 text-white hover:bg-white/40"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(idx)}
+                      className="p-1 rounded bg-red-500 text-white hover:bg-red-600"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="text-center sm:text-right pl-5 border-l border-border/80">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase block">Ghi Nhận Hóa Đơn</span>
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{postedBillsNum}</span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Action Button */}
-        <div className="pt-2">
+        {/* Compact Footer Action Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground">
+            <span>Tổng coupon: <strong className="text-amber-600 dark:text-amber-400 font-extrabold text-sm">{totalIssuedNum}</strong></span>
+            <span>Hóa đơn: <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">{postedBillsNum}</strong></span>
+          </div>
+
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="w-full sm:w-auto h-13 px-8 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-black font-extrabold text-base shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50"
+            className="w-full sm:w-auto h-11 px-6 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-black font-extrabold text-sm shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
           >
-            <Save className="w-5 h-5" />
-            {isSubmitting ? "Đang lưu Firestore..." : "Lưu Số Liệu Hôm Nay"}
+            <Save className="w-4 h-4" />
+            <span>{isSubmitting ? "Đang lưu..." : "Lưu Số Liệu"}</span>
           </Button>
         </div>
       </form>
+
+      {/* Lightbox / Preview Modal */}
+      {previewIndex !== null && billImages.length > 0 && (
+        <ImagePreviewModal
+          isOpen={previewIndex !== null}
+          onClose={() => setPreviewIndex(null)}
+          images={billImages}
+          initialIndex={previewIndex}
+          billNumber={billNumber}
+          title={`Ảnh Bill / POS (${restaurantName} - Ngày ${date})`}
+        />
+      )}
     </Card>
   );
 }

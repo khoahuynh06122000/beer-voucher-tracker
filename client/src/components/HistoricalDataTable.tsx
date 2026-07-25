@@ -10,10 +10,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { History, RefreshCw, Download, Send } from "lucide-react";
+import { History, RefreshCw, Download, Send, Camera, Eye, Plus } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getVouchersByDateRange, VoucherRecord } from "@/lib/firestoreService";
+import { getVouchersByDateRange, VoucherRecord, appendBillImagesToVoucher } from "@/lib/firestoreService";
 import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
+import { compressImage } from "@/lib/imageUtils";
+import { ImagePreviewModal } from "./ImagePreviewModal";
 import { toast } from "sonner";
 
 export function HistoricalDataTable() {
@@ -31,8 +33,40 @@ export function HistoricalDataTable() {
   const [records, setRecords] = useState<VoucherRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sendingRowId, setSendingRowId] = useState<string | null>(null);
+  const [activePreviewRecord, setActivePreviewRecord] = useState<VoucherRecord | null>(null);
 
   const restaurantId = user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
+
+  const handleAppendImagesToRecord = async (record: VoucherRecord, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const toastId = toast.loading(`Đang xử lý & nén ${files.length} ảnh...`);
+    try {
+      const compressedImages: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const compressed = await compressImage(files[i]);
+        compressedImages.push(compressed);
+      }
+
+      const updatedRecord = await appendBillImagesToVoucher(
+        record.restaurantId,
+        record.date,
+        compressedImages
+      );
+
+      toast.dismiss(toastId);
+      toast.success(`Đã bổ sung ${compressedImages.length} ảnh cho ngày ${record.date}!`);
+
+      if (activePreviewRecord && (activePreviewRecord.id === record.id || activePreviewRecord.date === record.date)) {
+        setActivePreviewRecord(updatedRecord);
+      }
+
+      loadData();
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      toast.error("Lỗi khi bổ sung ảnh: " + err.message);
+    }
+  };
 
   const handleSendRowReport = async (record: VoucherRecord) => {
     const rowId = record.id || `${record.restaurantId}_${record.date}`;
@@ -230,6 +264,9 @@ export function HistoricalDataTable() {
                 Tỷ lệ quy đổi
               </TableHead>
               <TableHead className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                📸 Ảnh Bill
+              </TableHead>
+              <TableHead className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Báo Cáo Teams
               </TableHead>
             </TableRow>
@@ -317,6 +354,50 @@ export function HistoricalDataTable() {
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {record.billImages && record.billImages.length > 0 ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setActivePreviewRecord(record)}
+                              className="h-8 px-2 text-xs text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/10 gap-1 rounded-lg font-bold"
+                            >
+                              <Camera className="w-3.5 h-3.5 text-amber-500" />
+                              <span>{record.billImages.length} ảnh</span>
+                            </Button>
+
+                            <label className="cursor-pointer" title="Bổ sung thêm ảnh bill">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => handleAppendImagesToRecord(record, e.target.files)}
+                                className="hidden"
+                              />
+                              <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 flex items-center justify-center transition-all">
+                                <Plus className="w-4 h-4 text-amber-500" />
+                              </div>
+                            </label>
+                          </>
+                        ) : (
+                          <label className="cursor-pointer" title="Bổ sung ảnh bill cho ngày này">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => handleAppendImagesToRecord(record, e.target.files)}
+                              className="hidden"
+                            />
+                            <div className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all">
+                              <Camera className="w-3.5 h-3.5 text-amber-500" />
+                              <span>+ Thêm ảnh</span>
+                            </div>
+                          </label>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-4 text-center">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -335,7 +416,7 @@ export function HistoricalDataTable() {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={user?.role === "admin" ? 9 : 8}
+                  colSpan={user?.role === "admin" ? 10 : 9}
                   className="py-12 px-4 text-center text-muted-foreground text-sm"
                 >
                   Không có dữ liệu trong khoảng thời gian đã chọn.
@@ -345,6 +426,18 @@ export function HistoricalDataTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Historical Record Image Preview Modal */}
+      {activePreviewRecord && (
+        <ImagePreviewModal
+          isOpen={!!activePreviewRecord}
+          onClose={() => setActivePreviewRecord(null)}
+          images={activePreviewRecord.billImages || []}
+          billNumber={activePreviewRecord.billNumber}
+          title={`Ảnh Bill - ${activePreviewRecord.restaurantName || activePreviewRecord.restaurantId} (${activePreviewRecord.date})`}
+          onUploadMore={(e) => handleAppendImagesToRecord(activePreviewRecord, e.target.files)}
+        />
+      )}
     </Card>
   );
 }

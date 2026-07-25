@@ -32,6 +32,8 @@ export interface VoucherRecord {
   postedBills: number;
   totalIssued: number;
   utilizationRate: number;
+  billNumber?: string;
+  billImages?: string[];
   updatedAt?: string;
   createdBy?: string;
 }
@@ -163,6 +165,8 @@ export async function getVoucherByDate(
       let totalCancelled = 0;
       let totalPostedBills = 0;
       let totalIssued = 0;
+      let allBillImages: string[] = [];
+      let allBillNumbers: string[] = [];
 
       querySnap.forEach((doc) => {
         const data = doc.data() as VoucherRecord;
@@ -173,6 +177,12 @@ export async function getVoucherByDate(
         totalCancelled += data.cancelled || 0;
         totalPostedBills += data.postedBills || (potato + beer);
         totalIssued += data.totalIssued || (potato + beer + (data.cancelled || 0));
+        if (data.billImages && Array.isArray(data.billImages)) {
+          allBillImages.push(...data.billImages);
+        }
+        if (data.billNumber) {
+          allBillNumbers.push(`${data.restaurantName || data.restaurantId}: ${data.billNumber}`);
+        }
       });
 
       const rate = totalIssued > 0 ? Math.round((totalPostedBills / totalIssued) * 100) : 0;
@@ -188,6 +198,8 @@ export async function getVoucherByDate(
         postedBills: totalPostedBills,
         totalIssued,
         utilizationRate: rate,
+        billNumber: allBillNumbers.length > 0 ? allBillNumbers.join("; ") : undefined,
+        billImages: allBillImages.length > 0 ? allBillImages : undefined,
       };
     } else {
       const docId = `${restaurantId}_${date}`;
@@ -294,10 +306,13 @@ export async function upsertVoucher(data: {
   restaurantName?: string;
   potatoCoupons: number;
   beerCoupons: number;
+  bakeryCoupons?: number;
   cancelled: number;
   postedBills: number;
   totalIssued: number;
   createdBy: string;
+  billNumber?: string;
+  billImages?: string[];
 }): Promise<VoucherRecord> {
   const docId = `${data.restaurantId}_${data.date}`;
   const docRef = doc(db, "vouchers", docId);
@@ -315,6 +330,41 @@ export async function upsertVoucher(data: {
 
   await setDoc(docRef, record, { merge: true });
   return { id: docId, ...record };
+}
+
+/**
+ * Append new bill images to an existing voucher record
+ */
+export async function appendBillImagesToVoucher(
+  restaurantId: string,
+  date: string,
+  newImages: string[],
+  billNumber?: string
+): Promise<VoucherRecord> {
+  const docId = `${restaurantId}_${date}`;
+  const docRef = doc(db, "vouchers", docId);
+  const snap = await getDoc(docRef);
+
+  let existingImages: string[] = [];
+  let currentRecord: Partial<VoucherRecord> = {};
+
+  if (snap.exists()) {
+    currentRecord = snap.data() as VoucherRecord;
+    existingImages = currentRecord.billImages || [];
+  }
+
+  const updatedImages = [...existingImages, ...newImages];
+  const updatedData: Partial<VoucherRecord> = {
+    billImages: updatedImages,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (billNumber) {
+    updatedData.billNumber = billNumber;
+  }
+
+  await setDoc(docRef, updatedData, { merge: true });
+  return { ...currentRecord, ...updatedData, id: docId } as VoucherRecord;
 }
 
 /**
