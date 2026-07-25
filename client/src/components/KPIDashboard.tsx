@@ -760,31 +760,31 @@ export function KPIDashboard({
               </div>
             </Card>
 
-            {/* Simple Executive Analysis & Quick Metrics Card */}
+            {/* Executive Analysis & Quick Metrics Card */}
             <Card className="lg:col-span-5 p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <h4 className="text-sm font-extrabold text-foreground">
-                    Tóm Tắt &amp; Nhận Định Đơn Giản
+                    Tóm Tắt &amp; Nhận Định
                   </h4>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Tổng Phát Out</div>
+                    <div className="text-[11px] text-muted-foreground font-medium">Tổng Phát Hành</div>
                     <div className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
                       {userDept.totalIssued.toLocaleString("vi-VN")}
                     </div>
                   </div>
                   <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Khách Đã Đổi</div>
+                    <div className="text-[11px] text-muted-foreground font-medium">Đã Quy Đổi</div>
                     <div className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5">
                       {userDept.totalPosted.toLocaleString("vi-VN")}
                     </div>
                   </div>
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Tỷ Lệ Đổi</div>
+                    <div className="text-[11px] text-muted-foreground font-medium">Tỷ Lệ Quy Đổi</div>
                     <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
                       {userDept.overallRate}%
                     </div>
@@ -793,26 +793,27 @@ export function KPIDashboard({
 
                 <div className="p-3 rounded-xl bg-muted/60 text-xs text-foreground space-y-2">
                   <div className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                    💡 <span>Nhận định đơn giản cho {userDept.meta.name}:</span>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Nhận định đánh giá ({userDept.meta.name}):</span>
                   </div>
                   {userDept.overallRate >= 60 ? (
                     <p className="leading-relaxed font-medium">
-                      Nhà hàng có tỷ lệ khách sử dụng voucher rất tốt (<strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong>). Phần lớn khách nhận voucher đều đến nhà hàng quy đổi món ăn/đồ uống hiệu quả!
+                      Nhà hàng đạt tỷ lệ sử dụng voucher cao (<strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong>). Khối lượng voucher phát hành thu hút khách hàng đến quy đổi hiệu quả.
                     </p>
                   ) : userDept.overallRate >= 30 ? (
                     <p className="leading-relaxed font-medium">
-                      Nhà hàng đạt tỷ lệ quy đổi khá (<strong className="text-amber-600 dark:text-amber-400">{userDept.overallRate}%</strong>). Bạn có thể tiếp tục nhắc nhở thu ngân và phục vụ gợi ý voucher khi khách gọi món.
+                      Nhà hàng ghi nhận tỷ lệ quy đổi <strong className="text-amber-600 dark:text-amber-400">{userDept.overallRate}%</strong>. Đơn vị cần duy trì tư vấn ưu đãi cho khách hàng tại điểm phục vụ.
                     </p>
                   ) : (
                     <p className="leading-relaxed font-medium">
-                      Tỷ lệ quy đổi hiện tại ở mức <strong className="text-orange-600 dark:text-orange-400">{userDept.overallRate}%</strong>. Nhà hàng nên đẩy mạnh việc giới thiệu ưu đãi tặng voucher trực tiếp tại bàn.
+                      Tỷ lệ quy đổi hiện đạt <strong className="text-orange-600 dark:text-orange-400">{userDept.overallRate}%</strong>. Đơn vị cần tăng cường giới thiệu chương trình voucher trực tiếp đến khách hàng.
                     </p>
                   )}
                 </div>
               </div>
 
               <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[11px] text-muted-foreground flex items-center justify-between">
-                <span>Trạng thái số liệu kỳ này</span>
+                <span>Trạng thái ghi nhận số liệu</span>
                 <span className="font-bold text-foreground">{userDept.meta.name}</span>
               </div>
             </Card>

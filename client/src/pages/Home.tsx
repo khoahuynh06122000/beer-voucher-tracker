@@ -288,13 +288,6 @@ export default function Home() {
             <section>
               <VoucherEntryForm onSuccess={handleFormSuccess} />
             </section>
-            <section>
-              <KPIDashboard
-                refreshTrigger={refreshTrigger}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-              />
-            </section>
           </div>
         )}
 
