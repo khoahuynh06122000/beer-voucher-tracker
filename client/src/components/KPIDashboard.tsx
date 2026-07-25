@@ -343,6 +343,13 @@ export function KPIDashboard({
     return { deptSummaries, allDailyFlat, timeSeriesChartData, departmentChartData };
   }, [allRecords, selectedRestId]);
 
+  const userDept = useMemo(() => {
+    return (
+      departmentFluctuations.deptSummaries.find((d) => d.deptId === userRestaurantId) ||
+      departmentFluctuations.deptSummaries[0]
+    );
+  }, [departmentFluctuations, userRestaurantId]);
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
@@ -670,27 +677,237 @@ export function KPIDashboard({
         })}
       </div>
 
-      {/* Department Trend & Daily Fluctuation Cards Section (FP&A Standard) */}
-      <div className="space-y-5 pt-2">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-              <BarChart2 className="w-5 h-5" />
+      {/* Section for BP User (Department User) - Separate report for their own restaurant */}
+      {!isAdmin && userDept && (
+        <div className="space-y-5 pt-2">
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <BarChart2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight flex items-center gap-2">
+                  <span>Báo Cáo Voucher Nhà Hàng - {userDept.meta.name}</span>
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Số liệu phát hành, lượt khách sử dụng voucher và tiến độ theo từng ngày của {userDept.meta.name}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight flex items-center gap-2">
-                <span>Báo Cáo Biến Động Vận Hành &amp; Quy Đổi Voucher (FP&amp;A Standard)</span>
-                <Sparkles className="w-4 h-4 text-amber-500" />
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Phân tích Ma trận Chuỗi Thời Gian (Time-Series Matrix) &amp; Biến động Ngày-qua-Ngày (DoD Variance)
-              </p>
-            </div>
+            <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl self-start md:self-auto shrink-0">
+              {userDept.dailyList.length} Ngày Hoạt Động Trong Kỳ
+            </span>
           </div>
-          <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl self-start md:self-auto shrink-0">
-            {departmentFluctuations.deptSummaries.length} Bộ Phận Trong Kỳ
-          </span>
+
+          {/* Simple Executive Commentary Card */}
+          <Card className="p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs space-y-3">
+            <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h4 className="text-sm font-extrabold text-foreground">
+                Tóm Tắt Nhanh Kết Quả Voucher - {userDept.meta.name}
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <div className="text-muted-foreground font-semibold">Tổng Voucher Đã Phát</div>
+                <div className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                  {userDept.totalIssued.toLocaleString("vi-VN")} chiếc
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <div className="text-muted-foreground font-semibold">Khách Đã Đến Quy Đổi</div>
+                <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
+                  {userDept.totalPosted.toLocaleString("vi-VN")} chiếc
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="text-muted-foreground font-semibold">Tỷ Lệ Sử Dụng Thành Công</div>
+                <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                  {userDept.overallRate}%
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-muted/60 text-xs text-foreground font-medium leading-relaxed">
+              💡 <strong className="font-extrabold text-foreground">Nhận định đơn giản: </strong>
+              {userDept.overallRate >= 60 ? (
+                <span>
+                  Nhà hàng có tỷ lệ khách sử dụng voucher rất tốt ({userDept.overallRate}%). Lượng khách mang voucher đến ăn uống quy đổi đạt hiệu quả cao!
+                </span>
+              ) : userDept.overallRate >= 30 ? (
+                <span>
+                  Nhà hàng đạt tỷ lệ quy đổi {userDept.overallRate}%. Bạn có thể tiếp tục nhắc nhở thu ngân và phục vụ gợi ý voucher khi khách gọi món.
+                </span>
+              ) : (
+                <span>
+                  Tỷ lệ quy đổi hiện tại là {userDept.overallRate}%. Hãy tăng cường giới thiệu chương trình tặng voucher tại bàn để đón thêm lượt khách quy đổi nhé.
+                </span>
+              )}
+            </div>
+          </Card>
+
+          {/* Chart: Diễn Biến Phát Hành & Quy Đổi Hàng Ngày */}
+          <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+              <div>
+                <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-amber-500" />
+                  <span>Diễn Biến Quy Đổi &amp; Phát Hành Theo Ngày - {userDept.meta.name}</span>
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Cột vàng: Tổng voucher phát ra | Cột xanh: Voucher khách đã sử dụng | Đường xanh lá: Tỷ lệ đổi (%)
+                </p>
+              </div>
+            </div>
+
+            <div className="h-[280px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={userDept.dailyList}
+                  margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11 }}
+                    unit="%"
+                  />
+                  <Tooltip
+                    cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
+                    contentStyle={{
+                      backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                      borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
+                      borderRadius: "12px",
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontSize: "12px",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                    }}
+                    itemStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontWeight: "bold",
+                      marginBottom: "4px",
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+                  <Bar yAxisId="left" dataKey="issued" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                  <Bar yAxisId="left" dataKey="posted" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Đã quy đổi" />
+                  <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={2.5} name="Tỷ lệ quy đổi %" dot={{ r: 4 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          {/* Table: Bảng Nhật Ký Hoạt Động Hàng Ngày */}
+          <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+              <div>
+                <h4 className="text-sm sm:text-base font-extrabold text-foreground flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-amber-500" />
+                  <span>Nhật Ký Số Liệu Hàng Ngày ({userDept.meta.name})</span>
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Số lượng voucher phát ra, đã đổi và mức độ tăng/giảm so với ngày trước đó
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-border/80">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted/70 text-muted-foreground uppercase text-[10px] font-extrabold tracking-wider border-b border-border">
+                  <tr>
+                    <th className="px-4 py-3">Ngày</th>
+                    <th className="px-3 py-3 text-right">Phát Hành</th>
+                    <th className="px-3 py-3 text-right">Khách Đã Đổi</th>
+                    <th className="px-3 py-3 text-right">Chưa Dùng / Đã Hủy</th>
+                    <th className="px-3 py-3 text-center">Tỷ Lệ Đổi</th>
+                    <th className="px-4 py-3 text-right">So Với Ngày Trước</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/70 font-semibold">
+                  {userDept.dailyList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                        Chưa có dữ liệu phát hành trong khoảng thời gian này.
+                      </td>
+                    </tr>
+                  ) : (
+                    userDept.dailyList.map((rec) => (
+                      <tr key={rec.date} className="hover:bg-amber-500/5 transition-colors">
+                        <td className="px-4 py-3 font-extrabold text-foreground">{rec.date}</td>
+                        <td className="px-3 py-3 text-right font-black text-amber-600 dark:text-amber-400">
+                          {rec.issued.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3 py-3 text-right font-bold text-blue-600 dark:text-blue-400">
+                          {rec.posted.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3 py-3 text-right text-muted-foreground font-medium">
+                          {rec.cancelled.toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs">
+                            {rec.rate}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-extrabold">
+                          {rec.isFirstDay ? (
+                            <span className="text-muted-foreground/60 text-[11px]">- (Ngày đầu)</span>
+                          ) : rec.diff > 0 ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                              <TrendingUp className="w-3.5 h-3.5" /> +{rec.diff.toLocaleString("vi-VN")} (+{rec.pctChange}%)
+                            </span>
+                          ) : rec.diff < 0 ? (
+                            <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1">
+                              <TrendingDown className="w-3.5 h-3.5" /> {rec.diff.toLocaleString("vi-VN")} ({rec.pctChange}%)
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground inline-flex items-center gap-1">
+                              <Minus className="w-3.5 h-3.5" /> 0 (0%)
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
+      )}
+
+      {/* Multi-Department Section ONLY for ADMIN */}
+      {isAdmin && (
+        <div className="space-y-5 pt-2">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <BarChart2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight flex items-center gap-2">
+                  <span>Báo Cáo Biến Động Vận Hành &amp; Quy Đổi Voucher (FP&amp;A Standard)</span>
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Phân tích Ma trận Chuỗi Thời Gian (Time-Series Matrix) &amp; Biến động Ngày-qua-Ngày (DoD Variance)
+                </p>
+              </div>
+            </div>
+            <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl self-start md:self-auto shrink-0">
+              {departmentFluctuations.deptSummaries.length} Bộ Phận Trong Kỳ
+            </span>
+          </div>
 
         {/* FP&A Executive Commentary & Key Insight Highlights */}
         <Card className="p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/[0.04] via-card to-card shadow-xs space-y-3">
@@ -1006,12 +1223,23 @@ export function KPIDashboard({
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
+                    cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
                     contentStyle={{
                       backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
                       borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
                       borderRadius: "12px",
                       color: theme === "dark" ? "#f8fafc" : "#0f172a",
                       fontSize: "12px",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                    }}
+                    itemStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontWeight: "bold",
+                      marginBottom: "4px",
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
@@ -1055,12 +1283,23 @@ export function KPIDashboard({
                     unit="%"
                   />
                   <Tooltip
+                    cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
                     contentStyle={{
                       backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
                       borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
                       borderRadius: "12px",
                       color: theme === "dark" ? "#f8fafc" : "#0f172a",
                       fontSize: "12px",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                    }}
+                    itemStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontWeight: "bold",
+                      marginBottom: "4px",
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
@@ -1080,8 +1319,9 @@ export function KPIDashboard({
           </Card>
         </div>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }
 
 

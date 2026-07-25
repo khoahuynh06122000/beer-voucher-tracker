@@ -36,6 +36,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { getVouchersByDateRange, VoucherRecord, getLocalDateString } from "@/lib/firestoreService";
 
 const RESTAURANTS = [
@@ -64,6 +65,7 @@ export function AnalyticsCharts({
   onRestaurantChange,
 }: AnalyticsChartsProps = {}) {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const isAdmin = user?.role === "admin";
 
   const [internalRestaurant, setInternalRestaurant] = useState<string>("all");
@@ -428,17 +430,27 @@ export function AnalyticsCharts({
                   tickLine={false}
                 />
                 <Tooltip
+                  cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
                   formatter={(value: any, name: any) => {
                     if (name === "Tỷ lệ quy đổi %") return [`${value}%`, name];
                     return [value?.toLocaleString("vi-VN"), name];
                   }}
                   contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "none",
+                    backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                    borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
                     borderRadius: "10px",
-                    color: "#fff",
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
                     fontSize: "12px",
                     boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                  }}
+                  itemStyle={{
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                    fontWeight: "bold",
+                    marginBottom: "4px",
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }} />
@@ -654,6 +666,7 @@ export function AnalyticsCharts({
                     paddingAngle={4}
                     dataKey="value"
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={{ stroke: theme === "dark" ? "#cbd5e1" : "#64748b" }}
                   >
                     {pieCouponData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -662,11 +675,20 @@ export function AnalyticsCharts({
                   <Tooltip
                     formatter={(val: number) => [val.toLocaleString(), "Số lượng"]}
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.9)",
-                      border: "none",
-                      borderRadius: "8px",
-                      color: "#fff",
+                      backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                      borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
+                      borderRadius: "10px",
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
                       fontSize: "12px",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                    }}
+                    itemStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{
+                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                      fontWeight: "bold",
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
@@ -693,12 +715,23 @@ export function AnalyticsCharts({
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} tickLine={false} />
                 <Tooltip
+                  cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
                   contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "none",
-                    borderRadius: "8px",
-                    color: "#fff",
+                    backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                    borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
+                    borderRadius: "10px",
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
                     fontSize: "12px",
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                  }}
+                  itemStyle={{
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{
+                    color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                    fontWeight: "bold",
+                    marginBottom: "4px",
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: "12px" }} />

@@ -209,3 +209,49 @@
     @apply font-semibold;
   }
 }
+
+/* Recharts Dark Mode High-Contrast & Soft Hover Fixes */
+.dark .recharts-text {
+  fill: #e2e8f0 !important;
+}
+
+.dark .recharts-cartesian-axis-tick-value {
+  fill: #cbd5e1 !important;
+}
+
+.dark .recharts-legend-item-text {
+  color: #e2e8f0 !important;
+}
+
+.dark .recharts-pie-label-text {
+  fill: #f8fafc !important;
+}
+
+.dark .recharts-pie-label-line {
+  stroke: #94a3b8 !important;
+}
+
+/* Tooltip text contrast fixes (Fixes Image 1 dark text in tooltip) */
+.dark .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .recharts-tooltip-item,
+.dark .recharts-tooltip-item-name,
+.dark .recharts-tooltip-item-value,
+.dark .recharts-tooltip-label {
+  color: #f8fafc !important;
+}
+
+/* Active bar hover overlay fix (Fixes Image 2 bright white background box behind bar) */
+.recharts-rectangle.recharts-tooltip-cursor {
+  fill: rgba(0, 0, 0, 0.05) !important;
+}
+
+.dark .recharts-rectangle.recharts-tooltip-cursor {
+  fill: rgba(255, 255, 255, 0.08) !important;
+}
