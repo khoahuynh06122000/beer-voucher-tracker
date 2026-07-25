@@ -279,19 +279,6 @@ export default function Home() {
                 onRestaurantChange={setAnalyticsSelectedRestaurant}
               />
             </section>
-
-            {/* ONLY render entry form if user is NOT admin */}
-            {!isAdmin && (
-              <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-6 rounded-full bg-amber-500" />
-                  <h2 className="text-xl font-bold text-foreground tracking-tight">
-                    Nhập Liệu Phiếu Voucher
-                  </h2>
-                </div>
-                <VoucherEntryForm onSuccess={handleFormSuccess} />
-              </section>
-            )}
           </div>
         )}
 

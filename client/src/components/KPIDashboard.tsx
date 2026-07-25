@@ -701,112 +701,122 @@ export function KPIDashboard({
             </span>
           </div>
 
-          {/* Simple Executive Commentary Card */}
-          <Card className="p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs space-y-3">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <h4 className="text-sm font-extrabold text-foreground">
-                Tóm Tắt Nhanh Kết Quả Voucher - {userDept.meta.name}
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <div className="text-muted-foreground font-semibold">Tổng Voucher Đã Phát</div>
-                <div className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                  {userDept.totalIssued.toLocaleString("vi-VN")} chiếc
-                </div>
-              </div>
-              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <div className="text-muted-foreground font-semibold">Khách Đã Đến Quy Đổi</div>
-                <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                  {userDept.totalPosted.toLocaleString("vi-VN")} chiếc
-                </div>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <div className="text-muted-foreground font-semibold">Tỷ Lệ Sử Dụng Thành Công</div>
-                <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                  {userDept.overallRate}%
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-muted/60 text-xs text-foreground font-medium leading-relaxed">
-              💡 <strong className="font-extrabold text-foreground">Nhận định đơn giản: </strong>
-              {userDept.overallRate >= 60 ? (
-                <span>
-                  Nhà hàng có tỷ lệ khách sử dụng voucher rất tốt ({userDept.overallRate}%). Lượng khách mang voucher đến ăn uống quy đổi đạt hiệu quả cao!
-                </span>
-              ) : userDept.overallRate >= 30 ? (
-                <span>
-                  Nhà hàng đạt tỷ lệ quy đổi {userDept.overallRate}%. Bạn có thể tiếp tục nhắc nhở thu ngân và phục vụ gợi ý voucher khi khách gọi món.
-                </span>
-              ) : (
-                <span>
-                  Tỷ lệ quy đổi hiện tại là {userDept.overallRate}%. Hãy tăng cường giới thiệu chương trình tặng voucher tại bàn để đón thêm lượt khách quy đổi nhé.
-                </span>
-              )}
-            </div>
-          </Card>
-
-          {/* Chart: Diễn Biến Phát Hành & Quy Đổi Hàng Ngày */}
-          <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-3">
-            <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
-              <div>
+          {/* Side-by-Side Grid: Chart on Left (7 cols), Simple Analysis on Right (5 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Chart: Diễn Biến Phát Hành & Quy Đổi Hàng Ngày */}
+            <Card className="lg:col-span-7 p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs flex flex-col justify-between">
+              <div className="border-b border-border/60 pb-2.5">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <BarChart2 className="w-4 h-4 text-amber-500" />
-                  <span>Diễn Biến Quy Đổi &amp; Phát Hành Theo Ngày - {userDept.meta.name}</span>
+                  <span>Biểu Đồ Quy Đổi &amp; Phát Hành - {userDept.meta.name}</span>
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Cột vàng: Tổng voucher phát ra | Cột xanh: Voucher khách đã sử dụng | Đường xanh lá: Tỷ lệ đổi (%)
+                  Cột vàng: Phát ra | Cột xanh: Khách đã đổi | Đường xanh lá: Tỷ lệ (%)
                 </p>
               </div>
-            </div>
 
-            <div className="h-[280px] w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  data={userDept.dailyList}
-                  margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tick={{ fontSize: 11 }}
-                    unit="%"
-                  />
-                  <Tooltip
-                    cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
-                    contentStyle={{
-                      backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
-                      borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
-                      borderRadius: "12px",
-                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
-                      fontSize: "12px",
-                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
-                    }}
-                    itemStyle={{
-                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
-                      fontSize: "12px",
-                    }}
-                    labelStyle={{
-                      color: theme === "dark" ? "#f8fafc" : "#0f172a",
-                      fontWeight: "bold",
-                      marginBottom: "4px",
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
-                  <Bar yAxisId="left" dataKey="issued" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
-                  <Bar yAxisId="left" dataKey="posted" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Đã quy đổi" />
-                  <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={2.5} name="Tỷ lệ quy đổi %" dot={{ r: 4 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
+              <div className="h-[280px] w-full pt-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={userDept.dailyList}
+                    margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      unit="%"
+                    />
+                    <Tooltip
+                      cursor={{ fill: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)" }}
+                      contentStyle={{
+                        backgroundColor: theme === "dark" ? "#1e293b" : "#ffffff",
+                        borderColor: theme === "dark" ? "#334155" : "#e2e8f0",
+                        borderRadius: "12px",
+                        color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                        fontSize: "12px",
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                      }}
+                      itemStyle={{
+                        color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                        fontSize: "12px",
+                      }}
+                      labelStyle={{
+                        color: theme === "dark" ? "#f8fafc" : "#0f172a",
+                        fontWeight: "bold",
+                        marginBottom: "4px",
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+                    <Bar yAxisId="left" dataKey="issued" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                    <Bar yAxisId="left" dataKey="posted" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Đã quy đổi" />
+                    <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={2.5} name="Tỷ lệ quy đổi %" dot={{ r: 4 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* Simple Executive Analysis & Quick Metrics Card */}
+            <Card className="lg:col-span-5 p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <h4 className="text-sm font-extrabold text-foreground">
+                    Tóm Tắt &amp; Nhận Định Đơn Giản
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-[11px] text-muted-foreground font-medium">Tổng Phát Out</div>
+                    <div className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                      {userDept.totalIssued.toLocaleString("vi-VN")}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
+                    <div className="text-[11px] text-muted-foreground font-medium">Khách Đã Đổi</div>
+                    <div className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5">
+                      {userDept.totalPosted.toLocaleString("vi-VN")}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                    <div className="text-[11px] text-muted-foreground font-medium">Tỷ Lệ Đổi</div>
+                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {userDept.overallRate}%
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-muted/60 text-xs text-foreground space-y-2">
+                  <div className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    💡 <span>Nhận định đơn giản cho {userDept.meta.name}:</span>
+                  </div>
+                  {userDept.overallRate >= 60 ? (
+                    <p className="leading-relaxed font-medium">
+                      Nhà hàng có tỷ lệ khách sử dụng voucher rất tốt (<strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong>). Phần lớn khách nhận voucher đều đến nhà hàng quy đổi món ăn/đồ uống hiệu quả!
+                    </p>
+                  ) : userDept.overallRate >= 30 ? (
+                    <p className="leading-relaxed font-medium">
+                      Nhà hàng đạt tỷ lệ quy đổi khá (<strong className="text-amber-600 dark:text-amber-400">{userDept.overallRate}%</strong>). Bạn có thể tiếp tục nhắc nhở thu ngân và phục vụ gợi ý voucher khi khách gọi món.
+                    </p>
+                  ) : (
+                    <p className="leading-relaxed font-medium">
+                      Tỷ lệ quy đổi hiện tại ở mức <strong className="text-orange-600 dark:text-orange-400">{userDept.overallRate}%</strong>. Nhà hàng nên đẩy mạnh việc giới thiệu ưu đãi tặng voucher trực tiếp tại bàn.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Trạng thái số liệu kỳ này</span>
+                <span className="font-bold text-foreground">{userDept.meta.name}</span>
+              </div>
+            </Card>
+          </div>
 
           {/* Table: Bảng Nhật Ký Hoạt Động Hàng Ngày */}
           <Card className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs space-y-4">
