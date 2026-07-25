@@ -391,7 +391,9 @@ function vitePluginManusDebugCollector(): Plugin {
             };
 
             const url = webhookUrl.trim();
-            const payloadsToTry = [adaptiveCardPayload, messageCardPayload, simpleTextPayload];
+            const payloadsToTry = url.includes("logic.azure.com") || url.includes("powerautomate")
+              ? [adaptiveCardPayload, messageCardPayload, simpleTextPayload]
+              : [messageCardPayload, adaptiveCardPayload, simpleTextPayload];
 
             let lastError = "";
             let success = false;

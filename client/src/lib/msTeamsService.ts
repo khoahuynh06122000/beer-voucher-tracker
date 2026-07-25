@@ -104,95 +104,42 @@ export async function sendMSTeamsReport(
     assessment = `Tỷ lệ quy đổi đạt **${rate}%**, chưa đạt mức tối ưu. Khuyến nghị nhân viên chủ động nhắc khách về ưu đãi voucher.`;
   }
 
-  const payload = {
-    type: "message",
-    attachments: [
+  const messageCardPayload = {
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": rate >= 80 ? "10B981" : rate >= 50 ? "F59E0B" : "EF4444",
+    "summary": `Dashboard Voucher ${record.restaurantName} - ${record.date}`,
+    "sections": [
       {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        contentUrl: null,
-        content: {
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          type: "AdaptiveCard",
-          version: "1.2",
-          body: [
-            {
-              type: "TextBlock",
-              size: "ExtraLarge",
-              weight: "Bolder",
-              text: `📊 DASHBOARD VOUCHER — ${record.restaurantName.toUpperCase()}`,
-              color: rate >= 80 ? "Good" : rate >= 50 ? "Warning" : "Attention"
-            },
-            {
-              type: "TextBlock",
-              text: `📅 Ngày: ${record.date} | 👤 Người báo cáo: ${record.createdBy || "Hệ thống"}`,
-              isSubtle: true
-            },
-            {
-              type: "Container",
-              style: "emphasis",
-              items: [
-                {
-                  type: "TextBlock",
-                  text: `TỶ LỆ KPI: ${progressBar}  ${rate}%  (${badgeText})`,
-                  weight: "Bolder",
-                  color: badgeColor
-                }
-              ]
-            },
-            {
-              type: "ColumnSet",
-              columns: [
-                {
-                  type: "Column",
-                  width: "1",
-                  items: [
-                    { type: "TextBlock", text: "Phát Hành", size: "Small", isSubtle: true },
-                    { type: "TextBlock", text: `${totalIssued}`, size: "Large", weight: "Bolder" }
-                  ]
-                },
-                {
-                  type: "Column",
-                  width: "1",
-                  items: [
-                    { type: "TextBlock", text: "Thu Về (Bill)", size: "Small", isSubtle: true },
-                    { type: "TextBlock", text: `${postedBills}`, size: "Large", weight: "Bolder", color: "Good" }
-                  ]
-                },
-                {
-                  type: "Column",
-                  width: "1",
-                  items: [
-                    { type: "TextBlock", text: "Hủy Bỏ", size: "Small", isSubtle: true },
-                    { type: "TextBlock", text: `${cancelled}`, size: "Large", weight: "Bolder", color: "Attention" }
-                  ]
-                }
-              ]
-            },
-            {
-              type: "Container",
-              style: "emphasis",
-              items: [
-                {
-                  type: "TextBlock",
-                  text: "💡 ĐÁNH GIÁ & PHÂN TÍCH TỰ ĐỘNG",
-                  weight: "Bolder"
-                },
-                {
-                  type: "TextBlock",
-                  text: assessment,
-                  wrap: true
-                }
-              ]
-            }
-          ],
-          actions: [
-            {
-              type: "Action.OpenUrl",
-              title: "🌐 Mở Live Dashboard Báo Cáo",
-              url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
-            }
-          ]
-        }
+        "activityTitle": `📊 DASHBOARD BÁO CÁO VOUCHER — ${record.restaurantName.toUpperCase()}`,
+        "activitySubtitle": `📅 Ngày: **${record.date}**  |  👤 Người báo cáo: **${record.createdBy || "Hệ thống"}**`,
+        "facts": [
+          { name: "📈 Tỷ Lệ KPI:", value: `${progressBar}  **${rate}%** (${badgeText})` },
+          { name: "📋 Tổng Phát Hành:", value: `**${totalIssued}** phiếu` },
+          { name: "🧾 Thu Về (Đăng Bill):", value: `**${postedBills}** phiếu` },
+          { name: "❌ Coupon Hủy Bỏ:", value: `**${cancelled}** phiếu` },
+          ...(isMaisonKayser
+            ? [{ name: "🥐 Voucher Bánh:", value: `**${bakery}** chiếc` }]
+            : [
+                { name: "🍟 Coupon Khoai Tây:", value: `**${potato}** phiếu` },
+                { name: "🍺 Coupon Bia:", value: `**${beer}** phiếu` },
+              ]),
+        ],
+        "markdown": true
+      },
+      {
+        "title": "💡 ĐÁNH GIÁ & PHÂN TÍCH TỰ ĐỘNG",
+        "text": assessment,
+        "markdown": true
+      }
+    ],
+    "potentialAction": [
+      {
+        "@type": "OpenUri",
+        "name": "🌐 Mở Live Dashboard Báo Cáo",
+        "targets": [
+          { "os": "default", "uri": "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app" }
+        ]
       }
     ]
   };
@@ -201,7 +148,7 @@ export async function sendMSTeamsReport(
     const res = await fetch(webhookUrl.trim(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(messageCardPayload),
     });
 
     if (res.ok || res.status === 200 || res.status === 202) {
