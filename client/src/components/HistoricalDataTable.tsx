@@ -18,8 +18,17 @@ import { compressImage } from "@/lib/imageUtils";
 import { ImagePreviewModal } from "./ImagePreviewModal";
 import { toast } from "sonner";
 
+const RESTAURANT_OPTIONS = [
+  { id: "all", name: "Tất Cả Nhà Hàng" },
+  { id: "lehoibia", name: "Lễ Hội Bia" },
+  { id: "1901", name: "Nhà Hàng 1901" },
+  { id: "beerplaza", name: "Beer Plaza" },
+  { id: "maisonkayser", name: "Maison Kayser" },
+];
+
 export function HistoricalDataTable() {
   const { user } = useAuth();
+  const [selectedFilterRestaurant, setSelectedFilterRestaurant] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -34,8 +43,6 @@ export function HistoricalDataTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [sendingRowId, setSendingRowId] = useState<string | null>(null);
   const [activePreviewRecord, setActivePreviewRecord] = useState<VoucherRecord | null>(null);
-
-  const restaurantId = user?.role === "admin" ? "all" : (user?.username || user?.id || "lehoibia");
 
   const handleAppendImagesToRecord = async (record: VoucherRecord, files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -88,7 +95,7 @@ export function HistoricalDataTable() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await getVouchersByDateRange(restaurantId, startDate, endDate);
+      const data = await getVouchersByDateRange(selectedFilterRestaurant, startDate, endDate);
       setRecords(data);
     } catch (e) {
       console.error("Error loading historical data:", e);
@@ -99,7 +106,7 @@ export function HistoricalDataTable() {
 
   useEffect(() => {
     loadData();
-  }, [restaurantId, startDate, endDate]);
+  }, [selectedFilterRestaurant, startDate, endDate]);
 
   const handleSetLastDays = (days: number) => {
     const end = new Date();
@@ -208,7 +215,23 @@ export function HistoricalDataTable() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 max-w-lg gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 max-w-2xl gap-3">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+            Nhà hàng
+          </label>
+          <select
+            value={selectedFilterRestaurant}
+            onChange={(e) => setSelectedFilterRestaurant(e.target.value)}
+            className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 touch-manipulation cursor-pointer"
+          >
+            {RESTAURANT_OPTIONS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
             Từ ngày
@@ -240,7 +263,7 @@ export function HistoricalDataTable() {
               <TableHead className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Ngày
               </TableHead>
-              {user?.role === "admin" && (
+              {(user?.role === "admin" || selectedFilterRestaurant === "all") && (
                 <TableHead className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Nhà Hàng
                 </TableHead>
@@ -320,7 +343,7 @@ export function HistoricalDataTable() {
                     <TableCell className="py-3.5 px-4 font-semibold text-sm text-foreground">
                       {record.date}
                     </TableCell>
-                    {user?.role === "admin" && (
+                    {(user?.role === "admin" || selectedFilterRestaurant === "all") && (
                       <TableCell className="py-3.5 px-4 text-xs font-bold text-amber-600">
                         {record.restaurantName || record.restaurantId}
                       </TableCell>

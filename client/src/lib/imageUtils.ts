@@ -1,11 +1,12 @@
 /**
  * Compress an image File to a lightweight JPEG Data URL string
+ * High efficiency: max 750px width/height and 0.55 JPEG quality keeps images <30KB
  */
 export function compressImage(
   file: File,
-  maxWidth: number = 1200,
-  maxHeight: number = 1200,
-  quality: number = 0.75
+  maxWidth: number = 750,
+  maxHeight: number = 750,
+  quality: number = 0.55
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

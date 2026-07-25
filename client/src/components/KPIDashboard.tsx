@@ -14,31 +14,41 @@ interface KPIDashboardProps {
   onDateChange?: (date: string) => void;
 }
 
+const RESTAURANT_OPTIONS = [
+  { id: "all", name: "Tất Cả Nhà Hàng (Tổng Hợp)" },
+  { id: "lehoibia", name: "Lễ Hội Bia" },
+  { id: "1901", name: "Nhà Hàng 1901" },
+  { id: "beerplaza", name: "Beer Plaza" },
+  { id: "maisonkayser", name: "Maison Kayser" },
+];
+
 export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPIDashboardProps) {
   const { user } = useAuth();
+  const [selectedRestId, setSelectedRestId] = useState<string>(() => {
+    return user?.username && user.username !== "admin" ? user.username : "all";
+  });
   const [todayRecord, setTodayRecord] = useState<VoucherRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const targetDate = selectedDate || getLocalDateString();
-  const isAdmin = user?.role === "admin";
-  const restaurantId = user?.username || user?.id || "lehoibia";
+  const isAll = selectedRestId === "all";
 
   useEffect(() => {
     let isMounted = true;
     async function fetchKPI() {
       setIsLoading(true);
-      if (restaurantId) {
-        const record = await getVoucherByDate(restaurantId, targetDate, isAdmin);
-        if (isMounted) setTodayRecord(record);
+      const record = await getVoucherByDate(selectedRestId, targetDate, isAll);
+      if (isMounted) {
+        setTodayRecord(record);
+        setIsLoading(false);
       }
-      if (isMounted) setIsLoading(false);
     }
     fetchKPI();
     return () => {
       isMounted = false;
     };
-  }, [restaurantId, targetDate, isAdmin, refreshTrigger]);
+  }, [selectedRestId, targetDate, isAll, refreshTrigger]);
 
   if (isLoading) {
     return (
@@ -61,7 +71,8 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
   const total = todayRecord?.totalIssued ?? 0;
   const rate = todayRecord?.utilizationRate ?? 0;
 
-  const isMaisonKayser = restaurantId === "maisonkayser" || todayRecord?.restaurantId === "maisonkayser";
+  const isMaisonKayser = selectedRestId === "maisonkayser" || todayRecord?.restaurantId === "maisonkayser";
+  const isAdmin = isAll || user?.role === "admin";
 
   let stats;
 
@@ -192,27 +203,38 @@ export function KPIDashboard({ refreshTrigger, selectedDate, onDateChange }: KPI
 
   return (
     <div className="space-y-3">
-      {/* Date bar badge */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-2">
+      {/* Date & Restaurant Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-muted-foreground bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 p-3 sm:px-4 sm:py-2.5 rounded-2xl shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
-            Đang hiển thị số liệu ngày: <strong className="text-foreground font-bold">{targetDate}</strong>
+            Ngày: <strong className="text-foreground font-bold">{targetDate}</strong>
           </span>
-          {isAdmin && (
-            <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold text-[10px] uppercase tracking-wide border border-amber-500/30">
-              Tổng Tất Cả Nhà Hàng
-            </span>
-          )}
+
+          <div className="flex items-center gap-1.5 ml-0 sm:ml-3 border-l border-amber-500/30 pl-3">
+            <span className="font-semibold text-foreground">Xem số liệu:</span>
+            <select
+              value={selectedRestId}
+              onChange={(e) => setSelectedRestId(e.target.value)}
+              className="px-2.5 py-1 rounded-xl bg-background border border-amber-500/30 text-foreground font-extrabold shadow-xs text-xs outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
+            >
+              {RESTAURANT_OPTIONS.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
         {onDateChange && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="hidden sm:inline font-semibold">Đổi ngày:</span>
             <input
               type="date"
               value={targetDate}
               onChange={(e) => onDateChange(e.target.value)}
-              className="px-2.5 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none"
+              className="px-2.5 py-1 text-xs rounded-xl bg-background border border-amber-500/30 text-foreground font-bold shadow-xs focus:ring-2 focus:ring-amber-500/30 outline-none cursor-pointer"
             />
           </div>
         )}

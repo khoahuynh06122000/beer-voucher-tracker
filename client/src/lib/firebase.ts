@@ -18,16 +18,6 @@ export const auth = getAuth(app);
 
 const dbId = firebaseConfigData.firestoreDatabaseId;
 
-let firestoreDb;
-try {
-  firestoreDb = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
-    ...(dbId && dbId !== "(default)" ? { databaseId: dbId } : {}),
-  });
-} catch (e) {
-  firestoreDb = dbId && dbId !== "(default)" ? getFirestore(app, dbId) : getFirestore(app);
-}
-
-export const db = firestoreDb;
+export const db = dbId && dbId !== "(default)" ? getFirestore(app, dbId) : getFirestore(app);
 
 export default app;
