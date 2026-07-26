@@ -21,6 +21,7 @@ import {
   PieChart as PieChartIcon,
   Sun,
   Moon,
+  DollarSign,
 } from "lucide-react";
 import {
   ResponsiveContainer,
