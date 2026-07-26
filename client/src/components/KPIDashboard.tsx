@@ -420,7 +420,7 @@ export function KPIDashboard({
       {
         label: "COUPON KHOAI TÂY & BIA",
         value: potato + beer,
-        unit: "Coupon khoai tây & bia toàn nhà hàng",
+        unit: `~ ${(beer * 0.5).toFixed(1)}L Bia & ${(potato * 0.1).toFixed(1)}kg Khoai`,
         icon: Beer,
         iconBg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 dark:bg-amber-500/20",
         accentBorder: "border-l-4 border-l-amber-500",
@@ -460,20 +460,20 @@ export function KPIDashboard({
       {
         label: "COUPON KHOAI TÂY",
         value: potato,
-        unit: "Coupon khoai tây thu về",
+        unit: `~ ${(potato * 0.1).toFixed(1)} kg khoai tây (0.1kg/vé)`,
         icon: Ticket,
         iconBg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 dark:bg-amber-500/20",
         accentBorder: "border-l-4 border-l-amber-500",
-        badge: "Khoai tây",
+        badge: `${(potato * 0.1).toFixed(1)} kg`,
       },
       {
         label: "COUPON BEER",
         value: beer,
-        unit: "Coupon bia thu về",
+        unit: `~ ${(beer * 0.5).toFixed(1)} Lít bia tươi (500ml/vé)`,
         icon: Beer,
         iconBg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20",
         accentBorder: "border-l-4 border-l-blue-500",
-        badge: "Đồ uống",
+        badge: `${(beer * 0.5).toFixed(1)} Lít`,
       },
       {
         label: "COUPON HỦY",
@@ -676,6 +676,79 @@ export function KPIDashboard({
           );
         })}
       </div>
+
+      {/* Product Volume Conversion Highlight Cards (Sản Lượng Quy Đổi Thực Tế) */}
+      {!isMaisonKayser && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          {/* Beer Volume Conversion Card */}
+          <Card className="p-4 sm:p-5 rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-card to-background shadow-xs relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                  <Beer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-black text-foreground">SẢN LƯỢNG BIA QUY ĐỔI</h4>
+                  <p className="text-[11px] text-muted-foreground font-semibold">Định mức: 1 vé beer = 500ml (0.5 Lít)</p>
+                </div>
+              </div>
+              <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                500 ml / vé
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-3 mt-3">
+              <span className="text-2xl sm:text-4xl font-black text-blue-600 dark:text-blue-400 tracking-tight">
+                {(beer * 0.5).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-lg font-bold">Lít</span>
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">
+                (~ {(beer * 500).toLocaleString("vi-VN")} ml từ <strong className="text-foreground">{beer.toLocaleString("vi-VN")}</strong> vé)
+              </span>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-blue-500/20 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Sản lượng tiêu thụ ước tính:</span>
+              <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                {beer > 0 ? `${(beer * 0.5).toFixed(1)} Lít bia tươi` : "Chưa phát sinh"}
+              </span>
+            </div>
+          </Card>
+
+          {/* Potato Weight Conversion Card */}
+          <Card className="p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-background shadow-xs relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-black text-foreground">KHỐI LƯỢNG KHOAI TÂY QUY ĐỔI</h4>
+                  <p className="text-[11px] text-muted-foreground font-semibold">Định mức: 1 vé khoai tây = 0.1 kg (100g)</p>
+                </div>
+              </div>
+              <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                0.1 kg / vé
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-3 mt-3">
+              <span className="text-2xl sm:text-4xl font-black text-amber-600 dark:text-amber-400 tracking-tight">
+                {(potato * 0.1).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-lg font-bold">kg</span>
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">
+                (~ {(potato * 100).toLocaleString("vi-VN")} g từ <strong className="text-foreground">{potato.toLocaleString("vi-VN")}</strong> vé)
+              </span>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Khối lượng nguyên liệu tiêu thụ:</span>
+              <span className="font-extrabold text-amber-600 dark:text-amber-400">
+                {potato > 0 ? `${(potato * 0.1).toFixed(1)} kg khoai tây chiên` : "Chưa phát sinh"}
+              </span>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Section for BP User (Department User) - Separate report for their own restaurant */}
       {!isAdmin && userDept && (

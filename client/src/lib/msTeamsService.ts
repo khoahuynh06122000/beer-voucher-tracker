@@ -29,7 +29,11 @@ export function generateAnalysisText(record: {
   if (isMaisonKayser) {
     details = `• **Voucher Bánh:** ${record.bakeryCoupons || 0} chiếc\n• **Voucher Hủy:** ${record.cancelled} chiếc`;
   } else {
-    details = `• **Coupon Khoai Tây:** ${record.potatoCoupons || 0} phiếu\n• **Coupon Bia:** ${record.beerCoupons || 0} phiếu\n• **Coupon Hủy:** ${record.cancelled} phiếu`;
+    const potato = record.potatoCoupons || 0;
+    const beer = record.beerCoupons || 0;
+    const beerLiters = (beer * 0.5).toFixed(1);
+    const potatoKg = (potato * 0.1).toFixed(1);
+    details = `• **Coupon Khoai Tây:** ${potato} phiếu (~ **${potatoKg} kg** @ 0.1kg/vé)\n• **Coupon Bia:** ${beer} phiếu (~ **${beerLiters} Lít** @ 500ml/vé)\n• **Sản lượng quy đổi:** 🍺 ${beerLiters} Lít Bia | 🍟 ${potatoKg} kg Khoai\n• **Coupon Hủy:** ${record.cancelled} phiếu`;
   }
 
   return `${performanceAssessment}\n\n**Chi Tiết Số Liệu:**\n${details}\n• **Tổng voucher đã thu hồi (đăng bill):** ${record.postedBills} phiếu\n• **Tổng phát hành:** ${record.totalIssued} phiếu`;
@@ -219,8 +223,9 @@ export async function sendMSTeamsReport(
           ...(isMaisonKayser
             ? [{ name: "🥐 Voucher Bánh:", value: `**${bakery}** chiếc` }]
             : [
-                { name: "🍟 Coupon Khoai Tây:", value: `**${potato}** phiếu` },
-                { name: "🍺 Coupon Bia:", value: `**${beer}** phiếu` },
+                { name: "🍟 Coupon Khoai Tây:", value: `**${potato}** phiếu (~ **${(potato * 0.1).toFixed(1)} kg** @ 0.1kg/vé)` },
+                { name: "🍺 Coupon Bia:", value: `**${beer}** phiếu (~ **${(beer * 0.5).toFixed(1)} Lít** @ 500ml/vé)` },
+                { name: "⚡ Quy Đổi Sản Lượng:", value: `🍺 **${(beer * 0.5).toFixed(1)} Lít Bia** | 🍟 **${(potato * 0.1).toFixed(1)} kg Khoai**` },
               ]),
         ],
         "markdown": true

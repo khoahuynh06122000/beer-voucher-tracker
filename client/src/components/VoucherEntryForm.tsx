@@ -241,47 +241,79 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2.5">
-            <div>
-              <label className="block text-xs font-bold text-amber-600 dark:text-amber-400 mb-1 truncate">
-                🍟 Khoai Tây
-              </label>
-              <input
-                type="number"
-                value={potatoCoupons}
-                onChange={(e) => setPotatoCoupons(e.target.value)}
-                placeholder="0"
-                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                min="0"
-              />
+          <div className="space-y-2.5">
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-amber-600 dark:text-amber-400 truncate">
+                    🍟 Khoai Tây
+                  </label>
+                  <span className="text-[10px] font-semibold text-muted-foreground">0.1kg/vé</span>
+                </div>
+                <input
+                  type="number"
+                  value={potatoCoupons}
+                  onChange={(e) => setPotatoCoupons(e.target.value)}
+                  placeholder="0"
+                  className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  min="0"
+                />
+                <span className="block text-[10px] text-center font-bold text-amber-600 dark:text-amber-400 mt-1">
+                  ~ {(potatoNum * 0.1).toFixed(1)} kg
+                </span>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 truncate">
+                    🍺 Beer
+                  </label>
+                  <span className="text-[10px] font-semibold text-muted-foreground">0.5L/vé</span>
+                </div>
+                <input
+                  type="number"
+                  value={beerCoupons}
+                  onChange={(e) => setBeerCoupons(e.target.value)}
+                  placeholder="0"
+                  className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  min="0"
+                />
+                <span className="block text-[10px] text-center font-bold text-blue-600 dark:text-blue-400 mt-1">
+                  ~ {(beerNum * 0.5).toFixed(1)} Lít
+                </span>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-red-600 dark:text-red-400 truncate">
+                    ❌ Hủy / Rách
+                  </label>
+                  <span className="text-[10px] font-semibold text-muted-foreground">Hủy</span>
+                </div>
+                <input
+                  type="number"
+                  value={cancelled}
+                  onChange={(e) => setCancelled(e.target.value)}
+                  placeholder="0"
+                  className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  min="0"
+                />
+                <span className="block text-[10px] text-center font-bold text-red-600 dark:text-red-400 mt-1">
+                  Phế phẩm
+                </span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 truncate">
-                🍺 Beer
-              </label>
-              <input
-                type="number"
-                value={beerCoupons}
-                onChange={(e) => setBeerCoupons(e.target.value)}
-                placeholder="0"
-                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                min="0"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-red-600 dark:text-red-400 mb-1 truncate">
-                ❌ Hủy / Rách
-              </label>
-              <input
-                type="number"
-                value={cancelled}
-                onChange={(e) => setCancelled(e.target.value)}
-                placeholder="0"
-                className="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-extrabold text-lg text-center focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                min="0"
-              />
+            {/* Product Conversion Highlight Banner */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-amber-500/10 border border-amber-500/20 flex flex-wrap items-center justify-around gap-2 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                <Beer className="w-4 h-4 text-blue-500" />
+                <span>Bia quy đổi: <strong className="text-sm font-black text-blue-600 dark:text-blue-400">{(beerNum * 0.5).toFixed(1)} Lít</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                <Ticket className="w-4 h-4 text-amber-500" />
+                <span>Khoai Tây quy đổi: <strong className="text-sm font-black text-amber-600 dark:text-amber-400">{(potatoNum * 0.1).toFixed(1)} kg</strong></span>
+              </div>
             </div>
           </div>
         )}

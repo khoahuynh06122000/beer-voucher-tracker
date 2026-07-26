@@ -351,7 +351,7 @@ export function AnalyticsCharts({
             {totalIssuedAll.toLocaleString("vi-VN")}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Gồm {totalPotatoAll.toLocaleString()} Khoai Tây + {totalBeerAll.toLocaleString()} Beer
+            ~ {(totalBeerAll * 0.5).toFixed(1)}L Bia & {(totalPotatoAll * 0.1).toFixed(1)}kg Khoai
           </p>
         </Card>
 
@@ -387,6 +387,43 @@ export function AnalyticsCharts({
           <p className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1">
             {topRestaurant ? `${topRestaurant.utilizationRate}% quy đổi (${topRestaurant.postedBills} HD)` : "Chưa có số liệu"}
           </p>
+        </Card>
+      </div>
+
+      {/* Product Volume Conversion Overview Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card className="p-4 rounded-xl border border-blue-500/30 bg-gradient-to-r from-blue-500/10 via-card to-background flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              🍺 SẢN LƯỢNG BIA QUY ĐỔI
+            </span>
+            <div className="text-2xl font-black text-foreground mt-1">
+              {(totalBeerAll * 0.5).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Lít
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Tương đương {(totalBeerAll * 500).toLocaleString("vi-VN")} ml từ {totalBeerAll.toLocaleString("vi-VN")} vé bia
+            </p>
+          </div>
+          <div className="text-right font-black text-xs text-blue-700 dark:text-blue-300 bg-blue-500/20 px-3 py-1.5 rounded-xl border border-blue-500/30">
+            500 ml / vé
+          </div>
+        </Card>
+
+        <Card className="p-4 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-background flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              🍟 KHỐI LƯỢNG KHOAI TÂY QUY ĐỔI
+            </span>
+            <div className="text-2xl font-black text-foreground mt-1">
+              {(totalPotatoAll * 0.1).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Tương đương {(totalPotatoAll * 100).toLocaleString("vi-VN")} g từ {totalPotatoAll.toLocaleString("vi-VN")} vé khoai tây
+            </p>
+          </div>
+          <div className="text-right font-black text-xs text-amber-800 dark:text-amber-300 bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-500/30">
+            0.1 kg / vé
+          </div>
         </Card>
       </div>
 

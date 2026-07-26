@@ -286,10 +286,10 @@ export function HistoricalDataTable() {
                 </TableHead>
               )}
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                🍟 Khoai Tây
+                🍟 Khoai Tây (0.1kg/vé)
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                🍺 Coupon Beer
+                🍺 Coupon Beer (0.5L/vé)
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 🥐 Voucher Bánh
@@ -366,10 +366,20 @@ export function HistoricalDataTable() {
                       </TableCell>
                     )}
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-amber-700 dark:text-amber-300">
-                      {potato.toLocaleString()}
+                      <div>{potato.toLocaleString()}</div>
+                      {potato > 0 && (
+                        <span className="text-[10px] font-bold text-amber-600/80 dark:text-amber-400/80 block">
+                          ~ {(potato * 0.1).toFixed(1)} kg
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-blue-600 dark:text-blue-400">
-                      {beer.toLocaleString()}
+                      <div>{beer.toLocaleString()}</div>
+                      {beer > 0 && (
+                        <span className="text-[10px] font-bold text-blue-600/80 dark:text-blue-400/80 block">
+                          ~ {(beer * 0.5).toFixed(1)} Lít
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-right font-medium text-sm text-emerald-600 dark:text-emerald-400">
                       {bakery.toLocaleString()}
