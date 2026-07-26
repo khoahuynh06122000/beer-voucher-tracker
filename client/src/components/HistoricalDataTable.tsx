@@ -8,6 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { History, RefreshCw, Download, Send, Camera, Eye, Plus } from "lucide-react";
@@ -369,7 +370,7 @@ export function HistoricalDataTable() {
                       <div>{potato.toLocaleString()}</div>
                       {potato > 0 && (
                         <span className="text-[10px] font-bold text-amber-600/80 dark:text-amber-400/80 block">
-                          ~ {(potato * 0.1).toFixed(1)} kg
+                          {(potato * 0.1).toFixed(1)}kg | {(potato * 13000).toLocaleString("vi-VN")}đ
                         </span>
                       )}
                     </TableCell>
@@ -377,7 +378,7 @@ export function HistoricalDataTable() {
                       <div>{beer.toLocaleString()}</div>
                       {beer > 0 && (
                         <span className="text-[10px] font-bold text-blue-600/80 dark:text-blue-400/80 block">
-                          ~ {(beer * 0.5).toFixed(1)} Lít
+                          {(beer * 0.5).toFixed(1)}L | {(beer * 16000).toLocaleString("vi-VN")}đ
                         </span>
                       )}
                     </TableCell>
@@ -474,6 +475,56 @@ export function HistoricalDataTable() {
               </TableRow>
             )}
           </TableBody>
+          {records && records.length > 0 && (() => {
+            const totals = records.reduce(
+              (acc, r) => {
+                const bakery = r.bakeryCoupons ?? 0;
+                const potato = r.potatoCoupons ?? (bakery > 0 ? 0 : Math.round(r.postedBills / 2));
+                const beer = r.beerCoupons ?? (bakery > 0 ? 0 : r.postedBills - potato);
+                acc.potato += potato;
+                acc.beer += beer;
+                acc.bakery += bakery;
+                acc.cancelled += r.cancelled || 0;
+                acc.totalIssued += r.totalIssued || 0;
+                return acc;
+              },
+              { potato: 0, beer: 0, bakery: 0, cancelled: 0, totalIssued: 0 }
+            );
+            const totalBeerCost = totals.beer * 16000;
+            const totalPotatoCost = totals.potato * 13000;
+            const grandTotalCost = totalBeerCost + totalPotatoCost;
+
+            return (
+              <TableFooter className="bg-muted/50 border-t-2 border-border font-extrabold text-xs">
+                <TableRow>
+                  <TableCell colSpan={(user?.role === "admin" || selectedFilterRestaurant === "all") ? 2 : 1} className="py-3 px-4 text-foreground">
+                    TỔNG CỘNG ({records.length} BÁO CÁO)
+                  </TableCell>
+                  <TableCell className="py-3 px-4 text-right text-amber-700 dark:text-amber-300">
+                    <div>{totals.potato.toLocaleString()} vé</div>
+                    <div className="text-[10px] text-amber-600 font-bold">{(totals.potato * 0.1).toFixed(1)}kg | {totalPotatoCost.toLocaleString('vi-VN')}đ</div>
+                  </TableCell>
+                  <TableCell className="py-3 px-4 text-right text-blue-600 dark:text-blue-400">
+                    <div>{totals.beer.toLocaleString()} vé</div>
+                    <div className="text-[10px] text-blue-600 font-bold">{(totals.beer * 0.5).toFixed(1)}L | {totalBeerCost.toLocaleString('vi-VN')}đ</div>
+                  </TableCell>
+                  <TableCell className="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400">
+                    {totals.bakery.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="py-3 px-4 text-right text-red-600 dark:text-red-400">
+                    {totals.cancelled.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="py-3 px-4 text-right text-amber-600 dark:text-amber-400 font-black text-sm">
+                    <div>{totals.totalIssued.toLocaleString()}</div>
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold">💰 {grandTotalCost.toLocaleString('vi-VN')} VNĐ</div>
+                  </TableCell>
+                  <TableCell colSpan={3} className="py-3 px-4 text-center text-muted-foreground text-[11px]">
+                    Tổng Chi Phí: <strong className="text-emerald-600 dark:text-emerald-400 text-xs">{grandTotalCost.toLocaleString('vi-VN')} VNĐ</strong>
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            );
+          })()}
         </Table>
       </div>
 

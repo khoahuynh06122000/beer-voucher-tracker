@@ -259,7 +259,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
                   min="0"
                 />
                 <span className="block text-[10px] text-center font-bold text-amber-600 dark:text-amber-400 mt-1">
-                  ~ {(potatoNum * 0.1).toFixed(1)} kg
+                  {(potatoNum * 0.1).toFixed(1)} kg | {(potatoNum * 13000).toLocaleString('vi-VN')} đ
                 </span>
               </div>
 
@@ -279,7 +279,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
                   min="0"
                 />
                 <span className="block text-[10px] text-center font-bold text-blue-600 dark:text-blue-400 mt-1">
-                  ~ {(beerNum * 0.5).toFixed(1)} Lít
+                  {(beerNum * 0.5).toFixed(1)} Lít | {(beerNum * 16000).toLocaleString('vi-VN')} đ
                 </span>
               </div>
 
@@ -304,15 +304,20 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
               </div>
             </div>
 
-            {/* Product Conversion Highlight Banner */}
-            <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-amber-500/10 border border-amber-500/20 flex flex-wrap items-center justify-around gap-2 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
-                <Beer className="w-4 h-4 text-blue-500" />
-                <span>Bia quy đổi: <strong className="text-sm font-black text-blue-600 dark:text-blue-400">{(beerNum * 0.5).toFixed(1)} Lít</strong></span>
+            {/* Product Conversion & Cost Highlight Banner */}
+            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-blue-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                  <Beer className="w-4 h-4 text-blue-500" />
+                  <span>Bia: <strong className="font-black text-blue-600 dark:text-blue-400">{(beerNum * 0.5).toFixed(1)}L</strong> ({(beerNum * 16000).toLocaleString('vi-VN')} đ)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                  <Ticket className="w-4 h-4 text-amber-500" />
+                  <span>Khoai: <strong className="font-black text-amber-600 dark:text-amber-400">{(potatoNum * 0.1).toFixed(1)}kg</strong> ({(potatoNum * 13000).toLocaleString('vi-VN')} đ)</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
-                <Ticket className="w-4 h-4 text-amber-500" />
-                <span>Khoai Tây quy đổi: <strong className="text-sm font-black text-amber-600 dark:text-amber-400">{(potatoNum * 0.1).toFixed(1)} kg</strong></span>
+              <div className="font-extrabold text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 px-3 py-1 rounded-lg border border-emerald-500/30">
+                💰 Tổng Chi Phí: <strong className="text-sm text-emerald-600 dark:text-emerald-300">{(beerNum * 16000 + potatoNum * 13000).toLocaleString('vi-VN')} VNĐ</strong>
               </div>
             </div>
           </div>

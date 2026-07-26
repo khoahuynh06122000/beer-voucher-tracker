@@ -33,7 +33,10 @@ export function generateAnalysisText(record: {
     const beer = record.beerCoupons || 0;
     const beerLiters = (beer * 0.5).toFixed(1);
     const potatoKg = (potato * 0.1).toFixed(1);
-    details = `• **Coupon Khoai Tây:** ${potato} phiếu (~ **${potatoKg} kg** @ 0.1kg/vé)\n• **Coupon Bia:** ${beer} phiếu (~ **${beerLiters} Lít** @ 500ml/vé)\n• **Sản lượng quy đổi:** 🍺 ${beerLiters} Lít Bia | 🍟 ${potatoKg} kg Khoai\n• **Coupon Hủy:** ${record.cancelled} phiếu`;
+    const beerCost = beer * 16000;
+    const potatoCost = potato * 13000;
+    const totalCost = beerCost + potatoCost;
+    details = `• **Coupon Khoai Tây:** ${potato} phiếu (~ **${potatoKg} kg**)\n• **Coupon Bia:** ${beer} phiếu (~ **${beerLiters} Lít**)\n• **Sản lượng quy đổi:** 🍺 ${beerLiters} Lít Bia | 🍟 ${potatoKg} kg Khoai\n• **Chi phí ước tính:** 🍺 Bia **${beerCost.toLocaleString('vi-VN')} VNĐ** | 🍟 Khoai **${potatoCost.toLocaleString('vi-VN')} VNĐ**\n• 💰 **TỔNG CHI PHÍ VOUCHER:** **${totalCost.toLocaleString('vi-VN')} VNĐ**\n• **Coupon Hủy:** ${record.cancelled} phiếu`;
   }
 
   return `${performanceAssessment}\n\n**Chi Tiết Số Liệu:**\n${details}\n• **Tổng voucher đã thu hồi (đăng bill):** ${record.postedBills} phiếu\n• **Tổng phát hành:** ${record.totalIssued} phiếu`;
@@ -223,9 +226,10 @@ export async function sendMSTeamsReport(
           ...(isMaisonKayser
             ? [{ name: "🥐 Voucher Bánh:", value: `**${bakery}** chiếc` }]
             : [
-                { name: "🍟 Coupon Khoai Tây:", value: `**${potato}** phiếu (~ **${(potato * 0.1).toFixed(1)} kg** @ 0.1kg/vé)` },
-                { name: "🍺 Coupon Bia:", value: `**${beer}** phiếu (~ **${(beer * 0.5).toFixed(1)} Lít** @ 500ml/vé)` },
+                { name: "🍟 Coupon Khoai Tây:", value: `**${potato}** phiếu (~ **${(potato * 0.1).toFixed(1)} kg** | **${(potato * 13000).toLocaleString('vi-VN')} VNĐ**)` },
+                { name: "🍺 Coupon Bia:", value: `**${beer}** phiếu (~ **${(beer * 0.5).toFixed(1)} Lít** | **${(beer * 16000).toLocaleString('vi-VN')} VNĐ**)` },
                 { name: "⚡ Quy Đổi Sản Lượng:", value: `🍺 **${(beer * 0.5).toFixed(1)} Lít Bia** | 🍟 **${(potato * 0.1).toFixed(1)} kg Khoai**` },
+                { name: "💰 Tổng Chi Phí Voucher:", value: `💵 **${(beer * 16000 + potato * 13000).toLocaleString('vi-VN')} VNĐ**` },
               ]),
         ],
         "markdown": true

@@ -390,39 +390,56 @@ export function AnalyticsCharts({
         </Card>
       </div>
 
-      {/* Product Volume Conversion Overview Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Product Volume Conversion & Cost Overview Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4 rounded-xl border border-blue-500/30 bg-gradient-to-r from-blue-500/10 via-card to-background flex items-center justify-between">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              🍺 SẢN LƯỢNG BIA QUY ĐỔI
+              🍺 SẢN LƯỢNG & CHI PHÍ BIA
             </span>
-            <div className="text-2xl font-black text-foreground mt-1">
+            <div className="text-xl sm:text-2xl font-black text-foreground mt-1">
               {(totalBeerAll * 0.5).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Lít
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Tương đương {(totalBeerAll * 500).toLocaleString("vi-VN")} ml từ {totalBeerAll.toLocaleString("vi-VN")} vé bia
+            <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+              Chi phí: {(totalBeerAll * 16000).toLocaleString("vi-VN")} VNĐ
             </p>
           </div>
           <div className="text-right font-black text-xs text-blue-700 dark:text-blue-300 bg-blue-500/20 px-3 py-1.5 rounded-xl border border-blue-500/30">
-            500 ml / vé
+            16.000 đ / vé
           </div>
         </Card>
 
         <Card className="p-4 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-background flex items-center justify-between">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              🍟 KHỐI LƯỢNG KHOAI TÂY QUY ĐỔI
+              🍟 KHỐI LƯỢNG & CHI PHÍ KHOAI
             </span>
-            <div className="text-2xl font-black text-foreground mt-1">
+            <div className="text-xl sm:text-2xl font-black text-foreground mt-1">
               {(totalPotatoAll * 0.1).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Tương đương {(totalPotatoAll * 100).toLocaleString("vi-VN")} g từ {totalPotatoAll.toLocaleString("vi-VN")} vé khoai tây
+            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+              Chi phí: {(totalPotatoAll * 13000).toLocaleString("vi-VN")} VNĐ
             </p>
           </div>
           <div className="text-right font-black text-xs text-amber-800 dark:text-amber-300 bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-500/30">
-            0.1 kg / vé
+            13.000 đ / vé
+          </div>
+        </Card>
+
+        <Card className="p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-card to-background flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              💰 TỔNG CHI PHÍ VOUCHER
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+              {(totalBeerAll * 16000 + totalPotatoAll * 13000).toLocaleString("vi-VN")} VNĐ
+            </div>
+            <p className="text-[11px] font-medium text-muted-foreground mt-0.5">
+              Bia {(totalBeerAll * 16000).toLocaleString("vi-VN")}đ + Khoai {(totalPotatoAll * 13000).toLocaleString("vi-VN")}đ
+            </p>
+          </div>
+          <div className="text-right font-black text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-3 py-1.5 rounded-xl border border-emerald-500/30">
+            Tạm tính
           </div>
         </Card>
       </div>
