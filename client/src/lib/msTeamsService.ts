@@ -1,5 +1,44 @@
 import { getSetting, checkUnupdatedRestaurants } from "./firestoreService";
 
+export function getExpertAssessmentText(record: {
+  restaurantName: string;
+  potatoCoupons?: number;
+  beerCoupons?: number;
+  bakeryCoupons?: number;
+  postedBills: number;
+  utilizationRate: number;
+}): string {
+  const rate = record.utilizationRate || 0;
+  const isMaisonKayser =
+    (record.bakeryCoupons && record.bakeryCoupons > 0) ||
+    record.restaurantName.toLowerCase().includes("maison");
+
+  if (isMaisonKayser) {
+    const bakery = record.bakeryCoupons || record.postedBills || 0;
+    return `🥐 **PHÂN TÍCH NHU CẦU & XU HƯỚNG (MAISON KAYSER):**\n\n` +
+      `• **Hành vi & Nhu cầu:** Nhà hàng Maison Kayser đạt tỷ lệ quy đổi **${rate}%** với **${bakery.toLocaleString("vi-VN")}** voucher bánh đã thu hồi. Nhu cầu tiêu thụ các dòng bánh ngọt/bánh mì tại điểm bán duy trì rất ổn định.\n\n` +
+      `• **Khuyến nghị vận hành:** Mức độ thu hút tốt. Khuyến nghị Bếp Bánh chủ động chuẩn bị nguyên liệu tươi trong ngày cho các ca dịch vụ tiếp theo.`;
+  }
+
+  const potato = record.potatoCoupons || 0;
+  const beer = record.beerCoupons || 0;
+  const beerLiters = (beer * 0.5).toFixed(1);
+  const potatoKg = (potato * 0.1).toFixed(1);
+  const beerCost = beer * 16000;
+  const potatoCost = potato * 13000;
+  const totalCost = beerCost + potatoCost;
+  const totalCoupons = (beer + potato) || 1;
+  const beerPct = Math.round((beer / totalCoupons) * 100);
+  const potatoPct = 100 - beerPct;
+
+  const trendStatus = rate >= 80 ? "Xuất sắc" : rate >= 50 ? "Khá tốt" : "Cần tăng cường";
+
+  return `✨ **PHÂN TÍCH NHU CẦU & XU HƯỚNG CHUYÊN GIA:**\n\n` +
+    `• **Hành vi khách hàng:** Khách có xu hướng tiêu dùng theo **Combo Bia & Khoai** kết hợp (**${beerPct}%** Bia / **${potatoPct}%** Khoai). Đây là gói ưu đãi "mồi câu" xuất sắc giúp thu hút khách dùng bữa.\n\n` +
+    `• **Sản lượng & Chi phí:** Tiêu thụ thực tế đạt **${beerLiters} Lít Bia** (${beerCost.toLocaleString("vi-VN")} VNĐ) & **${potatoKg} kg Khoai** (${potatoCost.toLocaleString("vi-VN")} VNĐ). Tổng chi phí quy đổi đạt **${totalCost.toLocaleString("vi-VN")} VNĐ**.\n\n` +
+    `• **Đánh giá xu hướng:** Tỷ lệ chuyển đổi **${rate}%** (${trendStatus}). Khuyến nghị Bếp & Bar chủ động chuẩn bị kho lạnh (0.5L/vé bia & 0.1kg/vé khoai) cho các khung giờ cao điểm tiếp theo.`;
+}
+
 export function generateAnalysisText(record: {
   restaurantName: string;
   date: string;
@@ -11,35 +50,8 @@ export function generateAnalysisText(record: {
   totalIssued: number;
   utilizationRate: number;
 }): string {
-  const rate = record.utilizationRate;
-  const isMaisonKayser =
-    (record.bakeryCoupons && record.bakeryCoupons > 0) ||
-    record.restaurantName.toLowerCase().includes("maison");
-
-  let performanceAssessment = "";
-  if (rate >= 80) {
-    performanceAssessment = `🔥 **Hiệu suất Xuất Sắc!** Tỷ lệ quy đổi đạt **${rate}%**, chứng tỏ mức độ thu hút cao của chương trình voucher và khả năng tư vấn tối ưu tại nhà hàng.`;
-  } else if (rate >= 50) {
-    performanceAssessment = `👍 **Hiệu suất Khá Tốt.** Tỷ lệ quy đổi đạt **${rate}%**, lưu lượng khách quy đổi voucher diễn ra ổn định.`;
-  } else {
-    performanceAssessment = `⚠️ **Cần Cải Thiện.** Tỷ lệ quy đổi hiện tại chỉ đạt **${rate}%**, khuyến nghị nhân viên tích cực giới thiệu và hướng dẫn khách hàng sử dụng voucher.`;
-  }
-
-  let details = "";
-  if (isMaisonKayser) {
-    details = `• **Voucher Bánh:** ${record.bakeryCoupons || 0} chiếc\n• **Voucher Hủy:** ${record.cancelled} chiếc`;
-  } else {
-    const potato = record.potatoCoupons || 0;
-    const beer = record.beerCoupons || 0;
-    const beerLiters = (beer * 0.5).toFixed(1);
-    const potatoKg = (potato * 0.1).toFixed(1);
-    const beerCost = beer * 16000;
-    const potatoCost = potato * 13000;
-    const totalCost = beerCost + potatoCost;
-    details = `• **Coupon Khoai Tây:** ${potato} phiếu (~ **${potatoKg} kg**)\n• **Coupon Bia:** ${beer} phiếu (~ **${beerLiters} Lít**)\n• **Sản lượng quy đổi:** 🍺 ${beerLiters} Lít Bia | 🍟 ${potatoKg} kg Khoai\n• **Chi phí ước tính:** 🍺 Bia **${beerCost.toLocaleString('vi-VN')} VNĐ** | 🍟 Khoai **${potatoCost.toLocaleString('vi-VN')} VNĐ**\n• 💰 **TỔNG CHI PHÍ VOUCHER:** **${totalCost.toLocaleString('vi-VN')} VNĐ**\n• **Coupon Hủy:** ${record.cancelled} phiếu`;
-  }
-
-  return `${performanceAssessment}\n\n**Chi Tiết Số Liệu:**\n${details}\n• **Tổng voucher đã thu hồi (đăng bill):** ${record.postedBills} phiếu\n• **Tổng phát hành:** ${record.totalIssued} phiếu`;
+  const assessment = getExpertAssessmentText(record);
+  return `${assessment}\n\n**Chi Tiết Số Liệu Tổng Quan:**\n• **Thu về (Đăng bill):** ${record.postedBills} phiếu\n• **Phát hành:** ${record.totalIssued} phiếu\n• **Hủy bỏ:** ${record.cancelled} phiếu`;
 }
 
 export async function sendMSTeamsReport(
@@ -99,17 +111,15 @@ export async function sendMSTeamsReport(
 
   let badgeText = "👍 HIỆU SUẤT KHÁ TỐT";
   let badgeColor = "Warning";
-  let assessment = `Tỷ lệ quy đổi đạt **${rate}%**, lưu lượng khách sử dụng voucher diễn ra ổn định.`;
-
   if (rate >= 80) {
     badgeText = "🔥 HIỆU SUẤT XUẤT SẮC";
     badgeColor = "Good";
-    assessment = `Tỷ lệ quy đổi đạt **${rate}%**, lượng khách sử dụng voucher rất cao. Quy trình tư vấn & phục vụ tại nhà hàng đạt hiệu quả tối ưu.`;
   } else if (rate < 50) {
     badgeText = "⚠️ CẦN CẢI THIỆN";
     badgeColor = "Attention";
-    assessment = `Tỷ lệ quy đổi đạt **${rate}%**, chưa đạt mức tối ưu. Khuyến nghị nhân viên chủ động nhắc khách về ưu đãi voucher.`;
   }
+
+  const assessment = getExpertAssessmentText(record);
 
   const adaptiveCardContent = {
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",

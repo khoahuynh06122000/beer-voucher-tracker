@@ -384,15 +384,35 @@ function vitePluginManusDebugCollector(): Plugin {
             if (rate >= 80) {
               badgeText = "🔥 HIỆU SUẤT XUẤT SẮC";
               badgeColor = "Good";
-              performanceAssessment = `Tỷ lệ quy đổi đạt **${rate}%**, lượng khách sử dụng voucher rất cao. Quy trình tư vấn & phục vụ tại nhà hàng đạt hiệu quả tối ưu.`;
             } else if (rate >= 50) {
               badgeText = "👍 HIỆU SUẤT KHÁ TỐT";
               badgeColor = "Warning";
-              performanceAssessment = `Tỷ lệ quy đổi đạt **${rate}%**, lưu lượng khách sử dụng voucher diễn ra ổn định. Duy trì khuyến khích khách dùng voucher.`;
             } else {
               badgeText = "⚠️ CẦN CẢI THIỆN";
               badgeColor = "Attention";
-              performanceAssessment = `Tỷ lệ quy đổi đạt **${rate}%**, chưa đạt mức tối ưu. Khuyến nghị nhân viên chủ động nhắc khách về ưu đãi voucher.`;
+            }
+
+            if (isMaisonKayser) {
+              const bakeryVal = bakery || postedBills || 0;
+              performanceAssessment = `🥐 **PHÂN TÍCH NHU CẦU & XU HƯỚNG (MAISON KAYSER):**\n\n` +
+                `• **Hành vi & Nhu cầu:** Nhà hàng Maison Kayser đạt tỷ lệ quy đổi **${rate}%** với **${bakeryVal.toLocaleString("vi-VN")}** voucher bánh đã thu hồi. Nhu cầu tiêu thụ các dòng bánh ngọt/bánh mì tại điểm bán duy trì rất ổn định.\n\n` +
+                `• **Khuyến nghị vận hành:** Mức độ thu hút tốt. Khuyến nghị Bếp Bánh chủ động chuẩn bị nguyên liệu tươi trong ngày cho các ca dịch vụ tiếp theo.`;
+            } else {
+              const beerLiters = (beer * 0.5).toFixed(1);
+              const potatoKg = (potato * 0.1).toFixed(1);
+              const beerCost = beer * 16000;
+              const potatoCost = potato * 13000;
+              const totalCost = beerCost + potatoCost;
+              const totalCoupons = (beer + potato) || 1;
+              const beerPct = Math.round((beer / totalCoupons) * 100);
+              const potatoPct = 100 - beerPct;
+
+              const trendStatus = rate >= 80 ? "Xuất sắc" : rate >= 50 ? "Khá tốt" : "Cần tăng cường";
+
+              performanceAssessment = `✨ **PHÂN TÍCH NHU CẦU & XU HƯỚNG CHUYÊN GIA:**\n\n` +
+                `• **Hành vi khách hàng:** Khách có xu hướng tiêu dùng theo **Combo Bia & Khoai** kết hợp (**${beerPct}%** Bia / **${potatoPct}%** Khoai). Đây là gói ưu đãi "mồi câu" xuất sắc giúp thu hút khách dùng bữa.\n\n` +
+                `• **Sản lượng & Chi phí:** Tiêu thụ thực tế đạt **${beerLiters} Lít Bia** (${beerCost.toLocaleString("vi-VN")} VNĐ) & **${potatoKg} kg Khoai** (${potatoCost.toLocaleString("vi-VN")} VNĐ). Tổng chi phí quy đổi đạt **${totalCost.toLocaleString("vi-VN")} VNĐ**.\n\n` +
+                `• **Đánh giá xu hướng:** Tỷ lệ chuyển đổi **${rate}%** (${trendStatus}). Khuyến nghị Bếp & Bar chủ động chuẩn bị kho lạnh (0.5L/vé bia & 0.1kg/vé khoai) cho các khung giờ cao điểm tiếp theo.`;
             }
 
             // Format 1: Modern Visual Dashboard Adaptive Card
