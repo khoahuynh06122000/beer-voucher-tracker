@@ -213,13 +213,16 @@ export function KPIDashboard({
       let totalIssued = 0;
       let totalPosted = 0;
       let totalCancelled = 0;
+      let totalPotato = 0;
+      let totalBeer = 0;
+      let totalBakery = 0;
       let peakRecord: VoucherRecord | null = null;
       let offPeakRecord: VoucherRecord | null = null;
 
       const dailyWithFluctuation = sorted.map((r, idx) => {
-        const potato = r.potatoCoupons ?? Math.round((r.postedBills || 0) / 2);
-        const beer = r.beerCoupons ?? ((r.postedBills || 0) - potato);
         const bakery = r.bakeryCoupons ?? 0;
+        const potato = r.potatoCoupons ?? (bakery > 0 ? 0 : Math.round((r.postedBills || 0) / 2));
+        const beer = r.beerCoupons ?? (bakery > 0 ? 0 : (r.postedBills || 0) - potato);
         const cancelled = r.cancelled || 0;
         const posted = r.postedBills || (potato + beer + bakery);
         const issued = r.totalIssued || (potato + beer + bakery + cancelled);
@@ -228,6 +231,9 @@ export function KPIDashboard({
         totalIssued += issued;
         totalPosted += posted;
         totalCancelled += cancelled;
+        totalPotato += potato;
+        totalBeer += beer;
+        totalBakery += bakery;
 
         if (!peakRecord || issued > (peakRecord.totalIssued || 0)) {
           peakRecord = { ...r, totalIssued: issued };
@@ -296,6 +302,9 @@ export function KPIDashboard({
         totalIssued,
         totalPosted,
         totalCancelled,
+        totalPotato,
+        totalBeer,
+        totalBakery,
         avgDaily,
         overallRate,
         periodGrowth,
@@ -866,12 +875,12 @@ export function KPIDashboard({
             </Card>
 
             {/* Executive Analysis & Quick Metrics Card */}
-            <Card className="lg:col-span-5 p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs flex flex-col justify-between space-y-4">
+            <Card className="lg:col-span-5 p-4 sm:p-5 rounded-2xl border border-amber-500/30 bg-card shadow-xs flex flex-col justify-between space-y-3">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <h4 className="text-sm font-extrabold text-foreground">
-                    Tóm Tắt &amp; Nhận Định
+                    Tóm Tắt &amp; Nhận Định ({userDept.meta.name})
                   </h4>
                 </div>
 
@@ -896,30 +905,73 @@ export function KPIDashboard({
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-muted/60 text-xs text-foreground space-y-2">
-                  <div className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Nhận định đánh giá ({userDept.meta.name}):</span>
+                {/* Expert Demand & Trend Analysis Section */}
+                <div className="p-3 rounded-xl bg-muted/50 border border-border/80 text-xs text-foreground space-y-2.5">
+                  <div className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Nhận định đánh giá chuyên gia:</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground bg-background px-2 py-0.5 rounded-md border border-border/60">
+                      Nhu cầu &amp; Xu hướng
+                    </span>
                   </div>
-                  {userDept.overallRate >= 60 ? (
-                    <p className="leading-relaxed font-medium">
-                      Nhà hàng đạt tỷ lệ sử dụng voucher cao (<strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong>). Khối lượng voucher phát hành thu hút khách hàng đến quy đổi hiệu quả.
+
+                  {userDept.meta.isMaisonKayser ? (
+                    <p className="leading-relaxed text-[11px] text-muted-foreground font-medium">
+                      Nhà hàng Maison Kayser đạt tỷ lệ quy đổi <strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong> với tổng số <strong className="text-foreground">{userDept.totalPosted.toLocaleString("vi-VN")} voucher bánh</strong> đã thu hồi. Nhu cầu sử dụng voucher tại điểm bán ổn định.
                     </p>
-                  ) : userDept.overallRate >= 30 ? (
-                    <p className="leading-relaxed font-medium">
-                      Nhà hàng ghi nhận tỷ lệ quy đổi <strong className="text-amber-600 dark:text-amber-400">{userDept.overallRate}%</strong>. Đơn vị cần duy trì tư vấn ưu đãi cho khách hàng tại điểm phục vụ.
-                    </p>
-                  ) : (
-                    <p className="leading-relaxed font-medium">
-                      Tỷ lệ quy đổi hiện đạt <strong className="text-orange-600 dark:text-orange-400">{userDept.overallRate}%</strong>. Đơn vị cần tăng cường giới thiệu chương trình voucher trực tiếp đến khách hàng.
-                    </p>
-                  )}
+                  ) : (() => {
+                    const beer = userDept.totalBeer || 0;
+                    const potato = userDept.totalPotato || 0;
+                    const beerLiters = (beer * 0.5).toFixed(1);
+                    const potatoKg = (potato * 0.1).toFixed(1);
+                    const beerCost = beer * 16000;
+                    const potatoCost = potato * 13000;
+                    const totalCost = beerCost + potatoCost;
+                    const totalCoupons = (beer + potato) || 1;
+                    const beerPct = Math.round((beer / totalCoupons) * 100);
+                    const potatoPct = 100 - beerPct;
+
+                    return (
+                      <div className="space-y-2">
+                        {/* Demand Ratio Visual Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-bold">
+                            <span className="text-blue-600 dark:text-blue-400">🍺 Bia: {beerPct}% ({beer.toLocaleString("vi-VN")} vé)</span>
+                            <span className="text-amber-600 dark:text-amber-400">🍟 Khoai: {potatoPct}% ({potato.toLocaleString("vi-VN")} vé)</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
+                            <div style={{ width: `${beerPct}%` }} className="bg-blue-500 h-full" />
+                            <div style={{ width: `${potatoPct}%` }} className="bg-amber-500 h-full" />
+                          </div>
+                        </div>
+
+                        {/* Professional Commentary Points */}
+                        <div className="space-y-1.5 text-[11px] leading-relaxed">
+                          <p className="font-medium text-foreground">
+                            • <strong>Hành vi khách hàng:</strong> Khách có xu hướng tiêu dùng theo <strong>Combo Bia &amp; Khoai</strong> kết hợp ({beerPct}% Bia / {potatoPct}% Khoai). Đây là gói ưu đãi "mồi câu" xuất sắc giúp thu hút khách dùng bữa.
+                          </p>
+                          <p className="font-medium text-foreground">
+                            • <strong>Sản lượng &amp; Chi phí quy đổi:</strong> Tiêu thụ thực tế đạt <strong className="text-blue-600 dark:text-blue-400">{beerLiters} Lít Bia</strong> ({beerCost.toLocaleString("vi-VN")} VNĐ) &amp; <strong className="text-amber-600 dark:text-amber-400">{potatoKg} kg Khoai</strong> ({potatoCost.toLocaleString("vi-VN")} VNĐ). Tổng chi phí voucher đạt <strong className="text-emerald-600 dark:text-emerald-400">{totalCost.toLocaleString("vi-VN")} VNĐ</strong>.
+                          </p>
+                          <p className="font-medium text-muted-foreground">
+                            • <strong>Đánh giá xu hướng:</strong> Tỷ lệ chuyển đổi <strong className="text-emerald-600 dark:text-emerald-400">{userDept.overallRate}%</strong> rất cao. Khuyến nghị Bếp &amp; Bar chủ động chuẩn bị kho lạnh (0.5L/vé bia &amp; 0.1kg/vé khoai) cho các khung giờ cao điểm tiếp theo.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[11px] text-muted-foreground flex items-center justify-between">
-                <span>Trạng thái ghi nhận số liệu</span>
-                <span className="font-bold text-foreground">{userDept.meta.name}</span>
+              <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Chi phí quy đổi voucher ({userDept.meta.name}):</span>
+                <span className="font-extrabold text-foreground">
+                  {userDept.meta.isMaisonKayser
+                    ? `${userDept.totalPosted.toLocaleString("vi-VN")} bánh`
+                    : `${(((userDept.totalBeer || 0) * 16000) + ((userDept.totalPotato || 0) * 13000)).toLocaleString("vi-VN")} VNĐ`}
+                </span>
               </div>
             </Card>
           </div>
