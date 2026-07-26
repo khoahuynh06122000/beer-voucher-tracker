@@ -226,32 +226,81 @@ function vitePluginManusDebugCollector(): Plugin {
       setInterval(async () => {
         try {
           const now = new Date();
-          // Check Vietnam local time (UTC+7)
-          const vnOffset = 7 * 60 * 60 * 1000;
-          const vnDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + vnOffset);
+          // Calculate Vietnam local time (UTC+7)
+          const vnTimestamp = now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (7 * 3600 * 1000);
+          const vnDate = new Date(vnTimestamp);
           const hour = vnDate.getHours();
-          const minute = vnDate.getMinutes();
           const todayStr = `${vnDate.getFullYear()}-${String(vnDate.getMonth() + 1).padStart(2, "0")}-${String(vnDate.getDate()).padStart(2, "0")}`;
 
-          if (hour === 9 && minute === 0 && lastSentDateStr !== todayStr) {
-            lastSentDateStr = todayStr;
+          // Trigger once daily at or after 09:00 AM VN time
+          if (hour >= 9 && lastSentDateStr !== todayStr) {
             console.log(`[AUTOMATED CRON 09:00 AM] Triggering daily missing report check for ${todayStr}...`);
 
-            // Fetch saved webhook URL from Firestore
+            // Fetch saved webhook URL from Firestore settings
             const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
             const settingResp = await fetch(settingUrl);
             if (settingResp.ok) {
               const settingData = await settingResp.json();
               const webhookUrl = settingData.fields?.value?.stringValue;
-              if (webhookUrl) {
-                const cardPayload = await getLiveMissingStatus();
-                await fetch(webhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(cardPayload),
-                });
-                console.log(`[AUTOMATED CRON 09:00 AM] Sent alert to MS Teams successfully!`);
+              if (webhookUrl && webhookUrl.trim()) {
+                const cardContent = await getLiveMissingStatus();
+                
+                // Format standard MS Teams Wrapped Payload
+                const teamsWrappedPayload = {
+                  type: "message",
+                  attachments: [
+                    {
+                      contentType: "application/vnd.microsoft.card.adaptive",
+                      contentUrl: null,
+                      content: cardContent
+                    }
+                  ]
+                };
+
+                const url = webhookUrl.trim();
+                const isPowerAutomate =
+                  url.includes("logic.azure.com") ||
+                  url.includes("powerautomate") ||
+                  url.includes("powerplatform") ||
+                  url.includes("flow.microsoft.com");
+
+                const payloadsToTry = isPowerAutomate
+                  ? [cardContent, teamsWrappedPayload]
+                  : [teamsWrappedPayload, cardContent];
+
+                let success = false;
+                for (const payload of payloadsToTry) {
+                  try {
+                    const resp = await fetch(url, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload),
+                    });
+                    if (resp.ok || resp.status === 200 || resp.status === 202) {
+                      success = true;
+                      console.log(`[AUTOMATED CRON 09:00 AM] Sent missing report alert to MS Teams successfully! (HTTP ${resp.status})`);
+                      break;
+                    } else {
+                      const errTxt = await resp.text();
+                      console.warn(`[AUTOMATED CRON 09:00 AM] Webhook attempt returned HTTP ${resp.status}: ${errTxt}`);
+                    }
+                  } catch (err) {
+                    console.warn(`[AUTOMATED CRON 09:00 AM] Webhook fetch error:`, err);
+                  }
+                }
+
+                if (success) {
+                  lastSentDateStr = todayStr;
+                } else {
+                  console.error(`[AUTOMATED CRON 09:00 AM] Failed to deliver alert to MS Teams webhook.`);
+                  lastSentDateStr = todayStr;
+                }
+              } else {
+                console.log(`[AUTOMATED CRON 09:00 AM] Skipped - No MS Teams webhook URL configured in Admin Settings.`);
+                lastSentDateStr = todayStr;
               }
+            } else {
+              console.warn(`[AUTOMATED CRON 09:00 AM] Could not fetch settings from Firestore REST API.`);
             }
           }
         } catch (e) {
