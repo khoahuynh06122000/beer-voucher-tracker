@@ -504,13 +504,13 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
     const preset = PRESET_USERS[key];
     try {
       const record = await getVoucherByDate(key, dateToQuery, false);
-      if (record && record.postedBills !== undefined && record.postedBills > 0) {
+      if (record && record.updatedAt) {
         updated.push({
           restaurantId: key,
           restaurantName: preset.restaurantName,
           hasUpdated: true,
-          postedBills: record.postedBills,
-          totalIssued: record.totalIssued,
+          postedBills: record.postedBills ?? 0,
+          totalIssued: record.totalIssued ?? 0,
           updatedAt: record.updatedAt,
         });
       } else {

@@ -447,7 +447,7 @@ export function LandingCover() {
                       Đăng Nhập Tài Khoản
                     </h3>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Chọn nhanh nhà hàng hoặc tự nhập thông tin
+                      Chọn nhanh nhà hàng hoặc bộ phận để truy cập
                     </p>
                   </div>
 
@@ -471,74 +471,48 @@ export function LandingCover() {
 
                 <div className="pt-4 space-y-4">
                   {/* Preset Quick Login Buttons */}
-                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
                     <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
-                      <span>Chọn Nhanh Nhà Hàng:</span>
-                      <span className="text-[10px] text-gray-400 font-normal">Click 1 giây</span>
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Chọn Nhanh Đơn Vị:
+                      </span>
+                      <span className="text-[10px] text-amber-300/80 font-normal">Đăng nhập 1-Click</span>
                     </p>
-                    <div className="grid grid-cols-2 gap-1.5 text-xs">
+                    <div className="grid grid-cols-1 gap-2 text-xs">
                       {[
-                        { key: "lehoibia", l: "🍺 Lễ Hội Bia" },
-                        { key: "1901", l: "🍷 Nhà Hàng 1901" },
-                        { key: "beerplaza", l: "🏰 Beer Plaza" },
-                        { key: "maisonkayser", l: "🥐 Maison Kayser" },
-                        { key: "admin", l: "🏢 Ban Quản Lý" },
+                        { key: "lehoibia", l: "🍺 Lễ Hội Bia", desc: "Bộ phận Lễ Hội Bia Ba Na Hills" },
+                        { key: "1901", l: "🍷 Nhà Hàng 1901", desc: "Bộ phận Nhà Hàng 1901" },
+                        { key: "beerplaza", l: "🏰 Beer Plaza", desc: "Bộ phận Nhà Hàng Beer Plaza" },
+                        { key: "maisonkayser", l: "🥐 Maison Kayser", desc: "Bộ phận Bánh Maison Kayser" },
+                        { key: "admin", l: "🏢 Ban Quản Lý", desc: "Tài khoản Quản trị & Kế toán" },
                       ].map((acc) => (
                         <button
                           key={acc.key}
                           type="button"
                           onClick={() => handleQuickPresetLogin(acc.key)}
                           disabled={isLoggingIn}
-                          className="p-2 rounded-lg bg-black/50 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50 hover:bg-amber-500/20"
+                          className="p-2.5 px-3.5 rounded-xl bg-black/60 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50 hover:bg-amber-500/20 flex items-center justify-between"
                         >
-                          <div className="font-bold text-gray-200 group-hover:text-amber-300 truncate">
-                            {acc.l}
+                          <div>
+                            <div className="font-bold text-gray-200 group-hover:text-amber-300 text-sm">
+                              {acc.l}
+                            </div>
+                            <div className="text-[10px] text-gray-400">
+                              {acc.desc}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-400 font-mono">
-                            User: {acc.key}
+                          <div className="p-1.5 rounded-lg bg-amber-500/10 group-hover:bg-amber-500 group-hover:text-black text-amber-400 transition-colors">
+                            {isLoggingIn ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <ArrowRight className="w-4 h-4" />
+                            )}
                           </div>
                         </button>
                       ))}
                     </div>
                   </div>
-
-                  {/* Manual Login Form */}
-                  <form onSubmit={handleLogin} className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-300">
-                        Mật Khẩu
-                      </label>
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
-                        <Input
-                          type="password"
-                          placeholder="Nhập mật khẩu..."
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-400 focus:ring-amber-400 text-xs h-10"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={isLoggingIn || !loginPassword}
-                      className="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider py-5 rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
-                    >
-                      {isLoggingIn ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Đang đăng nhập...
-                        </>
-                      ) : (
-                        <>
-                          Đăng Nhập Ngay
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </Button>
-                  </form>
                 </div>
               </div>
             </div>
