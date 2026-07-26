@@ -345,14 +345,7 @@ export function LandingCover() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={() => setShowLoginModal(true)}
-              className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider px-5 py-2.5 rounded-lg shadow-lg shadow-amber-500/25 transition-all hover:scale-105"
-            >
-              Đăng Nhập
-            </Button>
-          </div>
+          {/* Header clean without duplicate top login button */}
         </div>
       </header>
 
@@ -401,9 +394,9 @@ export function LandingCover() {
                 {/* Floating Glass Graphic without background card box */}
                 <div className="relative flex items-center justify-center">
                   {/* Subtle golden ambient aura glow behind the glass */}
-                  <div className="absolute w-64 h-64 rounded-full bg-amber-500/20 blur-3xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500" />
+                  <div className="absolute w-80 h-80 rounded-full bg-amber-500/20 blur-3xl pointer-events-none group-hover:bg-amber-400/30 transition-all duration-500" />
                   
-                  <DraftBeerGlass size="lg" showGlow={true} className="relative z-10 transform transition-transform duration-500 group-hover:scale-110" />
+                  <DraftBeerGlass size="xl" showGlow={true} className="relative z-10 transform transition-transform duration-500 group-hover:scale-105" />
                 </div>
 
                 {/* Minimal floating caption */}
@@ -432,7 +425,7 @@ export function LandingCover() {
               </div>
 
               <div className="relative z-10 my-auto py-4 flex flex-col items-center justify-center">
-                <DraftBeerGlass size="md" showGlow={true} />
+                <DraftBeerGlass size="lg" showGlow={true} />
               </div>
 
               <div className="relative z-10 text-center px-2 py-2">
