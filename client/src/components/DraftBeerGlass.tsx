@@ -12,10 +12,10 @@ export const DraftBeerGlass: React.FC<DraftBeerGlassProps> = ({
   showGlow = true,
 }) => {
   const sizeClasses = {
-    sm: "w-32 h-44",
-    md: "w-56 h-72",
-    lg: "w-80 h-[420px]",
-    xl: "w-96 h-[500px]",
+    sm: "w-28 h-36",
+    md: "w-44 h-56",
+    lg: "w-60 h-[320px]",
+    xl: "w-72 h-[380px]",
   }[size];
 
   return (
@@ -243,28 +243,43 @@ export const DraftBeerGlass: React.FC<DraftBeerGlassProps> = ({
             KRAFTBEER
           </text>
 
-          {/* Gold Curved Banner Ribbon */}
+          {/* Bottom Arc Path for WORD ART: BA NA HILLS SIGNATURE */}
+          <path id="archBottomTextPath" d="M -31,10 A 32.5,32.5 0 0,0 31,10" fill="none" />
+
+          {/* Gold Curved Banner Ribbon following circle curvature */}
           <path
-            d="M -34,15 Q 0,20 34,15 L 32,30 Q 0,35 -32,30 Z"
+            d="M -34,12 A 36,36 0 0,0 34,12 L 27,10 A 29,29 0 0,1 -27,10 Z"
             fill="url(#goldBanner)"
             stroke="#FFFFFF"
-            strokeWidth="1"
-            className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+            strokeWidth="0.8"
+            className="drop-shadow-[0_4px_10px_rgba(0,0,0,0.85)]"
           />
 
-          {/* Ribbon Text: BA NA HILLS SIGNATURE */}
+          {/* Ribbon Decorative Inner Arc Line */}
+          <path
+            d="M -32.5,11 A 34.2,34.2 0 0,0 32.5,11"
+            fill="none"
+            stroke="#78350F"
+            strokeWidth="0.4"
+            strokeDasharray="1.5 1"
+            opacity="0.6"
+          />
+
+          {/* WORD ART Curved Text: BA NA HILLS SIGNATURE */}
           <text
-            x="0"
-            y="26"
-            fill="#1E1B18"
-            fontSize="5.2"
+            fontSize="4.4"
             fontWeight="900"
-            fontFamily="'Arial Black', Arial, sans-serif"
+            fontFamily="Impact, 'Arial Black', Arial, sans-serif"
+            fill="#1E1B18"
+            stroke="#FEF3C7"
+            strokeWidth="0.15"
+            paintOrder="stroke fill"
             textAnchor="middle"
-            letterSpacing="0.6"
-            dominantBaseline="middle"
+            letterSpacing="0.7"
           >
-            BA NA HILLS SIGNATURE
+            <textPath href="#archBottomTextPath" startOffset="50%">
+              BA NA HILLS SIGNATURE
+            </textPath>
           </text>
         </g>
       </svg>
