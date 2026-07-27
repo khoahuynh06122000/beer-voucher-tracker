@@ -375,32 +375,49 @@ function vitePluginManusDebugCollector(): Plugin {
         });
       });
 
-      // POST /api/telegram/set-webhook: Registers Telegram Bot Webhook
+      // GET/POST /api/telegram/set-webhook: Registers Telegram Bot Webhook
       server.middlewares.use("/api/telegram/set-webhook", async (req, res, next) => {
+        const handleSetWebhook = async (botToken: string, webhookUrl: string) => {
+          if (!botToken || !webhookUrl) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, message: "Thiếu botToken hoặc webhookUrl" }));
+            return;
+          }
+
+          const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/setWebhook?url=${encodeURIComponent(webhookUrl.trim())}`;
+          const resp = await fetch(telegramUrl);
+          const data = await resp.json();
+
+          if (resp.ok && data.ok) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true, message: "Kích hoạt Telegram Webhook thành công! Bot đã sẵn sàng nhận lệnh từ người dùng." }));
+          } else {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, message: data.description || "Lỗi đăng ký Telegram Webhook" }));
+          }
+        };
+
+        if (req.method === "GET") {
+          const urlObj = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+          const botToken = urlObj.searchParams.get("botToken") || "";
+          const webhookUrl = urlObj.searchParams.get("webhookUrl") || "";
+          try {
+            await handleSetWebhook(botToken, webhookUrl);
+          } catch (e: any) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, message: e.message }));
+          }
+          return;
+        }
+
         if (req.method !== "POST") return next();
 
         let body = "";
         req.on("data", (chunk) => body += chunk.toString());
         req.on("end", async () => {
           try {
-            const { botToken, webhookUrl } = JSON.parse(body);
-            if (!botToken || !webhookUrl) {
-              res.writeHead(400, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ success: false, message: "Thiếu botToken hoặc webhookUrl" }));
-              return;
-            }
-
-            const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/setWebhook?url=${encodeURIComponent(webhookUrl.trim())}`;
-            const resp = await fetch(telegramUrl);
-            const data = await resp.json();
-
-            if (resp.ok && data.ok) {
-              res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ success: true, message: "Kích hoạt Telegram Webhook thành công! Bot đã sẵn sàng nhận lệnh từ người dùng." }));
-            } else {
-              res.writeHead(400, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ success: false, message: data.description || "Lỗi đăng ký Telegram Webhook" }));
-            }
+            const parsed = body ? JSON.parse(body) : {};
+            await handleSetWebhook(parsed.botToken || "", parsed.webhookUrl || "");
           } catch (e: any) {
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ success: false, message: e.message }));

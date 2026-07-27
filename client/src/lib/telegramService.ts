@@ -96,11 +96,34 @@ export async function registerTelegramWebhook(
     const currentOrigin = window.location.origin;
     const webhookUrl = `${currentOrigin}/api/telegram/webhook`;
 
-    const res = await fetch("/api/telegram/set-webhook", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ botToken: token, webhookUrl }),
-    });
+    // 1. Try direct call to Telegram setWebhook API from browser (supports CORS)
+    try {
+      const tgApiUrl = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
+      const tgRes = await fetch(tgApiUrl);
+      if (tgRes.ok) {
+        const tgData = await tgRes.json();
+        if (tgData.ok) {
+          return {
+            success: true,
+            message: "Kích hoạt Lệnh Chat thành công! Bạn có thể nhắn tin với Bot ngay bây giờ.",
+          };
+        } else {
+          return {
+            success: false,
+            message: `Telegram báo lỗi: ${tgData.description || "Không thể cài đặt webhook"}`,
+          };
+        }
+      }
+    } catch (directErr) {
+      console.warn("Direct setWebhook failed, trying server endpoint...", directErr);
+    }
+
+    // 2. Fallback via server GET endpoint
+    const serverUrl = `/api/telegram/set-webhook?botToken=${encodeURIComponent(token)}&webhookUrl=${encodeURIComponent(webhookUrl)}`;
+    const res = await fetch(serverUrl);
+    if (!res.ok) {
+      return { success: false, message: `Lỗi Server HTTP ${res.status}` };
+    }
 
     const data = await res.json();
     return {
@@ -108,6 +131,6 @@ export async function registerTelegramWebhook(
       message: data.message || (data.success ? "Đã kích hoạt Telegram Webhook thành công!" : "Lỗi kích hoạt Webhook"),
     };
   } catch (err: any) {
-    return { success: false, message: "Lỗi kết nối server: " + err.message };
+    return { success: false, message: "Lỗi kết nối Webhook: " + err.message };
   }
 }
