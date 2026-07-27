@@ -375,26 +375,212 @@ function vitePluginManusDebugCollector(): Plugin {
         });
       });
 
-      // GET/POST /api/telegram/set-webhook: Registers Telegram Bot Webhook
+      // Helper to process incoming Telegram text command
+      const processTelegramMessageCommand = async (text: string, chatId: number | string, botToken: string) => {
+        const normText = text.trim().toLowerCase();
+
+        const replyTelegram = async (replyHtml: string) => {
+          try {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: replyHtml,
+                parse_mode: "HTML",
+              }),
+            });
+          } catch (err) {
+            console.error("Telegram reply error:", err);
+          }
+        };
+
+        // Check if user sent /start or help
+        if (normText === "/start" || normText === "/help" || normText === "hi" || normText === "hello") {
+          const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi có thể giúp bạn tự động đối soát số liệu nhà hàng nhập với ảnh biên bản/bill thực tế.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát ngày 2026-07-26"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát hôm nay"</i>\n\n👉 Bạn hãy thử gửi một câu lệnh ngay bây giờ!`;
+          await replyTelegram(welcome);
+          return;
+        }
+
+        // Check if user is asking for audit / đối soát
+        const isAuditRequest =
+          normText.includes("đối soát") ||
+          normText.includes("doi soat") ||
+          normText.includes("soi") ||
+          normText.includes("báo cáo") ||
+          normText.includes("bao cao") ||
+          normText.includes("kiểm tra") ||
+          normText.includes("kiem tra") ||
+          normText.includes("check");
+
+        if (!isAuditRequest) {
+          await replyTelegram(`<b>🤖 Chưa hiểu rõ lệnh "${text}".</b>\n\nBạn hãy thử nhắn:\n• <i>"đối soát ngày 2026-07-26"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát hôm nay"</i>`);
+          return;
+        }
+
+        // Extract target check date
+        const now = new Date();
+        let targetDate = "";
+
+        if (normText.includes("hôm qua") || normText.includes("hom qua")) {
+          const yesterday = new Date(now.getTime() - 86400000);
+          targetDate = yesterday.toISOString().split("T")[0];
+        } else if (normText.includes("hôm nay") || normText.includes("hom nay")) {
+          targetDate = now.toISOString().split("T")[0];
+        } else {
+          const ymd = normText.match(/\b(202\d)[-\/](\d{1,2})[-\/](\d{1,2})\b/);
+          if (ymd) {
+            targetDate = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+          } else {
+            const dmy = normText.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](202\d))?\b/);
+            if (dmy) {
+              const day = dmy[1].padStart(2, "0");
+              const month = dmy[2].padStart(2, "0");
+              const year = dmy[3] || String(now.getFullYear());
+              targetDate = `${year}-${month}-${day}`;
+            }
+          }
+        }
+
+        if (!targetDate) {
+          const yesterday = new Date(now.getTime() - 86400000);
+          targetDate = yesterday.toISOString().split("T")[0];
+        }
+
+        await replyTelegram(`⏳ <b>Đang quét dữ liệu & đối soát AI cho ngày ${targetDate}...</b>\n<i>Vui lòng đợi vài giây...</i>`);
+
+        // Fetch vouchers from Firestore REST API
+        const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/vouchers`;
+        const fsResp = await fetch(firestoreUrl);
+        let records: any[] = [];
+        if (fsResp.ok) {
+          const fsData = await fsResp.json();
+          const docs = fsData.documents || [];
+          for (const doc of docs) {
+            const fields = doc.fields || {};
+            const docDate = fields.date?.stringValue;
+            if (docDate === targetDate) {
+              records.push({
+                restaurantId: fields.restaurantId?.stringValue || "",
+                restaurantName: fields.restaurantName?.stringValue || fields.restaurantId?.stringValue || "",
+                date: docDate,
+                postedBills: Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0),
+                totalIssued: Number(fields.totalIssued?.integerValue || fields.totalIssued?.doubleValue || 0),
+                beerCoupons: Number(fields.beerCoupons?.integerValue || fields.beerCoupons?.doubleValue || 0),
+                potatoCoupons: Number(fields.potatoCoupons?.integerValue || fields.potatoCoupons?.doubleValue || 0),
+                billImages: fields.billImages?.arrayValue?.values?.map((v: any) => v.stringValue) || [],
+              });
+            }
+          }
+        }
+
+        if (records.length === 0) {
+          await replyTelegram(`❌ <b>Không tìm thấy dữ liệu báo cáo voucher cho ngày ${targetDate}.</b>\n\nChưa có nhà hàng nào cập nhật số liệu ngày này.`);
+          return;
+        }
+
+        let matchCount = 0;
+        let noImgCount = 0;
+        let detailsHtml = "";
+
+        for (const rec of records) {
+          const hasImgs = rec.billImages && rec.billImages.length > 0;
+          if (!hasImgs) {
+            noImgCount++;
+            detailsHtml += `\n⚠️ <b>${rec.restaurantName}</b>: Thiếu ảnh minh chứng (Nhập: ${rec.postedBills} phiếu)`;
+          } else {
+            matchCount++;
+            detailsHtml += `\n🟢 <b>${rec.restaurantName}</b>: Đã nhập ${rec.postedBills} phiếu | 📸 ${rec.billImages.length} ảnh`;
+          }
+        }
+
+        let reportMsg = `<b>🤖 BÁO CÁO AI AUDIT THEO YÊU CẦU TIN NHẮN</b>\n`;
+        reportMsg += `📅 <b>Ngày đối soát:</b> ${targetDate}\n`;
+        reportMsg += `⏱ <b>Thời gian xử lý:</b> ${new Date().toLocaleTimeString("vi-VN")}\n\n`;
+        reportMsg += `📊 <b>Tổng hợp (${records.length} nhà hàng):</b>\n`;
+        reportMsg += `• Đã gửi & có ảnh: 🟢 <b>${matchCount}</b> nhà hàng\n`;
+        reportMsg += `• Chưa có ảnh: ⚠️ <b>${noImgCount}</b> nhà hàng\n\n`;
+        reportMsg += `📝 <b>Chi tiết từng nhà hàng:</b>${detailsHtml}\n\n`;
+        reportMsg += `🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard</a>`;
+
+        await replyTelegram(reportMsg);
+      };
+
+      // Server-side offset tracker for Telegram getUpdates
+      let telegramPollingOffset = 0;
+
+      const runTelegramPollingBatch = async () => {
+        try {
+          // Fetch Telegram Bot Token from Firestore settings
+          const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
+          const tokenResp = await fetch(tokenUrl);
+          if (!tokenResp.ok) return { success: false, message: "Chưa cấu hình Telegram Bot Token" };
+
+          const tokenData = await tokenResp.json();
+          const botToken = tokenData.fields?.value?.stringValue || "";
+          if (!botToken) return { success: false, message: "Bot Token trống" };
+
+          // Delete webhook to ensure Telegram getUpdates works reliably in sandboxed preview
+          try {
+            await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+          } catch (e) {}
+
+          // Call getUpdates
+          const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&timeout=0`;
+          const resp = await fetch(updatesUrl);
+          if (!resp.ok) return { success: false, message: "Lỗi kết nối Telegram getUpdates" };
+
+          const data = await resp.json();
+          if (!data.ok || !Array.isArray(data.result)) return { success: true, processedCount: 0 };
+
+          const updates = data.result;
+          let processedCount = 0;
+
+          for (const item of updates) {
+            telegramPollingOffset = Math.max(telegramPollingOffset, item.update_id + 1);
+            const msg = item.message || item.edited_message;
+            if (msg && msg.chat && msg.text) {
+              await processTelegramMessageCommand(msg.text, msg.chat.id, botToken);
+              processedCount++;
+            }
+          }
+
+          return { success: true, processedCount, offset: telegramPollingOffset };
+        } catch (err: any) {
+          return { success: false, message: err.message };
+        }
+      };
+
+      // Start automatic background polling loop every 4 seconds
+      setInterval(() => {
+        runTelegramPollingBatch().catch(() => {});
+      }, 4000);
+
+      // GET/POST /api/telegram/poll: On-demand Telegram message checker
+      server.middlewares.use("/api/telegram/poll", async (req, res) => {
+        const result = await runTelegramPollingBatch();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+      });
+
+      // GET/POST /api/telegram/set-webhook: Registers Telegram Bot Webhook & starts polling
       server.middlewares.use("/api/telegram/set-webhook", async (req, res, next) => {
         const handleSetWebhook = async (botToken: string, webhookUrl: string) => {
-          if (!botToken || !webhookUrl) {
+          if (!botToken) {
             res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ success: false, message: "Thiếu botToken hoặc webhookUrl" }));
+            res.end(JSON.stringify({ success: false, message: "Thiếu botToken" }));
             return;
           }
 
-          const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/setWebhook?url=${encodeURIComponent(webhookUrl.trim())}`;
-          const resp = await fetch(telegramUrl);
-          const data = await resp.json();
+          // Trigger polling check right away
+          const pollRes = await runTelegramPollingBatch();
 
-          if (resp.ok && data.ok) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ success: true, message: "Kích hoạt Telegram Webhook thành công! Bot đã sẵn sàng nhận lệnh từ người dùng." }));
-          } else {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ success: false, message: data.description || "Lỗi đăng ký Telegram Webhook" }));
-          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            success: true,
+            message: "Kích hoạt nhận lệnh Telegram thành công! Server đã bắt đầu lắng nghe và trả lời tin nhắn tự động.",
+            pollRes
+          }));
         };
 
         if (req.method === "GET") {
@@ -425,14 +611,13 @@ function vitePluginManusDebugCollector(): Plugin {
         });
       });
 
-      // POST /api/telegram/webhook: Receives Telegram updates & commands (e.g. "đối soát ngày 2026-07-26")
+      // POST /api/telegram/webhook: Receives Telegram updates
       server.middlewares.use("/api/telegram/webhook", async (req, res, next) => {
         if (req.method !== "POST") return next();
 
         let bodyStr = "";
         req.on("data", (chunk) => bodyStr += chunk.toString());
         req.on("end", async () => {
-          // Immediately acknowledge Telegram
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: true }));
 
@@ -441,11 +626,6 @@ function vitePluginManusDebugCollector(): Plugin {
             const message = update.message || update.edited_message;
             if (!message || !message.chat || !message.text) return;
 
-            const chatId = message.chat.id;
-            const text = message.text.trim();
-            const normText = text.toLowerCase();
-
-            // Fetch Telegram Bot Token from Firestore settings
             const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
             const tokenResp = await fetch(tokenUrl);
             let botToken = "";
@@ -455,132 +635,7 @@ function vitePluginManusDebugCollector(): Plugin {
             }
             if (!botToken) return;
 
-            const replyTelegram = async (replyHtml: string) => {
-              try {
-                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: chatId,
-                    text: replyHtml,
-                    parse_mode: "HTML",
-                  }),
-                });
-              } catch (err) {
-                console.error("Telegram Webhook reply error:", err);
-              }
-            };
-
-            // Check if user sent /start or help
-            if (normText === "/start" || normText === "/help" || normText === "hi" || normText === "hello") {
-              const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi có thể giúp bạn tự động đối soát số liệu nhà hàng nhập với ảnh biên bản/bill thực tế.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát ngày 2026-07-26"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát hôm nay"</i>\n\n👉 Bạn hãy thử gửi một câu lệnh ngay bây giờ!`;
-              await replyTelegram(welcome);
-              return;
-            }
-
-            // Check if user is asking for audit / đối soát
-            const isAuditRequest =
-              normText.includes("đối soát") ||
-              normText.includes("doi soat") ||
-              normText.includes("soi") ||
-              normText.includes("báo cáo") ||
-              normText.includes("bao cao") ||
-              normText.includes("kiểm tra") ||
-              normText.includes("kiem tra") ||
-              normText.includes("check");
-
-            if (!isAuditRequest) {
-              await replyTelegram(`<b>🤖 Chưa hiểu rõ lệnh "${text}".</b>\n\nBạn hãy thử nhắn:\n• <i>"đối soát ngày 2026-07-26"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát hôm nay"</i>`);
-              return;
-            }
-
-            // Extract target check date
-            const now = new Date();
-            let targetDate = "";
-
-            if (normText.includes("hôm qua") || normText.includes("hom qua")) {
-              const yesterday = new Date(now.getTime() - 86400000);
-              targetDate = yesterday.toISOString().split("T")[0];
-            } else if (normText.includes("hôm nay") || normText.includes("hom nay")) {
-              targetDate = now.toISOString().split("T")[0];
-            } else {
-              const ymd = normText.match(/\b(202\d)[-\/](\d{1,2})[-\/](\d{1,2})\b/);
-              if (ymd) {
-                targetDate = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
-              } else {
-                const dmy = normText.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](202\d))?\b/);
-                if (dmy) {
-                  const day = dmy[1].padStart(2, "0");
-                  const month = dmy[2].padStart(2, "0");
-                  const year = dmy[3] || String(now.getFullYear());
-                  targetDate = `${year}-${month}-${day}`;
-                }
-              }
-            }
-
-            if (!targetDate) {
-              const yesterday = new Date(now.getTime() - 86400000);
-              targetDate = yesterday.toISOString().split("T")[0];
-            }
-
-            await replyTelegram(`⏳ <b>Đang quét dữ liệu & đối soát AI cho ngày ${targetDate}...</b>\n<i>Vui lòng đợi vài giây...</i>`);
-
-            // Fetch vouchers from Firestore REST API
-            const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/vouchers`;
-            const fsResp = await fetch(firestoreUrl);
-            let records: any[] = [];
-            if (fsResp.ok) {
-              const fsData = await fsResp.json();
-              const docs = fsData.documents || [];
-              for (const doc of docs) {
-                const fields = doc.fields || {};
-                const docDate = fields.date?.stringValue;
-                if (docDate === targetDate) {
-                  records.push({
-                    restaurantId: fields.restaurantId?.stringValue || "",
-                    restaurantName: fields.restaurantName?.stringValue || fields.restaurantId?.stringValue || "",
-                    date: docDate,
-                    postedBills: Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0),
-                    totalIssued: Number(fields.totalIssued?.integerValue || fields.totalIssued?.doubleValue || 0),
-                    beerCoupons: Number(fields.beerCoupons?.integerValue || fields.beerCoupons?.doubleValue || 0),
-                    potatoCoupons: Number(fields.potatoCoupons?.integerValue || fields.potatoCoupons?.doubleValue || 0),
-                    billImages: fields.billImages?.arrayValue?.values?.map((v: any) => v.stringValue) || [],
-                  });
-                }
-              }
-            }
-
-            if (records.length === 0) {
-              await replyTelegram(`❌ <b>Không tìm thấy dữ liệu báo cáo voucher cho ngày ${targetDate}.</b>\n\nChưa có nhà hàng nào cập nhật số liệu ngày này.`);
-              return;
-            }
-
-            let matchCount = 0;
-            let noImgCount = 0;
-            let detailsHtml = "";
-
-            for (const rec of records) {
-              const hasImgs = rec.billImages && rec.billImages.length > 0;
-              if (!hasImgs) {
-                noImgCount++;
-                detailsHtml += `\n⚠️ <b>${rec.restaurantName}</b>: Thiếu ảnh minh chứng (Nhập: ${rec.postedBills} phiếu)`;
-              } else {
-                matchCount++;
-                detailsHtml += `\n🟢 <b>${rec.restaurantName}</b>: Đã nhập ${rec.postedBills} phiếu | 📸 ${rec.billImages.length} ảnh`;
-              }
-            }
-
-            let reportMsg = `<b>🤖 BÁO CÁO AI AUDIT THEO YÊU CẦU TIN NHẮN</b>\n`;
-            reportMsg += `📅 <b>Ngày đối soát:</b> ${targetDate}\n`;
-            reportMsg += `⏱ <b>Thời gian xử lý:</b> ${new Date().toLocaleTimeString("vi-VN")}\n\n`;
-            reportMsg += `📊 <b>Tổng hợp (${records.length} nhà hàng):</b>\n`;
-            reportMsg += `• Đã gửi & có ảnh: 🟢 <b>${matchCount}</b> nhà hàng\n`;
-            reportMsg += `• Chưa có ảnh: ⚠️ <b>${noImgCount}</b> nhà hàng\n\n`;
-            reportMsg += `📝 <b>Chi tiết từng nhà hàng:</b>${detailsHtml}\n\n`;
-            reportMsg += `🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard</a>`;
-
-            await replyTelegram(reportMsg);
-
+            await processTelegramMessageCommand(message.text, message.chat.id, botToken);
           } catch (err: any) {
             console.error("Lỗi Telegram Webhook handler:", err);
           }

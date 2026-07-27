@@ -37,7 +37,7 @@ import {
   RestaurantStatus
 } from "@/lib/firestoreService";
 import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
-import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage, registerTelegramWebhook } from "@/lib/telegramService";
+import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage, registerTelegramWebhook, pollTelegramMessages } from "@/lib/telegramService";
 import { runAIAuditForDate, formatTelegramAIAuditReport, AIAuditResult } from "@/lib/aiAuditAgent";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
@@ -226,6 +226,23 @@ export default function AdminSettings() {
       toast.error("Lỗi kích hoạt Webhook: " + err.message);
     } finally {
       setIsSavingTelegram(false);
+    }
+  };
+
+  const handlePollTelegram = async () => {
+    try {
+      const res = await pollTelegramMessages();
+      if (res.success) {
+        if ((res.processedCount || 0) > 0) {
+          toast.success(`🤖 Bot vừa xử lý và trả lời ${res.processedCount} tin nhắn mới từ Telegram!`);
+        } else {
+          toast.info("Bot đang tự động lắng nghe (Không có tin nhắn mới chưa xử lý).");
+        }
+      } else {
+        toast.error("Lỗi kiểm tra tin nhắn: " + (res.message || "Lỗi không xác định"));
+      }
+    } catch (err: any) {
+      toast.error("Lỗi kiểm tra: " + err.message);
     }
   };
 
@@ -780,7 +797,17 @@ export default function AdminSettings() {
                 className="w-full sm:w-auto px-4 py-2 rounded-xl border-purple-500/50 bg-purple-950/30 text-purple-300 hover:bg-purple-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2"
               >
                 <Bot className="w-3.5 h-3.5 text-purple-400" />
-                ⚡ Kích Hoạt Nhận Lệnh Chat
+                ⚡ Kích Hoạt Lắng Nghe
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handlePollTelegram}
+                variant="outline"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl border-emerald-500/50 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2"
+              >
+                <Scan className="w-3.5 h-3.5 text-emerald-400" />
+                🔍 Quét Tin Nhắn Ngay
               </Button>
 
               <Button
