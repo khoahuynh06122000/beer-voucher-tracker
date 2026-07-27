@@ -335,8 +335,12 @@ function vitePluginManusDebugCollector(): Plugin {
 
       // Helper to process incoming Telegram text command
       const processTelegramMessageCommand = async (text: string, chatId: number | string, botToken: string) => {
-        const normText = text.trim().toLowerCase();
-        console.log(`[TELEGRAM COMMAND RECV] ChatId: ${chatId} | Text: "${text}"`);
+        const rawText = (text || "").trim();
+        // Remove bot handle if present, e.g. "/start@beervoucher_bot" -> "/start"
+        const cleanText = rawText.replace(/@\w+/g, "").trim();
+        const normText = cleanText.toLowerCase();
+
+        console.log(`[TELEGRAM RECV] ChatId: ${chatId} | CleanText: "${cleanText}" | NormText: "${normText}"`);
 
         const replyTelegram = async (replyHtml: string) => {
           try {
@@ -352,26 +356,30 @@ function vitePluginManusDebugCollector(): Plugin {
             });
             const data = await resp.json();
             if (!resp.ok || !data.ok) {
-              console.error(`[TELEGRAM REPLY ERROR]`, data);
+              console.error(`[TELEGRAM REPLY FAIL] ChatId: ${chatId}:`, data);
             } else {
-              console.log(`[TELEGRAM REPLY SUCCESS] Sent to ChatId ${chatId}`);
+              console.log(`[TELEGRAM REPLY OK] ChatId: ${chatId}`);
             }
           } catch (err) {
-            console.error("Telegram reply error:", err);
+            console.error("[TELEGRAM REPLY ERR]", err);
           }
         };
 
-        // Check if user sent /start or help or greetings
+        // 1. Check if user sent /start, /help, or general greetings
         if (
           normText === "/start" ||
           normText === "/help" ||
+          normText === "start" ||
+          normText === "help" ||
           normText === "hi" ||
           normText === "hello" ||
           normText === "chào" ||
+          normText === "chao" ||
           normText === "xin chào" ||
+          normText === "xin chao" ||
           normText === "bot"
         ) {
-          const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ đối soát tự động số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Bắn báo cáo trực tiếp lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy gửi một câu lệnh ngay để kiểm tra!`;
+          const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ tự động đối soát số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Gửi báo cáo thẳng lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy thử nhắn một câu lệnh ngay để nhận kết quả!`;
           await replyTelegram(welcome);
           return;
         }
@@ -401,14 +409,13 @@ function vitePluginManusDebugCollector(): Plugin {
         }
 
         if (!targetDate) {
-          // Default to today if asking for general audit, or yesterday otherwise
           targetDate = now.toISOString().split("T")[0];
         }
 
         const dateParts = targetDate.split("-");
         const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
 
-        // Check if user is asking to send report to MS Teams
+        // 2. Check if user is requesting to send report to MS Teams
         const isTeamsRequest =
           normText.includes("teams") ||
           normText.includes("msteams") ||
@@ -416,14 +423,14 @@ function vitePluginManusDebugCollector(): Plugin {
           normText.includes("webhook");
 
         if (isTeamsRequest) {
-          await replyTelegram(`⏳ <b>Đang lấy báo cáo đối soát ngày ${formattedDate} và đẩy tới MS Teams Webhook...</b>`);
+          await replyTelegram(`⏳ <b>Đang lấy báo cáo đối soát ngày ${formattedDate} và gửi tới MS Teams Webhook...</b>`);
 
           try {
             // Fetch saved MS Teams Webhook URL from Firestore settings
             const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
             const settingResp = await fetch(settingUrl);
             if (!settingResp.ok) {
-              await replyTelegram(`❌ <b>Lỗi kết nối Cấu hình Firestore!</b>\n Không thể lấy cấu hình Webhook MS Teams.`);
+              await replyTelegram(`❌ <b>Lỗi kết nối Firestore!</b>\nKhông thể lấy cấu hình Webhook MS Teams.`);
               return;
             }
 
@@ -431,7 +438,7 @@ function vitePluginManusDebugCollector(): Plugin {
             const webhookUrl = settingData.fields?.value?.stringValue;
 
             if (!webhookUrl || !webhookUrl.trim()) {
-              await replyTelegram(`❌ <b>Chưa cấu hình MS Teams Webhook!</b>\n\nBạn chưa lưu URL Webhook MS Teams trong trang <b>Cấu hình Hệ thống</b> trên Web App.`);
+              await replyTelegram(`❌ <b>Chưa cấu hình MS Teams Webhook!</b>\n\nBạn chưa lưu URL Webhook MS Teams trong mục <b>Cấu hình Hệ thống</b> trên Web App.`);
               return;
             }
 
@@ -482,13 +489,37 @@ function vitePluginManusDebugCollector(): Plugin {
             }
 
             if (teamsSuccess) {
-              await replyTelegram(`🚀 <b>ĐÃ GỬI THÀNH CÔNG BÁO CÁO TỚI MS TEAMS!</b>\n\n📅 <b>Ngày đối soát:</b> ${formattedDate}\n🔗 <b>Trạng thái:</b> Đã đẩy Adaptive Card lên Webhook Teams\n\n📌 <i>Vui lòng kiểm tra channel MS Teams để xem chi tiết.</i>`);
+              await replyTelegram(`🚀 <b>ĐÃ GỬI THÀNH CÔNG BÁO CÁO TỚI MS TEAMS!</b>\n\n📅 <b>Ngày đối soát:</b> ${formattedDate}\n🔗 <b>Kênh nhận:</b> MS Teams Channel Webhook\n\n📌 <i>Bạn hãy mở MS Teams để xem chi tiết Adaptive Card.</i>`);
             } else {
               await replyTelegram(`❌ <b>Gửi tới MS Teams thất bại!</b>\n\nLỗi: <i>${lastErr}</i>\n👉 Vui lòng kiểm tra lại URL Webhook MS Teams trong phần Cấu hình.`);
             }
           } catch (e: any) {
             await replyTelegram(`❌ <b>Lỗi hệ thống khi xử lý gửi Teams:</b> ${e.message}`);
           }
+          return;
+        }
+
+        // 3. Check if user request is an audit query
+        const isAuditRequest =
+          normText.includes("đối soát") ||
+          normText.includes("doi soat") ||
+          normText.includes("soi") ||
+          normText.includes("báo cáo") ||
+          normText.includes("bao cao") ||
+          normText.includes("kiểm tra") ||
+          normText.includes("kiem tra") ||
+          normText.includes("check") ||
+          normText.includes("xem") ||
+          normText.includes("dữ liệu") ||
+          normText.includes("hôm nay") ||
+          normText.includes("hom nay") ||
+          normText.includes("hôm qua") ||
+          normText.includes("hom qua") ||
+          /\b\d{1,2}[\/\-]\d{1,2}\b/.test(normText) ||
+          /\b202\d[-\/]\d{1,2}[-\/]\d{1,2}\b/.test(normText);
+
+        if (!isAuditRequest) {
+          await replyTelegram(`🤖 <b>Chưa hiểu rõ câu lệnh "${text}".</b>\n\nBạn hãy thử nhắn các câu lệnh sau:\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i>`);
           return;
         }
 
@@ -557,16 +588,21 @@ function vitePluginManusDebugCollector(): Plugin {
         }
 
         reportMsg += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard System</a>`;
-        reportMsg += `\n\n💡 <i>Mẹo: Nhắn <b>"gửi ms teams"</b> hoặc <b>"gửi teams"</b> để tự động đẩy báo cáo này thẳng lên kênh MS Teams!</i>`;
+        reportMsg += `\n\n💡 <i>Mẹo: Nhắn <b>"gửi ms teams"</b> để tự động đẩy báo cáo này thẳng lên kênh MS Teams!</i>`;
 
         await replyTelegram(reportMsg);
       };
 
-      // Server-side offset tracker for Telegram getUpdates
+      // Server-side offset tracker & lock for Telegram getUpdates
       let telegramPollingOffset = 0;
-      let telegramWebhookDeleted = false;
+      let isPollingActive = false;
 
       const runTelegramPollingBatch = async () => {
+        if (isPollingActive) {
+          return { success: false, message: "Polling loop currently active" };
+        }
+        isPollingActive = true;
+
         try {
           // Fetch Telegram Bot Token from Firestore settings
           const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
@@ -577,17 +613,10 @@ function vitePluginManusDebugCollector(): Plugin {
           const botToken = (tokenData.fields?.value?.stringValue || "").trim();
           if (!botToken) return { success: false, message: "Bot Token trống" };
 
-          // Delete webhook ONCE so getUpdates works without conflict
-          if (!telegramWebhookDeleted) {
-            try {
-              const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
-              const delData = await delResp.json();
-              console.log("[TELEGRAM WEBHOOK DELETED]", delData);
-              telegramWebhookDeleted = true;
-            } catch (e) {
-              console.error("[TELEGRAM WEBHOOK DELETE ERR]", e);
-            }
-          }
+          // Always ensure webhook is deleted so getUpdates works reliably without HTTP 409 Conflict
+          try {
+            await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+          } catch (e) {}
 
           // Call getUpdates
           const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&timeout=0`;
@@ -595,24 +624,34 @@ function vitePluginManusDebugCollector(): Plugin {
           if (!resp.ok) {
             const errText = await resp.text();
             console.error(`[TELEGRAM GETUPDATES FAIL] HTTP ${resp.status}:`, errText);
-            if (resp.status === 409 || errText.includes("webhook")) {
-              telegramWebhookDeleted = false; // Retry deleting webhook next time
-            }
             return { success: false, message: `Lỗi kết nối Telegram getUpdates (HTTP ${resp.status})` };
           }
 
           const data = await resp.json();
-          if (!data.ok || !Array.isArray(data.result)) return { success: true, processedCount: 0 };
+          if (!data.ok || !Array.isArray(data.result)) {
+            return { success: true, processedCount: 0 };
+          }
 
           const updates = data.result;
           let processedCount = 0;
 
           for (const item of updates) {
+            // Update offset immediately so update is never processed twice
             telegramPollingOffset = Math.max(telegramPollingOffset, item.update_id + 1);
-            const msg = item.message || item.edited_message;
-            if (msg && msg.chat && msg.text) {
-              await processTelegramMessageCommand(msg.text, msg.chat.id, botToken);
-              processedCount++;
+
+            const msg = item.message || item.edited_message || item.channel_post || item.edited_channel_post;
+            if (msg && msg.chat && (msg.text || msg.caption)) {
+              const textContent = msg.text || msg.caption || "";
+              const msgDate = msg.date || 0;
+              const nowSec = Math.floor(Date.now() / 1000);
+
+              // Only process messages created within the last 5 minutes (300 sec)
+              if (nowSec - msgDate < 300) {
+                await processTelegramMessageCommand(textContent, msg.chat.id, botToken);
+                processedCount++;
+              } else {
+                console.log(`[TELEGRAM SKIPPED STALE UPDATE] ID: ${item.update_id} | Date: ${msgDate}`);
+              }
             }
           }
 
@@ -620,6 +659,8 @@ function vitePluginManusDebugCollector(): Plugin {
         } catch (err: any) {
           console.error("[TELEGRAM POLLING ERR]", err);
           return { success: false, message: err.message };
+        } finally {
+          isPollingActive = false;
         }
       };
 
