@@ -687,6 +687,26 @@ export default function AdminSettings() {
               </div>
             </div>
 
+            {/* Quick Telegram Bot Creation Guide */}
+            <div className="p-3.5 rounded-2xl bg-sky-950/40 border border-sky-500/20 text-xs space-y-2">
+              <div className="font-bold text-sky-300 flex items-center gap-1.5">
+                <span>📖 Hướng dẫn nhanh tạo Telegram Bot (Chỉ mất 2 phút):</span>
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-gray-300 text-[11px] leading-relaxed">
+                <li>
+                  <b>Tạo Bot (Lấy Token):</b> Mở Telegram, tìm <b>@BotFather</b> → Gửi lệnh <code>/newbot</code> → Đặt tên & Username → Sao chép dãy <b>API Token</b> dán vào ô Token trên.
+                </li>
+                <li>
+                  <b>Lấy Chat ID:</b>
+                  <span className="block ml-3 text-gray-400">
+                    • <i>Cá nhân:</i> Tìm <b>@userinfobot</b> trên Telegram → Gửi tin nhắn bất kỳ → Copy dãy <code>Id</code>.
+                    <br />
+                    • <i>Nhóm Telegram:</i> Thêm Bot của bạn vào Nhóm → Thêm <b>@raw_data_bot</b> vào nhóm để lấy <code>chat.id</code> (ví dụ: <code>-100192837465</code>).
+                  </span>
+                </li>
+              </ol>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-1">
               <Button
                 type="button"

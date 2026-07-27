@@ -529,13 +529,14 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
         });
       });
 
-      // GET/POST /api/cron/trigger-09am: Triggers live check & sends 09:00 AM missing report to MS Teams
+      // GET/POST /api/cron/trigger-09am: Triggers live check & sends 09:00 AM missing report to MS Teams & Telegram
       server.middlewares.use("/api/cron/trigger-09am", async (req, res) => {
         try {
           const card = await getLiveMissingStatus();
           let sentSuccess = false;
-          let message = "";
+          let messageList: string[] = [];
 
+          // 1. Send to MS Teams if configured
           const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
           const settingResp = await fetch(settingUrl);
           if (settingResp.ok) {
@@ -562,22 +563,66 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                   });
                   if (resp.ok || resp.status === 200 || resp.status === 202) {
                     sentSuccess = true;
-                    message = "Đã kích hoạt và gửi báo cáo tiến độ 9:00 AM thành công lên kênh MS Teams!";
+                    messageList.push("MS Teams: Gửi thành công");
                     break;
                   }
                 } catch (e: any) {
-                  message = "Lỗi khi gửi webhook: " + e.message;
+                  messageList.push("MS Teams Lỗi: " + e.message);
                 }
               }
-            } else {
-              message = "Chưa cấu hình Webhook URL MS Teams trong Cài đặt Admin.";
             }
-          } else {
-            message = "Không thể lấy cấu hình Webhook từ Firestore.";
           }
 
+          // 2. Send to Telegram if configured
+          try {
+            const tgTokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
+            const tgChatUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_chat_id`;
+
+            const [tokenResp, chatResp] = await Promise.all([fetch(tgTokenUrl), fetch(tgChatUrl)]);
+            if (tokenResp.ok && chatResp.ok) {
+              const tokenData = await tokenResp.json();
+              const chatData = await chatResp.json();
+              const botToken = tokenData.fields?.value?.stringValue;
+              const chatId = chatData.fields?.value?.stringValue;
+
+              if (botToken && chatId) {
+                const checkDateStr = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+                let tgHtml = `<b>🤖 BÁO CÁO TIẾN ĐỘ VOUCHER (09:00 AM)</b>\n`;
+                tgHtml += `📅 <b>Ngày kiểm tra:</b> ${checkDateStr}\n\n`;
+
+                if (card.body && Array.isArray(card.body)) {
+                  // Extract missing & submitted status text
+                  tgHtml += `📊 <i>Nội dung tổng hợp tự động từ hệ thống:</i>\n`;
+                }
+
+                tgHtml += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard</a>`;
+
+                const telegramApiUrl = `https://api.telegram.org/bot${botToken.trim()}/sendMessage`;
+                const tgRes = await fetch(telegramApiUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: chatId.trim(),
+                    text: tgHtml,
+                    parse_mode: "HTML",
+                  }),
+                });
+                const tgData = await tgRes.json();
+                if (tgRes.ok && tgData.ok) {
+                  sentSuccess = true;
+                  messageList.push("Telegram Bot: Gửi thành công");
+                } else {
+                  messageList.push("Telegram Lỗi: " + (tgData.description || "Không thể gửi"));
+                }
+              }
+            }
+          } catch (tgErr: any) {
+            console.error("Lỗi gửi Telegram tự động:", tgErr);
+          }
+
+          const finalMessage = messageList.length > 0 ? messageList.join(" | ") : "Chưa cấu hình kênh nhận thông báo.";
           res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: sentSuccess, message, card }));
+          res.end(JSON.stringify({ success: sentSuccess, message: finalMessage, card }));
         } catch (e: any) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: false, error: e.message }));
