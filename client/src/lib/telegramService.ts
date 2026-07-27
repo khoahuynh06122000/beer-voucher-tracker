@@ -56,9 +56,20 @@ export async function sendTelegramMessage(
     if (response.ok && data.ok) {
       return { success: true, message: "Gửi báo cáo qua Telegram thành công!" };
     } else {
+      const desc = data.description || "Không thể gửi tin nhắn";
+      let userFriendlyMsg = `Lỗi Telegram API: ${desc}`;
+
+      if (desc.includes("chat not found")) {
+        userFriendlyMsg = `🔴 Lỗi 'chat not found' (Không tìm thấy trò chuyện):\n1. Mở Telegram và tìm đúng Bot của bạn.\n2. Nhấn nút /start (Bắt đầu) để cho phép Bot gửi tin nhắn cho bạn.\n3. Nhập chính xác Chat ID (Lấy từ @userinfobot trên Telegram).`;
+      } else if (desc.includes("Unauthorized")) {
+        userFriendlyMsg = `🔴 Lỗi 'Unauthorized': Bot Token không đúng! Vui lòng sao chép lại API Token chính xác từ @BotFather.`;
+      } else if (desc.includes("bot was blocked")) {
+        userFriendlyMsg = `🔴 Lỗi: Bot đã bị bạn chặn trên Telegram. Hãy mở khung chat với Bot và chọn Unblock.`;
+      }
+
       return {
         success: false,
-        message: `Lỗi Telegram API: ${data.description || "Không thể gửi tin nhắn"}`,
+        message: userFriendlyMsg,
       };
     }
   } catch (error: any) {

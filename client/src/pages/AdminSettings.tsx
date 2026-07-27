@@ -704,6 +704,9 @@ export default function AdminSettings() {
                     • <i>Nhóm Telegram:</i> Thêm Bot của bạn vào Nhóm → Thêm <b>@raw_data_bot</b> vào nhóm để lấy <code>chat.id</code> (ví dụ: <code>-100192837465</code>).
                   </span>
                 </li>
+                <li className="text-amber-300 font-bold pt-1">
+                  <b>Khắc phục lỗi "chat not found":</b> Bắt buộc phải mở khung chat với Bot vừa tạo trên Telegram và bấm nút <code className="bg-amber-500/20 px-1 py-0.5 rounded text-amber-200">/start</code> (Bắt đầu) trước 1 lần!
+                </li>
               </ol>
             </div>
 
