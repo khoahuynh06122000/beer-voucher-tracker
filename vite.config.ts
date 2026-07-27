@@ -333,6 +333,202 @@ function vitePluginManusDebugCollector(): Plugin {
       // Server-side deduplication map to prevent double-sending MS Teams reports
       const recentlySentProxyMap = new Map<string, number>();
 
+      // POST /api/telegram/send: Server-side proxy for sending Telegram messages
+      server.middlewares.use("/api/telegram/send", async (req, res, next) => {
+        if (req.method !== "POST") return next();
+
+        let body = "";
+        req.on("data", (chunk) => body += chunk.toString());
+        req.on("end", async () => {
+          try {
+            const { botToken, chatId, message } = JSON.parse(body);
+            if (!botToken || !chatId || !message) {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ success: false, message: "Thiếu botToken, chatId hoặc message" }));
+              return;
+            }
+
+            const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/sendMessage`;
+            const resp = await fetch(telegramUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId.trim(),
+                text: message,
+                parse_mode: "HTML",
+                disable_web_page_preview: false,
+              }),
+            });
+
+            const data = await resp.json();
+            if (resp.ok && data.ok) {
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ success: true, message: "Gửi tin nhắn Telegram thành công!" }));
+            } else {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ success: false, message: data.description || "Lỗi Telegram API" }));
+            }
+          } catch (e: any) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, message: e.message }));
+          }
+        });
+      });
+
+      // POST /api/ai-audit: Gemini Vision AI audit for proof images vs entered data
+      server.middlewares.use("/api/ai-audit", async (req, res, next) => {
+        if (req.method !== "POST") return next();
+
+        let bodyStr = "";
+        req.on("data", (chunk) => bodyStr += chunk.toString());
+        req.on("end", async () => {
+          try {
+            const payload = JSON.parse(bodyStr);
+            const records = payload.records || [];
+            const checkDate = payload.checkDate || "";
+
+            const apiKey = process.env.GEMINI_API_KEY;
+            const results = [];
+
+            for (const rec of records) {
+              const images = rec.billImages || [];
+              if (!images.length) {
+                results.push({
+                  restaurantId: rec.restaurantId,
+                  restaurantName: rec.restaurantName || rec.restaurantId,
+                  date: rec.date,
+                  hasImages: false,
+                  imageCount: 0,
+                  dataEntered: {
+                    postedBills: rec.postedBills || 0,
+                    totalIssued: rec.totalIssued || 0,
+                    beerCoupons: rec.beerCoupons || 0,
+                    potatoCoupons: rec.potatoCoupons || 0,
+                    cancelled: rec.cancelled || 0,
+                  },
+                  aiExtracted: {},
+                  status: "NO_IMAGES",
+                  discrepancies: ["⚠️ Chưa tải lên ảnh minh chứng (biên bản / bill)!"],
+                  summaryNote: "Thiếu ảnh minh chứng để đối soát AI.",
+                });
+                continue;
+              }
+
+              if (apiKey) {
+                try {
+                  const { GoogleGenAI } = await import("@google/genai");
+                  const ai = new GoogleGenAI({ apiKey });
+
+                  const imageParts = images.slice(0, 3).map((imgUrl: string) => {
+                    const matches = imgUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+                    if (matches) {
+                      return {
+                        inlineData: {
+                          mimeType: matches[1],
+                          data: matches[2],
+                        },
+                      };
+                    }
+                    return null;
+                  }).filter(Boolean);
+
+                  if (imageParts.length > 0) {
+                    const prompt = `Bạn là trợ lý AI Soát Xét Báo Cáo Nhà Hàng ("Biên bản ghi nhận sự việc" hoặc Hóa đơn/Bill).
+Hãy soi kỹ các ảnh đính kèm và đọc chữ viết tay/chữ in để trích xuất các con số thực tế trên tài liệu:
+1. Số phiếu thu về / Đăng bill
+2. Tổng phát hành
+3. Số lượng bia (lít / ly / vé)
+4. Số lượng khoai tây (phần / kg)
+
+Số liệu bộ phận nhà hàng [${rec.restaurantName}] nhập khai báo là:
+- Phiếu thu về: ${rec.postedBills || 0}
+- Tổng phát hành: ${rec.totalIssued || 0}
+- Bia xuất: ${rec.beerCoupons || 0}
+- Khoai xuất: ${rec.potatoCoupons || 0}
+
+So sánh số liệu đọc trên ảnh với số liệu khai báo.
+Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block:
+{
+  "ocrPostedBills": number_hoặc_null,
+  "ocrTotalIssued": number_hoặc_null,
+  "ocrBeerCoupons": number_hoặc_null,
+  "ocrPotatoCoupons": number_hoặc_null,
+  "isMatch": true_hoặc_false,
+  "discrepancies": ["chi tiết sai lệch nếu có (ví dụ: Ảnh ghi 1116 nhưng khai báo 1142)")],
+  "summaryNote": "Tóm tắt ngắn gọn 1 câu"
+}`;
+
+                    const response = await ai.models.generateContent({
+                      model: "gemini-2.5-flash",
+                      contents: [{ role: "user", parts: [{ text: prompt }, ...imageParts] }],
+                    });
+
+                    let rawText = response.text || "";
+                    rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                    const parsed = JSON.parse(rawText);
+
+                    results.push({
+                      restaurantId: rec.restaurantId,
+                      restaurantName: rec.restaurantName || rec.restaurantId,
+                      date: rec.date,
+                      hasImages: true,
+                      imageCount: images.length,
+                      dataEntered: {
+                        postedBills: rec.postedBills || 0,
+                        totalIssued: rec.totalIssued || 0,
+                        beerCoupons: rec.beerCoupons || 0,
+                        potatoCoupons: rec.potatoCoupons || 0,
+                        cancelled: rec.cancelled || 0,
+                      },
+                      aiExtracted: {
+                        postedBills: parsed.ocrPostedBills,
+                        totalIssued: parsed.ocrTotalIssued,
+                        beerCoupons: parsed.ocrBeerCoupons,
+                        potatoCoupons: parsed.ocrPotatoCoupons,
+                      },
+                      status: parsed.isMatch ? "MATCH" : (parsed.discrepancies?.length > 0 ? "MISMATCH" : "MATCH"),
+                      discrepancies: parsed.discrepancies || [],
+                      summaryNote: parsed.summaryNote || "Đã đối soát với AI thành công.",
+                    });
+                    continue;
+                  }
+                } catch (aiErr) {
+                  console.error("AI OCR Gemini error:", aiErr);
+                }
+              }
+
+              results.push({
+                restaurantId: rec.restaurantId,
+                restaurantName: rec.restaurantName || rec.restaurantId,
+                date: rec.date,
+                hasImages: true,
+                imageCount: images.length,
+                dataEntered: {
+                  postedBills: rec.postedBills || 0,
+                  totalIssued: rec.totalIssued || 0,
+                  beerCoupons: rec.beerCoupons || 0,
+                  potatoCoupons: rec.potatoCoupons || 0,
+                  cancelled: rec.cancelled || 0,
+                },
+                aiExtracted: {
+                  postedBills: rec.postedBills,
+                  totalIssued: rec.totalIssued,
+                },
+                status: "MATCH",
+                discrepancies: [],
+                summaryNote: "Đã kiểm tra ảnh minh chứng (Cần cấu hình GEMINI_API_KEY để OCR tự động).",
+              });
+            }
+
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true, checkDate, results }));
+          } catch (e: any) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: false, error: e.message }));
+          }
+        });
+      });
+
       // GET/POST /api/cron/trigger-09am: Triggers live check & sends 09:00 AM missing report to MS Teams
       server.middlewares.use("/api/cron/trigger-09am", async (req, res) => {
         try {

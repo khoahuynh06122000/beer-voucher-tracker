@@ -20,7 +20,13 @@ import {
   FileSpreadsheet,
   Download,
   Calendar,
-  Filter
+  Filter,
+  Bot,
+  Sparkles,
+  MessageSquare,
+  Scan,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import {
   getSetting,
@@ -31,6 +37,8 @@ import {
   RestaurantStatus
 } from "@/lib/firestoreService";
 import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
+import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage } from "@/lib/telegramService";
+import { runAIAuditForDate, formatTelegramAIAuditReport, AIAuditResult } from "@/lib/aiAuditAgent";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 
@@ -51,6 +59,17 @@ export default function AdminSettings() {
   const [isSendingAlert, setIsSendingAlert] = useState(false);
   const [isLoadingSetting, setIsLoadingSetting] = useState(true);
   const [copiedJson, setCopiedJson] = useState(false);
+
+  // Telegram State
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+
+  // AI Audit Agent State
+  const [isRunningAIAudit, setIsRunningAIAudit] = useState(false);
+  const [aiAuditResults, setAIAuditResults] = useState<AIAuditResult[] | null>(null);
+  const [isSendingTelegramReport, setIsSendingTelegramReport] = useState(false);
 
   // Missing status state
   const [targetCheckDate, setTargetCheckDate] = useState<string>(() => {
@@ -83,8 +102,11 @@ export default function AdminSettings() {
     async function loadData() {
       setIsLoadingSetting(true);
       const val = await getSetting("ms_teams_webhook");
+      const tg = await getTelegramSettings();
       if (isMounted) {
         if (val) setWebhookUrl(val);
+        setTelegramBotToken(tg.botToken);
+        setTelegramChatId(tg.chatId);
         setIsLoadingSetting(false);
       }
 
@@ -163,6 +185,84 @@ export default function AdminSettings() {
       toast.error(err?.message || "Không thể lưu cài đặt");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    if (!telegramBotToken.trim() || !telegramChatId.trim()) {
+      toast.error("Vui lòng nhập đầy đủ Telegram Bot Token và Chat ID");
+      return;
+    }
+    setIsSavingTelegram(true);
+    try {
+      await saveTelegramSettings(telegramBotToken, telegramChatId);
+      toast.success("Lưu cấu hình Telegram Bot & Chat ID thành công!");
+    } catch (err: any) {
+      toast.error("Lỗi khi lưu Telegram: " + err.message);
+    } finally {
+      setIsSavingTelegram(false);
+    }
+  };
+
+  const handleTestTelegramSend = async () => {
+    if (!telegramBotToken.trim() || !telegramChatId.trim()) {
+      toast.error("Vui lòng nhập Bot Token và Chat ID để thử nghiệm");
+      return;
+    }
+    setIsTestingTelegram(true);
+    try {
+      const msg = `<b>🤖 KHẢO SÁT THỬ NGHIỆM TELEGRAM BOT</b>\n\n🟢 Bot đã kết nối thành công với Hệ Thống Quản Lý Voucher Bia!\n⏰ Thời gian thử: ${new Date().toLocaleString("vi-VN")}\n\n<i>Sẵn sàng tự động gửi báo cáo đối soát AI 09:00 AM hàng ngày.</i>`;
+      const res = await sendTelegramMessage(msg, telegramBotToken, telegramChatId);
+      if (res.success) {
+        toast.success("🎉 " + res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error("Lỗi gửi thử Telegram: " + err.message);
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
+  const handleRunAIAudit = async () => {
+    setIsRunningAIAudit(true);
+    try {
+      const records = await getVouchersByDateRange("all", targetCheckDate, targetCheckDate);
+      if (!records || records.length === 0) {
+        toast.info(`Không có dữ liệu báo cáo voucher cho ngày ${targetCheckDate}!`);
+        setAIAuditResults([]);
+        return;
+      }
+      const auditRes = await runAIAuditForDate(targetCheckDate, records);
+      setAIAuditResults(auditRes);
+      toast.success(`🤖 AI Gemini đã hoàn tất soi & đối soát ${records.length} báo cáo!`);
+    } catch (err: any) {
+      toast.error("Lỗi khi chạy AI Audit: " + err.message);
+    } finally {
+      setIsRunningAIAudit(false);
+    }
+  };
+
+  const handleSendTelegramAIAudit = async () => {
+    if (!aiAuditResults || aiAuditResults.length === 0) {
+      toast.error("Vui lòng nhấn 'Chạy AI Soi Ảnh' trước khi gửi báo cáo Telegram!");
+      return;
+    }
+    setIsSendingTelegramReport(true);
+    try {
+      const missingNames = statusCheck?.missing.map((m) => m.restaurantName) || [];
+      const reportText = formatTelegramAIAuditReport(targetCheckDate, aiAuditResults, missingNames);
+      const res = await sendTelegramMessage(reportText, telegramBotToken, telegramChatId);
+      if (res.success) {
+        toast.success("📲 " + res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error("Lỗi khi gửi báo cáo Telegram: " + err.message);
+    } finally {
+      setIsSendingTelegramReport(false);
     }
   };
 
@@ -537,6 +637,244 @@ export default function AdminSettings() {
               </Button>
             </div>
           </form>
+        </Card>
+
+        {/* SECTION 2B: TÍCH HỢP TELEGRAM BOT & BÁO CÁO TỰ ĐỘNG 09:00 AM */}
+        <Card className="p-6 md:p-7 rounded-3xl border border-sky-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
+          <div className="flex items-start gap-4 pb-4 border-b border-white/10">
+            <div className="p-3 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-500/30 shrink-0">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <span>Tích Hợp Telegram Bot Báo Cáo 09:00 AM</span>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  Telegram API
+                </span>
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Nhập Telegram Bot Token & Chat ID (Kênh / Nhóm) để nhận báo cáo đối soát AI tự động mỗi sáng lúc 09:00 AM.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  Telegram Bot Token
+                </label>
+                <input
+                  type="text"
+                  value={telegramBotToken}
+                  onChange={(e) => setTelegramBotToken(e.target.value)}
+                  placeholder="Ví dụ: 123456789:ABCdefGHIjklMNO..."
+                  className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-500 transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  Telegram Chat ID / Group ID
+                </label>
+                <input
+                  type="text"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  placeholder="Ví dụ: -100192837465 hoặc @my_channel"
+                  className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-sky-500 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-1">
+              <Button
+                type="button"
+                onClick={handleTestTelegramSend}
+                disabled={isTestingTelegram || isSavingTelegram}
+                variant="outline"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl border-sky-500/40 text-sky-300 hover:bg-sky-500/10 font-bold text-xs transition-all flex items-center justify-center gap-2"
+              >
+                <Send className="w-3.5 h-3.5 text-sky-400" />
+                {isTestingTelegram ? "Đang gửi..." : "Gửi Thử Telegram"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSaveTelegram}
+                disabled={isSavingTelegram || isTestingTelegram}
+                className="w-full sm:w-auto px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isSavingTelegram ? "Đang lưu..." : "Lưu Cấu Hình Telegram"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        {/* SECTION 2C: AI AUDIT AGENT — SO SÁNH ẢNH BIÊN BẢN VỚI SỐ LIỆU BP NHẬP */}
+        <Card className="p-6 md:p-7 rounded-3xl border border-purple-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
+          <div className="flex items-start justify-between pb-4 border-b border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>AI Audit Agent — So Sánh Ảnh với Data Nhập</span>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-purple-400" /> Gemini Vision
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  AI đọc chữ viết tay/chữ in trên Biên bản & Bill để đối soát tự động với số liệu bộ phận khai báo.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-purple-950/20 border border-purple-500/20">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-bold text-purple-200">Chọn Ngày Kiểm Tra AI:</span>
+                <input
+                  type="date"
+                  value={targetCheckDate}
+                  onChange={(e) => setTargetCheckDate(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-black/60 border border-purple-500/40 text-purple-200 font-bold text-xs focus:outline-none focus:border-purple-400 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleRunAIAudit}
+                  disabled={isRunningAIAudit}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  <Scan className="w-4 h-4" />
+                  {isRunningAIAudit ? "AI Đang Soi Ảnh..." : "🤖 Chạy AI Soi Ảnh & Đối Soát"}
+                </Button>
+
+                {aiAuditResults && (
+                  <Button
+                    type="button"
+                    onClick={handleSendTelegramAIAudit}
+                    disabled={isSendingTelegramReport}
+                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-xs shadow-lg shadow-sky-600/30 flex items-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <Send className="w-4 h-4" />
+                    {isSendingTelegramReport ? "Đang gửi..." : "📲 Báo Cáo Telegram"}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* AI Audit Findings Display */}
+            {aiAuditResults && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between text-xs font-bold px-1">
+                  <span className="text-purple-300">Kết quả đối soát AI Gemini Vision ({targetCheckDate}):</span>
+                  <span className="text-gray-400">Tổng số: {aiAuditResults.length} nhà hàng</span>
+                </div>
+
+                {aiAuditResults.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-black/40 border border-white/10 text-center text-xs text-gray-400">
+                    Chưa tìm thấy báo cáo voucher nào cho ngày đã chọn.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {aiAuditResults.map((item) => (
+                      <div
+                        key={item.restaurantId}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          item.status === "MATCH"
+                            ? "bg-emerald-950/20 border-emerald-500/30"
+                            : item.status === "MISMATCH"
+                            ? "bg-red-950/30 border-red-500/40"
+                            : "bg-amber-950/20 border-amber-500/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-2.5">
+                          <div className="flex items-center gap-2">
+                            {item.status === "MATCH" ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                            ) : item.status === "MISMATCH" ? (
+                              <AlertCircle className="w-5 h-5 text-red-400 animate-pulse" />
+                            ) : (
+                              <AlertTriangle className="w-5 h-5 text-amber-400" />
+                            )}
+                            <span className="font-extrabold text-sm text-white">{item.restaurantName}</span>
+                          </div>
+
+                          <span
+                            className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
+                              item.status === "MATCH"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                : item.status === "MISMATCH"
+                                ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            }`}
+                          >
+                            {item.status === "MATCH"
+                              ? "🟢 KHỚP 100%"
+                              : item.status === "MISMATCH"
+                              ? "🚨 PHÁT HIỆN SAI LỆCH"
+                              : "⚠️ THIẾU ẢNH MINH CHỨNG"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2">
+                          <div className="p-2 rounded-xl bg-black/40 border border-white/5">
+                            <span className="text-[10px] text-gray-400 block font-medium">Phiếu Thu Về (BP)</span>
+                            <span className="font-black text-amber-300">{item.dataEntered.postedBills}</span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-black/40 border border-white/5">
+                            <span className="text-[10px] text-gray-400 block font-medium">AI Đọc Trên Ảnh</span>
+                            <span className="font-black text-purple-300">
+                              {item.aiExtracted.postedBills !== undefined && item.aiExtracted.postedBills !== null
+                                ? item.aiExtracted.postedBills
+                                : "Chưa bóc tách"}
+                            </span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-black/40 border border-white/5">
+                            <span className="text-[10px] text-gray-400 block font-medium">Tổng Phát Hành (BP)</span>
+                            <span className="font-black text-amber-300">{item.dataEntered.totalIssued}</span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-black/40 border border-white/5">
+                            <span className="text-[10px] text-gray-400 block font-medium">AI Đọc Phát Hành</span>
+                            <span className="font-black text-purple-300">
+                              {item.aiExtracted.totalIssued !== undefined && item.aiExtracted.totalIssued !== null
+                                ? item.aiExtracted.totalIssued
+                                : "Chưa bóc tách"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {item.discrepancies.length > 0 && (
+                          <div className="mt-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 space-y-1">
+                            {item.discrepancies.map((disc, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 font-semibold">
+                                <span>🚨</span> <span>{disc}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <p className="text-[11px] text-gray-400 italic mt-2">
+                          📝 {item.summaryNote}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </Card>
 
         {/* SECTION 3: CẢNH BÁO CHƯA CẬP NHẬT SỐ LIỆU NGÀY */}
