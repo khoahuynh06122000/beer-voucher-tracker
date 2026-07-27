@@ -135,8 +135,15 @@ function vitePluginManusDebugCollector(): Plugin {
               const data = await resp.json();
               const fields = data.fields || {};
               const postedBillsVal = Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0);
-              if (postedBillsVal > 0) {
-                updated.push({ name: r.name, postedBills: postedBillsVal });
+              const totalIssuedVal = Number(fields.totalIssued?.integerValue || fields.totalIssued?.doubleValue || 0);
+              const bakeryVal = Number(fields.bakeryCoupons?.integerValue || fields.bakeryCoupons?.doubleValue || 0);
+              const beerVal = Number(fields.beerCoupons?.integerValue || fields.beerCoupons?.doubleValue || 0);
+              const potatoVal = Number(fields.potatoCoupons?.integerValue || fields.potatoCoupons?.doubleValue || 0);
+              const updatedAtVal = fields.updatedAt?.stringValue;
+
+              // If record exists and has timestamp or voucher data, it is UPDATED
+              if (updatedAtVal || postedBillsVal > 0 || totalIssuedVal > 0 || bakeryVal > 0 || beerVal > 0 || potatoVal > 0) {
+                updated.push({ name: r.name, postedBills: postedBillsVal || bakeryVal || 1 });
                 continue;
               }
             }
@@ -308,6 +315,64 @@ function vitePluginManusDebugCollector(): Plugin {
         }
       }, 60000); // Check every minute
 
+      // Server-side deduplication map to prevent double-sending MS Teams reports
+      const recentlySentProxyMap = new Map<string, number>();
+
+      // GET/POST /api/cron/trigger-09am: Triggers live check & sends 09:00 AM missing report to MS Teams
+      server.middlewares.use("/api/cron/trigger-09am", async (req, res) => {
+        try {
+          const card = await getLiveMissingStatus();
+          let sentSuccess = false;
+          let message = "";
+
+          const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
+          const settingResp = await fetch(settingUrl);
+          if (settingResp.ok) {
+            const settingData = await settingResp.json();
+            const webhookUrl = settingData.fields?.value?.stringValue;
+            if (webhookUrl && webhookUrl.trim()) {
+              const teamsWrappedPayload = {
+                type: "message",
+                attachments: [{ contentType: "application/vnd.microsoft.card.adaptive", contentUrl: null, content: card }]
+              };
+              const isPowerAutomate =
+                webhookUrl.includes("logic.azure.com") ||
+                webhookUrl.includes("powerautomate") ||
+                webhookUrl.includes("powerplatform") ||
+                webhookUrl.includes("flow.microsoft.com");
+
+              const payloadsToTry = isPowerAutomate ? [card, teamsWrappedPayload] : [teamsWrappedPayload, card];
+              for (const payload of payloadsToTry) {
+                try {
+                  const resp = await fetch(webhookUrl.trim(), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                  });
+                  if (resp.ok || resp.status === 200 || resp.status === 202) {
+                    sentSuccess = true;
+                    message = "Đã kích hoạt và gửi báo cáo tiến độ 9:00 AM thành công lên kênh MS Teams!";
+                    break;
+                  }
+                } catch (e: any) {
+                  message = "Lỗi khi gửi webhook: " + e.message;
+                }
+              }
+            } else {
+              message = "Chưa cấu hình Webhook URL MS Teams trong Cài đặt Admin.";
+            }
+          } else {
+            message = "Không thể lấy cấu hình Webhook từ Firestore.";
+          }
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: sentSuccess, message, card }));
+        } catch (e: any) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      });
+
       // GET/POST /api/cron/check-missing-reports: Returns daily missing report Adaptive Card for Power Automate / cron jobs
       server.middlewares.use("/api/cron/check-missing-reports", async (req, res) => {
         try {
@@ -339,6 +404,19 @@ function vitePluginManusDebugCollector(): Plugin {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ success: false, message: "Thiếu URL webhook hoặc dữ liệu báo cáo" }));
               return;
+            }
+
+            // Deduplication Guard: Check if same report was proxy-sent within last 15 seconds
+            const proxyKey = record ? `${record.restaurantName}_${record.date}` : (customPayload ? JSON.stringify(customPayload).slice(0, 50) : "");
+            const nowTime = Date.now();
+            if (proxyKey && (nowTime - (recentlySentProxyMap.get(proxyKey) || 0) < 15000)) {
+              console.log("[SERVER PROXY] Deduplicated duplicate MS Teams send for:", proxyKey);
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ success: true, message: "Đã gửi báo cáo & phân tích tự động lên MS Teams thành công! (Deduplicated)" }));
+              return;
+            }
+            if (proxyKey) {
+              recentlySentProxyMap.set(proxyKey, nowTime);
             }
 
             if (customPayload) {
@@ -754,6 +832,11 @@ function vitePluginManusDebugCollector(): Plugin {
         });
       });
     },
+    configurePreview(server: any) {
+      if (this && typeof this.configureServer === "function") {
+        this.configureServer(server);
+      }
+    }
   };
 }
 

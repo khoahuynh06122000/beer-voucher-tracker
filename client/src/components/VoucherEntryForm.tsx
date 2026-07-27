@@ -37,6 +37,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
   const [billImages, setBillImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const activeRestaurant = RESTAURANTS.find((r) => r.id === selectedRestaurantId) || {
     id: selectedRestaurantId,
@@ -114,6 +115,10 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (submittingRef.current || isSubmitting) {
+      return;
+    }
+
     if (isMaisonKayser) {
       if (!bakeryCoupons) {
         toast.error("Vui lòng nhập số liệu voucher bánh.");
@@ -126,6 +131,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
       }
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       const savedRecord = await upsertVoucher({
@@ -145,18 +151,18 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
       toast.success(`Đã lưu thành công số liệu ngày ${date} cho ${restaurantName}!`);
 
       // Trigger automatic MS Teams Report & Analysis send
-      sendStoredMSTeamsReport(savedRecord).then((res) => {
-        if (res.success) {
-          toast.success("📢 " + res.message);
-        } else {
-          console.warn("MS Teams send note:", res.message);
-        }
-      });
+      const res = await sendStoredMSTeamsReport(savedRecord);
+      if (res.success) {
+        toast.success("📢 " + res.message);
+      } else {
+        console.warn("MS Teams send note:", res.message);
+      }
 
       onSuccess?.(date);
     } catch (err: any) {
       toast.error(err.message || "Không thể lưu số liệu voucher.");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

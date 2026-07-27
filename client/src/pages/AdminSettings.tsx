@@ -172,6 +172,26 @@ export default function AdminSettings() {
     }
   };
 
+  const handleTrigger09amCron = async () => {
+    setIsSendingAlert(true);
+    try {
+      const res = await fetch("/api/cron/trigger-09am", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("⚡ " + data.message);
+        // Refresh status
+        const newStatus = await checkUnupdatedRestaurants();
+        setStatusCheck(newStatus);
+      } else {
+        toast.error("Không thể kích hoạt: " + (data.message || "Lỗi kết nối Webhook"));
+      }
+    } catch (err: any) {
+      toast.error("Lỗi kích hoạt 9:00 AM: " + err.message);
+    } finally {
+      setIsSendingAlert(false);
+    }
+  };
+
   const handleCopyCardSchema = () => {
     if (!statusCheck) return;
     const now = new Date();
@@ -419,17 +439,27 @@ export default function AdminSettings() {
                 className="w-full sm:w-auto px-4 py-2.5 rounded-xl border-white/20 text-gray-300 hover:bg-white/10 text-xs font-semibold flex items-center justify-center gap-2"
               >
                 {copiedJson ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                {copiedJson ? "Đã Sao Chép JSON Thẻ" : "📋 Copy Thẻ Thích Nghi JSON (Power Automate)"}
+                {copiedJson ? "Đã Sao Chép JSON Thẻ" : "📋 Copy Thẻ JSON (Power Automate)"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleTrigger09amCron}
+                disabled={isSendingAlert || !webhookUrl}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Clock className="w-4 h-4" />
+                {isSendingAlert ? "Đang gửi..." : "⚡ Kích Hoạt Progress Report 9h Sáng Ngay"}
               </Button>
 
               <Button
                 type="button"
                 onClick={handleSendMissingAlert}
                 disabled={isSendingAlert || !webhookUrl}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Bell className="w-4 h-4" />
-                {isSendingAlert ? "Đang gửi cảnh báo..." : "🔔 Gửi Cảnh Báo Nhắc Nhở Ngay Qua MS Teams"}
+                {isSendingAlert ? "Đang gửi..." : "🔔 Gửi Cảnh Báo Nhắc Nhở Ngay"}
               </Button>
             </div>
           </div>

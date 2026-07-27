@@ -54,6 +54,8 @@ export function generateAnalysisText(record: {
   return `${assessment}\n\n**Chi Tiết Số Liệu Tổng Quan:**\n• **Thu về (Đăng bill):** ${record.postedBills} phiếu\n• **Phát hành:** ${record.totalIssued} phiếu\n• **Hủy bỏ:** ${record.cancelled} phiếu`;
 }
 
+const lastSentCache = new Map<string, number>();
+
 export async function sendMSTeamsReport(
   webhookUrl: string,
   record: {
@@ -72,6 +74,16 @@ export async function sendMSTeamsReport(
   if (!webhookUrl || !webhookUrl.trim()) {
     return { success: false, message: "Chưa cấu hình URL MS Teams Webhook trong cài đặt Admin." };
   }
+
+  // Deduplication check: Do not send duplicate report for same restaurant and date within 15 seconds
+  const cacheKey = `${record.restaurantName}_${record.date}`;
+  const now = Date.now();
+  const lastTime = lastSentCache.get(cacheKey) || 0;
+  if (now - lastTime < 15000) {
+    console.log("[MS TEAMS] Duplicate report suppressed for:", cacheKey);
+    return { success: true, message: "Đã gửi báo cáo & phân tích tự động lên MS Teams thành công!" };
+  }
+  lastSentCache.set(cacheKey, now);
 
   // Primary: Send via server-side proxy endpoint to bypass browser CORS & try multiple Teams schemas
   try {
