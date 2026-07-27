@@ -53,6 +53,11 @@ export default function AdminSettings() {
   const [copiedJson, setCopiedJson] = useState(false);
 
   // Missing status state
+  const [targetCheckDate, setTargetCheckDate] = useState<string>(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return getLocalDateString(yesterday);
+  });
   const [statusCheck, setStatusCheck] = useState<{
     checkDate: string;
     missing: RestaurantStatus[];
@@ -203,7 +208,7 @@ export default function AdminSettings() {
 
     setIsSendingAlert(true);
     try {
-      const result = await sendMissingReportAlert(webhookUrl.trim(), statusCheck?.checkDate);
+      const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
       if (result.success) {
         toast.success("🔔 " + result.message);
       } else {
@@ -230,15 +235,15 @@ export default function AdminSettings() {
 
       if (data && data.success) {
         toast.success("⚡ " + data.message);
-        const newStatus = await checkUnupdatedRestaurants();
+        const newStatus = await checkUnupdatedRestaurants(targetCheckDate);
         setStatusCheck(newStatus);
       } else if (data && data.message) {
         toast.error("Không thể kích hoạt: " + data.message);
       } else {
-        const result = await sendMissingReportAlert();
+        const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
         if (result.success) {
           toast.success("⚡ " + result.message);
-          const newStatus = await checkUnupdatedRestaurants();
+          const newStatus = await checkUnupdatedRestaurants(targetCheckDate);
           setStatusCheck(newStatus);
         } else {
           toast.error("Không thể kích hoạt: " + result.message);
@@ -246,10 +251,10 @@ export default function AdminSettings() {
       }
     } catch (err: any) {
       try {
-        const result = await sendMissingReportAlert();
+        const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
         if (result.success) {
           toast.success("⚡ " + result.message);
-          const newStatus = await checkUnupdatedRestaurants();
+          const newStatus = await checkUnupdatedRestaurants(targetCheckDate);
           setStatusCheck(newStatus);
         } else {
           toast.error("Lỗi kích hoạt: " + result.message);
@@ -286,15 +291,14 @@ export default function AdminSettings() {
       const headers = [
         "STT",
         "Ngày",
-        "Mã Nhà Hàng",
         "Tên Nhà Hàng",
         "Phiếu Thu Về (Đăng Bill)",
         "Tổng Phát Hành",
         "Tỷ Lệ Quy Đổi (%)",
         "Coupon Hủy",
         "Voucher Bánh (Maison Kayser)",
-        "Lít Bia (Mẫu Cũ)",
-        "Khoai Tây",
+        "Số lượng bia xuất",
+        "Số lượng Khoai Tây xuất",
         "Mã Bill / POS",
         "Số Lượng Ảnh Bill",
         "Trạng Thái Ảnh Minh Chứng",
@@ -314,7 +318,6 @@ export default function AdminSettings() {
         return [
           index + 1,
           rec.date,
-          rec.restaurantId,
           rec.restaurantName,
           rec.postedBills || 0,
           rec.totalIssued || 0,
@@ -559,25 +562,46 @@ export default function AdminSettings() {
 
           {/* Status Live Preview */}
           <div className="p-4 rounded-2xl bg-[#08090f] border border-white/10 space-y-3">
-            <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300">
-                <Clock className="w-4 h-4 text-amber-400" />
-                Ngày kiểm tra: {statusCheck?.checkDate || "Đang quét..."}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-300">Chọn Ngày Kiểm Tra:</span>
+                <input
+                  type="date"
+                  value={targetCheckDate}
+                  onChange={async (e) => {
+                    const newDate = e.target.value;
+                    setTargetCheckDate(newDate);
+                    if (newDate) {
+                      setIsCheckingStatus(true);
+                      try {
+                        const res = await checkUnupdatedRestaurants(newDate);
+                        setStatusCheck(res);
+                      } catch (err) {
+                        console.error("Lỗi kiểm tra ngày:", err);
+                      } finally {
+                        setIsCheckingStatus(false);
+                      }
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-amber-200 font-bold text-xs focus:outline-none focus:border-amber-400 cursor-pointer"
+                />
               </div>
+
               <Button
                 onClick={async () => {
                   setIsCheckingStatus(true);
-                  const res = await checkUnupdatedRestaurants();
+                  const res = await checkUnupdatedRestaurants(targetCheckDate);
                   setStatusCheck(res);
                   setIsCheckingStatus(false);
-                  toast.success("Đã làm mới dữ liệu!");
+                  toast.success(`Đã cập nhật dữ liệu ngày ${targetCheckDate}!`);
                 }}
                 disabled={isCheckingStatus}
                 variant="ghost"
                 size="sm"
-                className="text-xs text-gray-400 hover:text-white h-7"
+                className="text-xs text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl h-8 px-3"
               >
-                {isCheckingStatus ? "Đang quét..." : "🔄 Làm mới"}
+                {isCheckingStatus ? "Đang quét..." : "🔄 Làm mới dữ liệu"}
               </Button>
             </div>
 
