@@ -37,7 +37,7 @@ import {
   RestaurantStatus
 } from "@/lib/firestoreService";
 import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
-import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage } from "@/lib/telegramService";
+import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage, registerTelegramWebhook } from "@/lib/telegramService";
 import { runAIAuditForDate, formatTelegramAIAuditReport, AIAuditResult } from "@/lib/aiAuditAgent";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
@@ -196,9 +196,34 @@ export default function AdminSettings() {
     setIsSavingTelegram(true);
     try {
       await saveTelegramSettings(telegramBotToken, telegramChatId);
-      toast.success("Lưu cấu hình Telegram Bot & Chat ID thành công!");
+      const webhookRes = await registerTelegramWebhook(telegramBotToken);
+      if (webhookRes.success) {
+        toast.success("Lưu cấu hình & Kích hoạt Telegram Webhook thành công! Bot đã sẵn sàng nhận lệnh chat đối soát.");
+      } else {
+        toast.success("Lưu cấu hình Telegram thành công! (Lưu ý Webhook: " + webhookRes.message + ")");
+      }
     } catch (err: any) {
       toast.error("Lỗi khi lưu Telegram: " + err.message);
+    } finally {
+      setIsSavingTelegram(false);
+    }
+  };
+
+  const handleActivateWebhook = async () => {
+    if (!telegramBotToken.trim()) {
+      toast.error("Vui lòng nhập Telegram Bot Token trước!");
+      return;
+    }
+    setIsSavingTelegram(true);
+    try {
+      const res = await registerTelegramWebhook(telegramBotToken);
+      if (res.success) {
+        toast.success("🎉 " + res.message);
+      } else {
+        toast.error("Lỗi Webhook: " + res.message);
+      }
+    } catch (err: any) {
+      toast.error("Lỗi kích hoạt Webhook: " + err.message);
     } finally {
       setIsSavingTelegram(false);
     }
@@ -223,6 +248,39 @@ export default function AdminSettings() {
     } finally {
       setIsTestingTelegram(false);
     }
+  };
+
+  const setDatePreset = (daysAgo: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const dateStr = d.toISOString().split("T")[0];
+    setTargetCheckDate(dateStr);
+  };
+
+  const handleToggleManualStatus = (restaurantId: string) => {
+    if (!aiAuditResults) return;
+    setAIAuditResults((prev) => {
+      if (!prev) return null;
+      return prev.map((item) => {
+        if (item.restaurantId === restaurantId) {
+          const nextStatus = item.status === "MATCH" ? "MISMATCH" : "MATCH";
+          return {
+            ...item,
+            status: nextStatus,
+            summaryNote:
+              nextStatus === "MATCH"
+                ? "Đã xác nhận khớp thủ công bởi Admin."
+                : "Đánh dấu sai lệch bởi Admin.",
+            discrepancies:
+              nextStatus === "MATCH"
+                ? []
+                : ["⚠️ Admin đánh dấu nghi vấn cần kiểm tra lại."],
+          };
+        }
+        return item;
+      });
+    });
+    toast.info("Đã cập nhật trạng thái đối soát thủ công!");
   };
 
   const handleRunAIAudit = async () => {
@@ -707,10 +765,24 @@ export default function AdminSettings() {
                 <li className="text-amber-300 font-bold pt-1">
                   <b>Khắc phục lỗi "chat not found":</b> Bắt buộc phải mở khung chat với Bot vừa tạo trên Telegram và bấm nút <code className="bg-amber-500/20 px-1 py-0.5 rounded text-amber-200">/start</code> (Bắt đầu) trước 1 lần!
                 </li>
+                <li className="text-emerald-300 font-bold pt-1">
+                  <b>💬 Nhắn tin trực tiếp với Bot:</b> Nhắn cho Bot bất kỳ câu lệnh nào như <i>"đối soát ngày 2026-07-26"</i>, <i>"đối soát 26/07"</i>, <i>"đối soát hôm qua"</i> hoặc <i>"đối soát hôm nay"</i>. Bot sẽ tự động trả kết quả đối soát về khung chat cho bạn!
+                </li>
               </ol>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-1">
+              <Button
+                type="button"
+                onClick={handleActivateWebhook}
+                disabled={isSavingTelegram}
+                variant="outline"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl border-purple-500/50 bg-purple-950/30 text-purple-300 hover:bg-purple-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2"
+              >
+                <Bot className="w-3.5 h-3.5 text-purple-400" />
+                ⚡ Kích Hoạt Nhận Lệnh Chat
+              </Button>
+
               <Button
                 type="button"
                 onClick={handleTestTelegramSend}
@@ -757,16 +829,42 @@ export default function AdminSettings() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-purple-950/20 border border-purple-500/20">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-purple-400" />
-                <span className="text-xs font-bold text-purple-200">Chọn Ngày Kiểm Tra AI:</span>
+            {/* Date selection bar & Quick presets */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-4 rounded-2xl bg-purple-950/20 border border-purple-500/20">
+              <div className="flex flex-wrap items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-400 shrink-0" />
+                <span className="text-xs font-bold text-purple-200 shrink-0">Ngày Chọn Đối Soát:</span>
                 <input
                   type="date"
                   value={targetCheckDate}
                   onChange={(e) => setTargetCheckDate(e.target.value)}
                   className="px-3 py-1.5 rounded-xl bg-black/60 border border-purple-500/40 text-purple-200 font-bold text-xs focus:outline-none focus:border-purple-400 cursor-pointer"
                 />
+
+                {/* Quick Date Presets */}
+                <div className="flex items-center gap-1 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setDatePreset(0)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/30 text-purple-300 font-medium text-[11px] transition-all"
+                  >
+                    Hôm nay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDatePreset(1)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/30 text-purple-300 font-medium text-[11px] transition-all"
+                  >
+                    Hôm qua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDatePreset(2)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/30 text-purple-300 font-medium text-[11px] transition-all"
+                  >
+                    2 ngày trước
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -777,7 +875,7 @@ export default function AdminSettings() {
                   className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all disabled:opacity-50"
                 >
                   <Scan className="w-4 h-4" />
-                  {isRunningAIAudit ? "AI Đang Soi Ảnh..." : "🤖 Chạy AI Soi Ảnh & Đối Soát"}
+                  {isRunningAIAudit ? "AI Đang Soi Ảnh..." : "🔍 Chạy Đối Soát AI Tại Chỗ"}
                 </Button>
 
                 {aiAuditResults && (
@@ -831,21 +929,32 @@ export default function AdminSettings() {
                             <span className="font-extrabold text-sm text-white">{item.restaurantName}</span>
                           </div>
 
-                          <span
-                            className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
-                              item.status === "MATCH"
-                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${
+                                item.status === "MATCH"
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                  : item.status === "MISMATCH"
+                                  ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                  : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                              }`}
+                            >
+                              {item.status === "MATCH"
+                                ? "🟢 KHỚP 100%"
                                 : item.status === "MISMATCH"
-                                ? "bg-red-500/20 text-red-300 border-red-500/30"
-                                : "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                            }`}
-                          >
-                            {item.status === "MATCH"
-                              ? "🟢 KHỚP 100%"
-                              : item.status === "MISMATCH"
-                              ? "🚨 PHÁT HIỆN SAI LỆCH"
-                              : "⚠️ THIẾU ẢNH MINH CHỨNG"}
-                          </span>
+                                ? "🚨 PHÁT HIỆN SAI LỆCH"
+                                : "⚠️ THIẾU ẢNH MINH CHỨNG"}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleManualStatus(item.restaurantId)}
+                              title="Chuyển đổi trạng thái Khớp / Sai Lệch thủ công"
+                              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[10px] font-bold transition-all"
+                            >
+                              🔄 Đổi Trạng Thái
+                            </button>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2">

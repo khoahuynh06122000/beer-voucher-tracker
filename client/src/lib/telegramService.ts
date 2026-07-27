@@ -79,3 +79,35 @@ export async function sendTelegramMessage(
     };
   }
 }
+
+export async function registerTelegramWebhook(
+  customBotToken?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    let token = customBotToken?.trim();
+    if (!token) {
+      const saved = await getTelegramSettings();
+      token = saved.botToken;
+    }
+    if (!token) {
+      return { success: false, message: "Chưa nhập Bot Token!" };
+    }
+
+    const currentOrigin = window.location.origin;
+    const webhookUrl = `${currentOrigin}/api/telegram/webhook`;
+
+    const res = await fetch("/api/telegram/set-webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ botToken: token, webhookUrl }),
+    });
+
+    const data = await res.json();
+    return {
+      success: data.success,
+      message: data.message || (data.success ? "Đã kích hoạt Telegram Webhook thành công!" : "Lỗi kích hoạt Webhook"),
+    };
+  } catch (err: any) {
+    return { success: false, message: "Lỗi kết nối server: " + err.message };
+  }
+}
