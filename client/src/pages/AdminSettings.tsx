@@ -4,11 +4,43 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Beer, ArrowLeft, Settings, Link2, Bell, CheckCircle2, Save, HelpCircle, Send, AlertTriangle, Copy, Check, Clock, ShieldAlert, BookOpen } from "lucide-react";
-import { getSetting, setSetting, getLocalDateString, checkUnupdatedRestaurants, RestaurantStatus } from "@/lib/firestoreService";
+import {
+  Beer,
+  ArrowLeft,
+  Settings,
+  Link2,
+  Bell,
+  Save,
+  Send,
+  AlertTriangle,
+  Copy,
+  Check,
+  Clock,
+  BookOpen,
+  FileSpreadsheet,
+  Download,
+  Calendar,
+  Filter
+} from "lucide-react";
+import {
+  getSetting,
+  setSetting,
+  getLocalDateString,
+  checkUnupdatedRestaurants,
+  getVouchersByDateRange,
+  RestaurantStatus
+} from "@/lib/firestoreService";
 import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
+
+const RESTAURANT_OPTIONS = [
+  { id: "all", name: "Tất Cả Nhà Hàng" },
+  { id: "lehoibia", name: "Lễ Hội Bia" },
+  { id: "1901", name: "Nhà Hàng 1901" },
+  { id: "beerplaza", name: "Beer Plaza" },
+  { id: "maisonkayser", name: "Maison Kayser" },
+];
 
 export default function AdminSettings() {
   const { user, loading, isAuthenticated } = useAuth();
@@ -28,6 +60,18 @@ export default function AdminSettings() {
     totalRestaurants: number;
   } | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
+  // Comprehensive Export State
+  const [exportStartDate, setExportStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [exportEndDate, setExportEndDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [exportRestaurant, setExportRestaurant] = useState<string>("all");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,7 +124,7 @@ export default function AdminSettings() {
           </div>
           <h2 className="text-xl font-extrabold text-white">Không Có Quyền Truy Cập</h2>
           <p className="text-xs text-gray-400">
-            Bạn cần tài khoản quản trị viên (Admin) để thiết lập tích hợp báo cáo MS Teams.
+            Bạn cần tài khoản quản trị viên (Admin) để thiết lập hệ thống.
           </p>
           <Button
             onClick={() => setLocation("/")}
@@ -191,7 +235,6 @@ export default function AdminSettings() {
       } else if (data && data.message) {
         toast.error("Không thể kích hoạt: " + data.message);
       } else {
-        // Client fallback using configured webhook
         const result = await sendMissingReportAlert();
         if (result.success) {
           toast.success("⚡ " + result.message);
@@ -230,6 +273,82 @@ export default function AdminSettings() {
     setTimeout(() => setCopiedJson(false), 3000);
   };
 
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const data = await getVouchersByDateRange(exportRestaurant, exportStartDate, exportEndDate);
+      if (!data || data.length === 0) {
+        toast.error("Không tìm thấy dữ liệu báo cáo trong khoảng thời gian đã chọn!");
+        setIsExporting(false);
+        return;
+      }
+
+      const headers = [
+        "STT",
+        "Ngày",
+        "Mã Nhà Hàng",
+        "Tên Nhà Hàng",
+        "Phiếu Thu Về (Đăng Bill)",
+        "Tổng Phát Hành",
+        "Tỷ Lệ Quy Đổi (%)",
+        "Coupon Hủy",
+        "Voucher Bánh (Maison Kayser)",
+        "Lít Bia (Mẫu Cũ)",
+        "Khoai Tây",
+        "Mã Bill / POS",
+        "Số Lượng Ảnh Bill",
+        "Trạng Thái Ảnh Minh Chứng",
+        "Người Nhập",
+        "Thời Gian Cập Nhật"
+      ];
+
+      const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      };
+
+      const rows = data.map((rec, index) => {
+        const imgCount = rec.billImages ? rec.billImages.length : 0;
+        const hasImg = imgCount > 0 ? `Đã có ${imgCount} ảnh` : "Chưa đính kèm ảnh";
+        return [
+          index + 1,
+          rec.date,
+          rec.restaurantId,
+          rec.restaurantName,
+          rec.postedBills || 0,
+          rec.totalIssued || 0,
+          `${rec.utilizationRate || 0}%`,
+          rec.cancelled || 0,
+          rec.bakeryCoupons || 0,
+          rec.beerCoupons || 0,
+          rec.potatoCoupons || 0,
+          rec.billNumber || "",
+          imgCount,
+          hasImg,
+          rec.createdBy || "Chưa rõ",
+          rec.updatedAt ? new Date(rec.updatedAt).toLocaleString("vi-VN") : ""
+        ].map(escapeCsv).join(",");
+      });
+
+      const csvContent = "\uFEFF" + [headers.map(escapeCsv).join(","), ...rows].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Bao_Cao_Phan_Tich_Voucher_${exportStartDate}_den_${exportEndDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`🎉 Tải về thành công ${data.length} dòng báo cáo Excel (.csv)!`);
+    } catch (err: any) {
+      toast.error("Lỗi khi xuất báo cáo Excel: " + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-[#07090e] text-gray-100 flex flex-col overflow-x-hidden">
@@ -250,7 +369,7 @@ export default function AdminSettings() {
             </div>
             <div>
               <h1 className="text-base font-extrabold text-white leading-none">Cài Đặt Quản Trị Hệ Thống</h1>
-              <p className="text-xs text-amber-300/80 mt-0.5 font-medium">MS Teams Integration Settings (Firestore)</p>
+              <p className="text-xs text-amber-300/80 mt-0.5 font-medium">Báo Cáo MS Teams & Xuất Dữ Liệu Excel</p>
             </div>
           </div>
 
@@ -262,7 +381,7 @@ export default function AdminSettings() {
               className="text-xs font-bold gap-1.5 rounded-xl border-emerald-500/30 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
             >
               <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-              Xem Hướng Dẫn / In PDF
+              Xem Hướng Dẫn
             </Button>
 
             <Button
@@ -278,16 +397,96 @@ export default function AdminSettings() {
         </div>
       </header>
 
-      <main className="relative z-10 container py-10 flex-1 max-w-3xl">
-        <Card className="p-6 md:p-8 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-8 text-white">
-          <div className="flex items-start gap-4 pb-6 border-b border-white/10">
+      <main className="relative z-10 container py-8 flex-1 max-w-3xl space-y-6">
+
+        {/* SECTION 1: XUẤT BÁO CÁO EXCEL TOÀN DIỆN */}
+        <Card className="p-6 md:p-7 rounded-3xl border border-emerald-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
+          <div className="flex items-start gap-4 pb-4 border-b border-white/10">
+            <div className="p-3 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+              <FileSpreadsheet className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <span>Phân Tích & Xuất Báo Cáo Excel Toàn Diện</span>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  File .XLSX / .CSV
+                </span>
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Tải toàn bộ số liệu báo cáo voucher, số lượng bill, tỷ lệ quy đổi và đối soát ảnh minh chứng về máy tính.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-400 mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                Từ Ngày:
+              </label>
+              <input
+                type="date"
+                value={exportStartDate}
+                onChange={(e) => setExportStartDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-400 mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                Đến Ngày:
+              </label>
+              <input
+                type="date"
+                value={exportEndDate}
+                onChange={(e) => setExportEndDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-400 mb-1 flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5 text-emerald-400" />
+                Nhà Hàng:
+              </label>
+              <select
+                value={exportRestaurant}
+                onChange={(e) => setExportRestaurant(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+              >
+                {RESTAURANT_OPTIONS.map((r) => (
+                  <option key={r.id} value={r.id} className="bg-slate-900 text-white">
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-1 flex justify-end">
+            <Button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              {isExporting ? "Đang xuất báo cáo..." : "Tải Báo Cáo Excel Về Máy"}
+            </Button>
+          </div>
+        </Card>
+
+        {/* SECTION 2: TÍCH HỢP MS TEAMS WEBHOOK */}
+        <Card className="p-6 md:p-7 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
+          <div className="flex items-start gap-4 pb-4 border-b border-white/10">
             <div className="p-3 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
               <Link2 className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">Tích Hợp MS Teams Webhook</h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Cấu hình webhook để tự động nhận thẻ báo cáo hiệu suất voucher mỗi ngày.
+              <h2 className="text-lg font-black text-white">Tích Hợp MS Teams Webhook</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Đường dẫn webhook nhận thẻ báo cáo hiệu suất tự động hàng ngày.
               </p>
             </div>
           </div>
@@ -297,10 +496,10 @@ export default function AdminSettings() {
               e.preventDefault();
               handleSave();
             }}
-            className="space-y-6"
+            className="space-y-4"
           >
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 MS Teams Incoming Webhook URL
               </label>
               <input
@@ -308,96 +507,62 @@ export default function AdminSettings() {
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 placeholder="https://outlook.webhook.office.com/webhookb2/..."
-                className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-foreground font-mono text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-all"
                 disabled={isLoadingSetting}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Đường dẫn kết nối bảo mật trực tiếp đến kênh thông báo MS Teams của doanh nghiệp.
-              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-border/80 space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                <HelpCircle className="w-4 h-4 text-amber-600" />
-                Hướng dẫn lấy Webhook URL trên Microsoft Teams:
-              </h4>
-              <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside pl-1">
-                <li>Mở kênh MS Teams bạn muốn nhận thông báo báo cáo.</li>
-                <li>Nhấn vào biểu tượng ba chấm (...) bên cạnh tên kênh và chọn <strong>Connectors</strong> (Đầu nối).</li>
-                <li>Tìm kiếm <strong>Incoming Webhook</strong> và chọn <strong>Configure</strong>.</li>
-                <li>Đặt tên connector (VD: <em>Beer Voucher Bot</em>), tải logo nếu muốn và nhấn <strong>Create</strong>.</li>
-                <li>Sao chép đường dẫn URL được cấp và dán vào ô trên.</li>
-              </ol>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-1">
               <Button
                 type="button"
                 onClick={handleTestSend}
                 disabled={isTesting || isSaving || isLoadingSetting}
                 variant="outline"
-                className="w-full sm:w-auto px-5 py-2.5 rounded-lg border-blue-500/40 text-blue-400 hover:bg-blue-500/10 font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl border-blue-500/40 text-blue-300 hover:bg-blue-500/10 font-bold text-xs transition-all flex items-center justify-center gap-2"
               >
-                <Send className="w-4 h-4 text-blue-400" />
-                {isTesting ? "Đang gửi thử..." : "Thử Gửi Báo Cáo Mẫu Qua MS Teams"}
+                <Send className="w-3.5 h-3.5 text-blue-400" />
+                {isTesting ? "Đang gửi..." : "Thử Gửi Mẫu"}
               </Button>
 
               <Button
                 type="submit"
                 disabled={isSaving || isTesting || isLoadingSetting}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
+                <Save className="w-3.5 h-3.5" />
                 {isSaving ? "Đang lưu..." : "Lưu Cấu Hình Webhook"}
               </Button>
             </div>
           </form>
-
-          <div className="pt-6 border-t border-border/60 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
-              <Bell className="w-4 h-4 text-purple-600" />
-              Lưu Trữ Cấu Hình Báo Cáo
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted-foreground">
-              <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Cấu hình được đồng bộ tức thì lên <strong>Firestore Settings</strong>.</span>
-              </div>
-              <div className="p-3 rounded-lg bg-background border border-border/60 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Hoàn toàn không cần máy chủ backend phụ thuộc.</span>
-              </div>
-            </div>
-          </div>
         </Card>
 
-        {/* Card Cảnh Báo Nhà Hàng Chưa Cập Nhật Số Liệu */}
-        <Card className="p-6 md:p-8 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-6 text-white mt-8">
-          <div className="flex items-start justify-between pb-6 border-b border-white/10">
+        {/* SECTION 3: CẢNH BÁO CHƯA CẬP NHẬT SỐ LIỆU NGÀY */}
+        <Card className="p-6 md:p-7 rounded-3xl border border-amber-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
+          <div className="flex items-start justify-between pb-4 border-b border-white/10">
             <div className="flex items-start gap-4">
               <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-black text-white flex flex-wrap items-center gap-2">
-                  <span>Cảnh Báo Chưa Cập Nhật Số Liệu Ngày</span>
+                <h2 className="text-lg font-black text-white flex flex-wrap items-center gap-2">
+                  <span>Cảnh Báo Nhập Liệu & Ảnh Bill</span>
                   <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
                     Tự động 9:00 Sáng
                   </span>
                 </h2>
-                <p className="text-xs text-gray-400 mt-1">
-                  Kiểm tra các nhà hàng chưa gửi báo cáo số lượng voucher của ngày trước đó và gửi nhắc nhở trực tiếp lên MS Teams.
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Theo dõi các nhà hàng chưa báo cáo hoặc thiếu ảnh minh chứng.
                 </p>
               </div>
             </div>
           </div>
 
           {/* Status Live Preview */}
-          <div className="p-5 rounded-2xl bg-[#08090f] border border-white/10 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="p-4 rounded-2xl bg-[#08090f] border border-white/10 space-y-3">
+            <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300">
                 <Clock className="w-4 h-4 text-amber-400" />
-                Trạng thái ngày: {statusCheck?.checkDate || "Đang quét..."}
+                Ngày kiểm tra: {statusCheck?.checkDate || "Đang quét..."}
               </div>
               <Button
                 onClick={async () => {
@@ -405,7 +570,7 @@ export default function AdminSettings() {
                   const res = await checkUnupdatedRestaurants();
                   setStatusCheck(res);
                   setIsCheckingStatus(false);
-                  toast.success("Đã làm mới dữ liệu kiểm tra!");
+                  toast.success("Đã làm mới dữ liệu!");
                 }}
                 disabled={isCheckingStatus}
                 variant="ghost"
@@ -417,17 +582,17 @@ export default function AdminSettings() {
             </div>
 
             {/* List breakdown */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Missing list */}
-              <div className="p-4 rounded-xl bg-red-950/30 border border-red-500/20 space-y-2">
+              <div className="p-3.5 rounded-xl bg-red-950/30 border border-red-500/20 space-y-1.5">
                 <div className="text-xs font-bold text-red-400 flex items-center justify-between">
                   <span>🔴 Chưa Cập Nhật ({statusCheck?.missing.length || 0})</span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 font-semibold">Cần Nhắc Nhở</span>
                 </div>
                 {statusCheck?.missing.length === 0 ? (
-                  <p className="text-xs text-emerald-400 italic">🟢 Tất cả nhà hàng đã cập nhật đầy đủ!</p>
+                  <p className="text-xs text-emerald-400 italic">🟢 Tất cả đã cập nhật đầy đủ!</p>
                 ) : (
-                  <ul className="text-xs text-gray-300 space-y-1.5 list-disc list-inside">
+                  <ul className="text-xs text-gray-300 space-y-1 list-disc list-inside">
                     {statusCheck?.missing.map((m) => (
                       <li key={m.restaurantId} className="font-semibold text-red-300">
                         {m.restaurantName}: <span className="text-red-400/80 font-normal">Chưa gửi báo cáo</span>
@@ -438,7 +603,7 @@ export default function AdminSettings() {
               </div>
 
               {/* Updated list */}
-              <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/20 space-y-2">
+              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/20 space-y-1.5">
                 <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
                   <span>🟢 Đã Cập Nhật ({statusCheck?.updated.length || 0})</span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 font-semibold">Hoàn Tất</span>
@@ -446,7 +611,7 @@ export default function AdminSettings() {
                 {statusCheck?.updated.length === 0 ? (
                   <p className="text-xs text-amber-400/80 italic">Chưa có nhà hàng nào cập nhật.</p>
                 ) : (
-                  <ul className="text-xs text-gray-300 space-y-1.5 list-disc list-inside">
+                  <ul className="text-xs text-gray-300 space-y-1 list-disc list-inside">
                     {statusCheck?.updated.map((u) => (
                       <li key={u.restaurantId} className="font-semibold text-emerald-300">
                         {u.restaurantName}: <span className="text-emerald-400/80 font-normal">{u.postedBills} phiếu</span>
@@ -458,75 +623,46 @@ export default function AdminSettings() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
               <Button
                 type="button"
                 onClick={handleCopyCardSchema}
                 variant="outline"
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border-white/20 text-gray-300 hover:bg-white/10 text-xs font-semibold flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-3.5 py-2 rounded-xl border-white/20 text-gray-300 hover:bg-white/10 text-xs font-semibold flex items-center justify-center gap-1.5"
               >
-                {copiedJson ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                {copiedJson ? "Đã Sao Chép JSON Thẻ" : "📋 Copy Thẻ JSON (Power Automate)"}
+                {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedJson ? "Đã Sao Chép JSON" : "📋 Copy Thẻ JSON"}
               </Button>
 
               <Button
                 type="button"
                 onClick={handleTrigger09amCron}
                 disabled={isSendingAlert || !webhookUrl}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                <Clock className="w-4 h-4" />
-                {isSendingAlert ? "Đang gửi..." : "⚡ Kích Hoạt Progress Report 9h Sáng Ngay"}
+                <Clock className="w-3.5 h-3.5" />
+                {isSendingAlert ? "Đang gửi..." : "⚡ Kích Hoạt Báo Cáo 9h Sáng"}
               </Button>
 
               <Button
                 type="button"
                 onClick={handleSendMissingAlert}
                 disabled={isSendingAlert || !webhookUrl}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                <Bell className="w-4 h-4" />
-                {isSendingAlert ? "Đang gửi..." : "🔔 Gửi Cảnh Báo Nhắc Nhở Ngay"}
+                <Bell className="w-3.5 h-3.5" />
+                {isSendingAlert ? "Đang gửi..." : "🔔 Gửi Cảnh Báo Ngay"}
               </Button>
-            </div>
-          </div>
-
-          {/* Guide for Power Automate 9:00 AM Cron */}
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
-            <h4 className="text-xs font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" />
-              Cấu Hình Tự Động 9:00 Sáng Trong Power Automate
-            </h4>
-            <div className="text-xs text-gray-300 space-y-2 leading-relaxed">
-              <p>
-                Để MS Teams tự động nhận cảnh báo nhà hàng chưa cập nhật số liệu vào đúng <strong>9:00 sáng</strong>:
-              </p>
-              <ol className="list-decimal list-inside space-y-1.5 pl-1 text-gray-300">
-                <li>
-                  Trong Power Automate, tạo luồng mới chọn trigger <strong>Lịch trình (Recurrence)</strong>.
-                </li>
-                <li>
-                  Đặt Tần suất: <strong>1 Ngày</strong>, Giờ chạy: <strong>09:00 AM</strong>.
-                </li>
-                <li>
-                  Thêm hành động <strong>HTTP (GET)</strong> gọi đến API ứng dụng:
-                  <code className="block mt-1 p-2 rounded bg-black/60 font-mono text-[11px] text-amber-300 border border-amber-500/30 select-all overflow-x-auto">
-                    GET https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app/api/cron/check-missing-reports
-                  </code>
-                </li>
-                <li>
-                  Thêm hành động <strong>Đăng thẻ trong một cuộc trò chuyện hoặc kênh</strong> (Post card in a chat or channel) chọn kênh <strong>PHỐI HỢP KẾ TOÁN - CỤM BEER</strong> và dán kết quả <code>Thẻ thích nghi</code> từ bước HTTP vào.
-                </li>
-              </ol>
             </div>
           </div>
         </Card>
 
       </main>
 
-      <footer className="border-t border-border bg-card/50 py-6 text-center text-xs text-muted-foreground">
+      <footer className="border-t border-border bg-card/50 py-5 text-center text-xs text-muted-foreground">
         Hệ Thống Quản Lý Voucher Bia © 2026. Tất cả quyền được bảo lưu.
       </footer>
     </div>
   );
 }
+
