@@ -357,6 +357,18 @@ function vitePluginManusDebugCollector(): Plugin {
             const data = await resp.json();
             if (!resp.ok || !data.ok) {
               console.error(`[TELEGRAM REPLY FAIL] ChatId: ${chatId}:`, data);
+              // Fallback to plain text if HTML parsing fails
+              if (data.description && data.description.includes("parse")) {
+                const plainText = replyHtml.replace(/<[^>]+>/g, "");
+                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: chatId,
+                    text: plainText,
+                  }),
+                });
+              }
             } else {
               console.log(`[TELEGRAM REPLY OK] ChatId: ${chatId}`);
             }
@@ -365,237 +377,243 @@ function vitePluginManusDebugCollector(): Plugin {
           }
         };
 
-        // 1. Check if user sent /start, /help, or general greetings
-        if (
-          normText === "/start" ||
-          normText === "/help" ||
-          normText === "start" ||
-          normText === "help" ||
-          normText === "hi" ||
-          normText === "hello" ||
-          normText === "chào" ||
-          normText === "chao" ||
-          normText === "xin chào" ||
-          normText === "xin chao" ||
-          normText === "bot"
-        ) {
-          const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ tự động đối soát số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Gửi báo cáo thẳng lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy thử nhắn một câu lệnh ngay để nhận kết quả!`;
-          await replyTelegram(welcome);
-          return;
-        }
+        try {
+          // 1. Check if user sent /start, /help, or general greetings
+          if (
+            normText === "/start" ||
+            normText === "/help" ||
+            normText === "start" ||
+            normText === "help" ||
+            normText === "hi" ||
+            normText === "hello" ||
+            normText === "chào" ||
+            normText === "chao" ||
+            normText === "xin chào" ||
+            normText === "xin chao" ||
+            normText === "bot"
+          ) {
+            const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ tự động đối soát số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Gửi báo cáo thẳng lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy thử nhắn một câu lệnh ngay để nhận kết quả!`;
+            await replyTelegram(welcome);
+            return;
+          }
 
-        // Extract target check date
-        const now = new Date();
-        let targetDate = "";
+          // Extract target check date
+          const now = new Date();
+          let targetDate = "";
 
-        if (normText.includes("hôm qua") || normText.includes("hom qua")) {
-          const yesterday = new Date(now.getTime() - 86400000);
-          targetDate = yesterday.toISOString().split("T")[0];
-        } else if (normText.includes("hôm nay") || normText.includes("hom nay")) {
-          targetDate = now.toISOString().split("T")[0];
-        } else {
-          const ymd = normText.match(/\b(202\d)[-\/](\d{1,2})[-\/](\d{1,2})\b/);
-          if (ymd) {
-            targetDate = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+          if (normText.includes("hôm qua") || normText.includes("hom qua")) {
+            const yesterday = new Date(now.getTime() - 86400000);
+            targetDate = yesterday.toISOString().split("T")[0];
+          } else if (normText.includes("hôm nay") || normText.includes("hom nay")) {
+            targetDate = now.toISOString().split("T")[0];
           } else {
-            const dmy = normText.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](202\d))?\b/);
-            if (dmy) {
-              const day = dmy[1].padStart(2, "0");
-              const month = dmy[2].padStart(2, "0");
-              const year = dmy[3] || String(now.getFullYear());
-              targetDate = `${year}-${month}-${day}`;
-            }
-          }
-        }
-
-        if (!targetDate) {
-          targetDate = now.toISOString().split("T")[0];
-        }
-
-        const dateParts = targetDate.split("-");
-        const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-
-        // 2. Check if user is requesting to send report to MS Teams
-        const isTeamsRequest =
-          normText.includes("teams") ||
-          normText.includes("msteams") ||
-          normText.includes("ms teams") ||
-          normText.includes("webhook");
-
-        if (isTeamsRequest) {
-          await replyTelegram(`⏳ <b>Đang lấy báo cáo đối soát ngày ${formattedDate} và gửi tới MS Teams Webhook...</b>`);
-
-          try {
-            // Fetch saved MS Teams Webhook URL from Firestore settings
-            const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
-            const settingResp = await fetch(settingUrl);
-            if (!settingResp.ok) {
-              await replyTelegram(`❌ <b>Lỗi kết nối Firestore!</b>\nKhông thể lấy cấu hình Webhook MS Teams.`);
-              return;
-            }
-
-            const settingData = await settingResp.json();
-            const webhookUrl = settingData.fields?.value?.stringValue;
-
-            if (!webhookUrl || !webhookUrl.trim()) {
-              await replyTelegram(`❌ <b>Chưa cấu hình MS Teams Webhook!</b>\n\nBạn chưa lưu URL Webhook MS Teams trong mục <b>Cấu hình Hệ thống</b> trên Web App.`);
-              return;
-            }
-
-            // Generate full MS Teams Adaptive Card for target date
-            const cardContent = await getLiveMissingStatus(targetDate);
-
-            const teamsWrappedPayload = {
-              type: "message",
-              attachments: [
-                {
-                  contentType: "application/vnd.microsoft.card.adaptive",
-                  contentUrl: null,
-                  content: cardContent
-                }
-              ]
-            };
-
-            const url = webhookUrl.trim();
-            const isPowerAutomate =
-              url.includes("logic.azure.com") ||
-              url.includes("powerautomate") ||
-              url.includes("powerplatform") ||
-              url.includes("flow.microsoft.com");
-
-            const payloadsToTry = isPowerAutomate
-              ? [cardContent, teamsWrappedPayload]
-              : [teamsWrappedPayload, cardContent];
-
-            let teamsSuccess = false;
-            let lastErr = "";
-
-            for (const payload of payloadsToTry) {
-              try {
-                const resp = await fetch(url, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                });
-                if (resp.ok || resp.status === 200 || resp.status === 202) {
-                  teamsSuccess = true;
-                  break;
-                } else {
-                  lastErr = `HTTP ${resp.status}: ${await resp.text()}`;
-                }
-              } catch (err: any) {
-                lastErr = err.message || String(err);
-              }
-            }
-
-            if (teamsSuccess) {
-              await replyTelegram(`🚀 <b>ĐÃ GỬI THÀNH CÔNG BÁO CÁO TỚI MS TEAMS!</b>\n\n📅 <b>Ngày đối soát:</b> ${formattedDate}\n🔗 <b>Kênh nhận:</b> MS Teams Channel Webhook\n\n📌 <i>Bạn hãy mở MS Teams để xem chi tiết Adaptive Card.</i>`);
+            const ymd = normText.match(/\b(202\d)[-\/](\d{1,2})[-\/](\d{1,2})\b/);
+            if (ymd) {
+              targetDate = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
             } else {
-              await replyTelegram(`❌ <b>Gửi tới MS Teams thất bại!</b>\n\nLỗi: <i>${lastErr}</i>\n👉 Vui lòng kiểm tra lại URL Webhook MS Teams trong phần Cấu hình.`);
-            }
-          } catch (e: any) {
-            await replyTelegram(`❌ <b>Lỗi hệ thống khi xử lý gửi Teams:</b> ${e.message}`);
-          }
-          return;
-        }
-
-        // 3. Check if user request is an audit query
-        const isAuditRequest =
-          normText.includes("đối soát") ||
-          normText.includes("doi soat") ||
-          normText.includes("soi") ||
-          normText.includes("báo cáo") ||
-          normText.includes("bao cao") ||
-          normText.includes("kiểm tra") ||
-          normText.includes("kiem tra") ||
-          normText.includes("check") ||
-          normText.includes("xem") ||
-          normText.includes("dữ liệu") ||
-          normText.includes("hôm nay") ||
-          normText.includes("hom nay") ||
-          normText.includes("hôm qua") ||
-          normText.includes("hom qua") ||
-          /\b\d{1,2}[\/\-]\d{1,2}\b/.test(normText) ||
-          /\b202\d[-\/]\d{1,2}[-\/]\d{1,2}\b/.test(normText);
-
-        if (!isAuditRequest) {
-          await replyTelegram(`🤖 <b>Chưa hiểu rõ câu lệnh "${text}".</b>\n\nBạn hãy thử nhắn các câu lệnh sau:\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i>`);
-          return;
-        }
-
-        await replyTelegram(`⏳ <b>Đang quét dữ liệu & đối soát AI cho ngày ${formattedDate}...</b>\n<i>Vui lòng đợi trong giây lát...</i>`);
-
-        const RESTAURANTS_LIST = [
-          { id: "lehoibia", name: "Lê Hội Bia" },
-          { id: "nhahang1901", name: "Nhà Hàng 1901" },
-          { id: "beerplaza", name: "Beer Plaza" },
-          { id: "maisonkayser", name: "Maison Kayser" },
-        ];
-
-        let updatedList: Array<{ name: string; postedBills: number; imgCount: number; billNo?: string }> = [];
-        let missingList: string[] = [];
-
-        for (const r of RESTAURANTS_LIST) {
-          const docId = `${r.id}_${targetDate}`;
-          const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/vouchers/${docId}`;
-          try {
-            const resp = await fetch(url);
-            if (resp.ok) {
-              const data = await resp.json();
-              const fields = data.fields || {};
-              const postedBillsVal = Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0);
-              const imgCount = fields.billImages?.arrayValue?.values?.length || 0;
-              const billNo = fields.billNumber?.stringValue;
-
-              if (postedBillsVal > 0 || imgCount > 0) {
-                updatedList.push({
-                  name: r.name,
-                  postedBills: postedBillsVal,
-                  imgCount,
-                  billNo,
-                });
-                continue;
+              const dmy = normText.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](202\d))?\b/);
+              if (dmy) {
+                const day = dmy[1].padStart(2, "0");
+                const month = dmy[2].padStart(2, "0");
+                const year = dmy[3] || String(now.getFullYear());
+                targetDate = `${year}-${month}-${day}`;
               }
             }
-            missingList.push(r.name);
-          } catch (e) {
-            missingList.push(r.name);
-          }
-        }
-
-        let reportMsg = `<b>🤖 BÁO CÁO AI AUDIT THEO LỆNH TELEGRAM</b>\n`;
-        reportMsg += `📅 <b>Ngày đối soát:</b> ${formattedDate}\n`;
-        reportMsg += `⏱ <b>Thời gian xử lý:</b> ${new Date().toLocaleTimeString("vi-VN")}\n\n`;
-
-        if (updatedList.length === 0) {
-          reportMsg += `⚠️ <b>Chưa có nhà hàng nào cập nhật số liệu cho ngày ${formattedDate}.</b>\n\n`;
-          reportMsg += `🔴 Tất cả ${RESTAURANTS_LIST.length} nhà hàng đều CHƯA có báo cáo.`;
-        } else {
-          reportMsg += `📊 <b>Tổng hợp (${updatedList.length}/${RESTAURANTS_LIST.length} nhà hàng đã gửi):</b>\n\n`;
-          reportMsg += `📝 <b>Chi tiết nhà hàng đã báo cáo:</b>\n`;
-          for (const item of updatedList) {
-            const imgIcon = item.imgCount > 0 ? `🟢 Đã có ${item.imgCount} ảnh` : `⚠️ Thiếu ảnh minh chứng`;
-            const billText = item.billNo ? ` (Mã: #${item.billNo})` : "";
-            reportMsg += `• <b>${item.name}</b>: ${item.postedBills} phiếu${billText} | ${imgIcon}\n`;
           }
 
-          if (missingList.length > 0) {
-            reportMsg += `\n🔴 <b>Cảnh báo chưa gửi (${missingList.length} nhà hàng):</b>\n`;
-            for (const mName of missingList) {
-              reportMsg += `• <b>${mName}</b>: ❌ Chưa nhập số liệu\n`;
+          if (!targetDate) {
+            targetDate = now.toISOString().split("T")[0];
+          }
+
+          const dateParts = targetDate.split("-");
+          const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+          // 2. Check if user is requesting to send report to MS Teams
+          const isTeamsRequest =
+            normText.includes("teams") ||
+            normText.includes("msteams") ||
+            normText.includes("ms teams") ||
+            normText.includes("webhook");
+
+          if (isTeamsRequest) {
+            await replyTelegram(`⏳ <b>Đang lấy báo cáo đối soát ngày ${formattedDate} và gửi tới MS Teams Webhook...</b>`);
+
+            try {
+              // Fetch saved MS Teams Webhook URL from Firestore settings
+              const settingUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/ms_teams_webhook`;
+              const settingResp = await fetch(settingUrl);
+              if (!settingResp.ok) {
+                await replyTelegram(`❌ <b>Lỗi kết nối Firestore!</b>\nKhông thể lấy cấu hình Webhook MS Teams.`);
+                return;
+              }
+
+              const settingData = await settingResp.json();
+              const webhookUrl = settingData.fields?.value?.stringValue;
+
+              if (!webhookUrl || !webhookUrl.trim()) {
+                await replyTelegram(`❌ <b>Chưa cấu hình MS Teams Webhook!</b>\n\nBạn chưa lưu URL Webhook MS Teams trong mục <b>Cấu hình Hệ thống</b> trên Web App.`);
+                return;
+              }
+
+              // Generate full MS Teams Adaptive Card for target date
+              const cardContent = await getLiveMissingStatus(targetDate);
+
+              const teamsWrappedPayload = {
+                type: "message",
+                attachments: [
+                  {
+                    contentType: "application/vnd.microsoft.card.adaptive",
+                    contentUrl: null,
+                    content: cardContent
+                  }
+                ]
+              };
+
+              const url = webhookUrl.trim();
+              const isPowerAutomate =
+                url.includes("logic.azure.com") ||
+                url.includes("powerautomate") ||
+                url.includes("powerplatform") ||
+                url.includes("flow.microsoft.com");
+
+              const payloadsToTry = isPowerAutomate
+                ? [cardContent, teamsWrappedPayload]
+                : [teamsWrappedPayload, cardContent];
+
+              let teamsSuccess = false;
+              let lastErr = "";
+
+              for (const payload of payloadsToTry) {
+                try {
+                  const resp = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (resp.ok || resp.status === 200 || resp.status === 202) {
+                    teamsSuccess = true;
+                    break;
+                  } else {
+                    lastErr = `HTTP ${resp.status}: ${await resp.text()}`;
+                  }
+                } catch (err: any) {
+                  lastErr = err.message || String(err);
+                }
+              }
+
+              if (teamsSuccess) {
+                await replyTelegram(`🚀 <b>ĐÃ GỬI THÀNH CÔNG BÁO CÁO TỚI MS TEAMS!</b>\n\n📅 <b>Ngày đối soát:</b> ${formattedDate}\n🔗 <b>Kênh nhận:</b> MS Teams Channel Webhook\n\n📌 <i>Bạn hãy mở MS Teams để xem chi tiết Adaptive Card.</i>`);
+              } else {
+                await replyTelegram(`❌ <b>Gửi tới MS Teams thất bại!</b>\n\nLỗi: <i>${lastErr}</i>\n👉 Vui lòng kiểm tra lại URL Webhook MS Teams trong phần Cấu hình.`);
+              }
+            } catch (e: any) {
+              await replyTelegram(`❌ <b>Lỗi hệ thống khi xử lý gửi Teams:</b> ${e.message}`);
+            }
+            return;
+          }
+
+          // 3. Check if user request is an audit query
+          const isAuditRequest =
+            normText.includes("đối soát") ||
+            normText.includes("doi soat") ||
+            normText.includes("soi") ||
+            normText.includes("báo cáo") ||
+            normText.includes("bao cao") ||
+            normText.includes("kiểm tra") ||
+            normText.includes("kiem tra") ||
+            normText.includes("check") ||
+            normText.includes("xem") ||
+            normText.includes("dữ liệu") ||
+            normText.includes("hôm nay") ||
+            normText.includes("hom nay") ||
+            normText.includes("hôm qua") ||
+            normText.includes("hom qua") ||
+            /\b\d{1,2}[\/\-]\d{1,2}\b/.test(normText) ||
+            /\b202\d[-\/]\d{1,2}[-\/]\d{1,2}\b/.test(normText);
+
+          if (!isAuditRequest) {
+            await replyTelegram(`🤖 <b>Chưa hiểu rõ câu lệnh "${text}".</b>\n\nBạn hãy thử nhắn các câu lệnh sau:\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i>`);
+            return;
+          }
+
+          await replyTelegram(`⏳ <b>Đang quét dữ liệu & đối soát AI cho ngày ${formattedDate}...</b>\n<i>Vui lòng đợi trong giây lát...</i>`);
+
+          const RESTAURANTS_LIST = [
+            { id: "lehoibia", name: "Lê Hội Bia" },
+            { id: "nhahang1901", name: "Nhà Hàng 1901" },
+            { id: "beerplaza", name: "Beer Plaza" },
+            { id: "maisonkayser", name: "Maison Kayser" },
+          ];
+
+          let updatedList: Array<{ name: string; postedBills: number; imgCount: number; billNo?: string }> = [];
+          let missingList: string[] = [];
+
+          for (const r of RESTAURANTS_LIST) {
+            const docId = `${r.id}_${targetDate}`;
+            const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/vouchers/${docId}`;
+            try {
+              const resp = await fetch(url);
+              if (resp.ok) {
+                const data = await resp.json();
+                const fields = data.fields || {};
+                const postedBillsVal = Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0);
+                const imgCount = fields.billImages?.arrayValue?.values?.length || 0;
+                const billNo = fields.billNumber?.stringValue;
+
+                if (postedBillsVal > 0 || imgCount > 0) {
+                  updatedList.push({
+                    name: r.name,
+                    postedBills: postedBillsVal,
+                    imgCount,
+                    billNo,
+                  });
+                  continue;
+                }
+              }
+              missingList.push(r.name);
+            } catch (e) {
+              missingList.push(r.name);
             }
           }
+
+          let reportMsg = `<b>🤖 BÁO CÁO AI AUDIT THEO LỆNH TELEGRAM</b>\n`;
+          reportMsg += `📅 <b>Ngày đối soát:</b> ${formattedDate}\n`;
+          reportMsg += `⏱ <b>Thời gian xử lý:</b> ${new Date().toLocaleTimeString("vi-VN")}\n\n`;
+
+          if (updatedList.length === 0) {
+            reportMsg += `⚠️ <b>Chưa có nhà hàng nào cập nhật số liệu cho ngày ${formattedDate}.</b>\n\n`;
+            reportMsg += `🔴 Tất cả ${RESTAURANTS_LIST.length} nhà hàng đều CHƯA có báo cáo.`;
+          } else {
+            reportMsg += `📊 <b>Tổng hợp (${updatedList.length}/${RESTAURANTS_LIST.length} nhà hàng đã gửi):</b>\n\n`;
+            reportMsg += `📝 <b>Chi tiết nhà hàng đã báo cáo:</b>\n`;
+            for (const item of updatedList) {
+              const imgIcon = item.imgCount > 0 ? `🟢 Đã có ${item.imgCount} ảnh` : `⚠️ Thiếu ảnh minh chứng`;
+              const billText = item.billNo ? ` (Mã: #${item.billNo})` : "";
+              reportMsg += `• <b>${item.name}</b>: ${item.postedBills} phiếu${billText} | ${imgIcon}\n`;
+            }
+
+            if (missingList.length > 0) {
+              reportMsg += `\n🔴 <b>Cảnh báo chưa gửi (${missingList.length} nhà hàng):</b>\n`;
+              for (const mName of missingList) {
+                reportMsg += `• <b>${mName}</b>: ❌ Chưa nhập số liệu\n`;
+              }
+            }
+          }
+
+          reportMsg += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard System</a>`;
+          reportMsg += `\n\n💡 <i>Mẹo: Nhắn <b>"gửi ms teams"</b> để tự động đẩy báo cáo này thẳng lên kênh MS Teams!</i>`;
+
+          await replyTelegram(reportMsg);
+        } catch (err: any) {
+          console.error("[TELEGRAM COMMAND PROC ERR]", err);
+          await replyTelegram(`❌ <b>Lỗi xử lý câu lệnh:</b> ${err.message || String(err)}`);
         }
-
-        reportMsg += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard System</a>`;
-        reportMsg += `\n\n💡 <i>Mẹo: Nhắn <b>"gửi ms teams"</b> để tự động đẩy báo cáo này thẳng lên kênh MS Teams!</i>`;
-
-        await replyTelegram(reportMsg);
       };
 
       // Server-side offset tracker & lock for Telegram getUpdates
       let telegramPollingOffset = 0;
       let isPollingActive = false;
+      let telegramWebhookCleared = false;
 
       const runTelegramPollingBatch = async () => {
         if (isPollingActive) {
@@ -613,10 +631,17 @@ function vitePluginManusDebugCollector(): Plugin {
           const botToken = (tokenData.fields?.value?.stringValue || "").trim();
           if (!botToken) return { success: false, message: "Bot Token trống" };
 
-          // Always ensure webhook is deleted so getUpdates works reliably without HTTP 409 Conflict
-          try {
-            await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
-          } catch (e) {}
+          // Delete Webhook ONCE so getUpdates works without HTTP 409 Conflict
+          if (!telegramWebhookCleared) {
+            try {
+              const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+              const delData = await delResp.json();
+              console.log("[TELEGRAM DELETE WEBHOOK OK]", delData);
+              telegramWebhookCleared = true;
+            } catch (e) {
+              console.error("[TELEGRAM DELETE WEBHOOK ERR]", e);
+            }
+          }
 
           // Call getUpdates
           const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&timeout=0`;
@@ -624,6 +649,9 @@ function vitePluginManusDebugCollector(): Plugin {
           if (!resp.ok) {
             const errText = await resp.text();
             console.error(`[TELEGRAM GETUPDATES FAIL] HTTP ${resp.status}:`, errText);
+            if (resp.status === 409 || errText.includes("webhook")) {
+              telegramWebhookCleared = false; // Reset flag to attempt deleteWebhook on next iteration
+            }
             return { success: false, message: `Lỗi kết nối Telegram getUpdates (HTTP ${resp.status})` };
           }
 
@@ -642,16 +670,9 @@ function vitePluginManusDebugCollector(): Plugin {
             const msg = item.message || item.edited_message || item.channel_post || item.edited_channel_post;
             if (msg && msg.chat && (msg.text || msg.caption)) {
               const textContent = msg.text || msg.caption || "";
-              const msgDate = msg.date || 0;
-              const nowSec = Math.floor(Date.now() / 1000);
-
-              // Only process messages created within the last 5 minutes (300 sec)
-              if (nowSec - msgDate < 300) {
-                await processTelegramMessageCommand(textContent, msg.chat.id, botToken);
-                processedCount++;
-              } else {
-                console.log(`[TELEGRAM SKIPPED STALE UPDATE] ID: ${item.update_id} | Date: ${msgDate}`);
-              }
+              console.log(`[TELEGRAM EXECUTING CMD] UpdateID: ${item.update_id} | ChatId: ${msg.chat.id} | Text: "${textContent}"`);
+              await processTelegramMessageCommand(textContent, msg.chat.id, botToken);
+              processedCount++;
             }
           }
 
