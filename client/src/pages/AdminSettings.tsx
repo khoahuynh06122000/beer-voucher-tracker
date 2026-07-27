@@ -176,17 +176,44 @@ export default function AdminSettings() {
     setIsSendingAlert(true);
     try {
       const res = await fetch("/api/cron/trigger-09am", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (data && data.success) {
         toast.success("⚡ " + data.message);
-        // Refresh status
         const newStatus = await checkUnupdatedRestaurants();
         setStatusCheck(newStatus);
+      } else if (data && data.message) {
+        toast.error("Không thể kích hoạt: " + data.message);
       } else {
-        toast.error("Không thể kích hoạt: " + (data.message || "Lỗi kết nối Webhook"));
+        // Client fallback using configured webhook
+        const result = await sendMissingReportAlert();
+        if (result.success) {
+          toast.success("⚡ " + result.message);
+          const newStatus = await checkUnupdatedRestaurants();
+          setStatusCheck(newStatus);
+        } else {
+          toast.error("Không thể kích hoạt: " + result.message);
+        }
       }
     } catch (err: any) {
-      toast.error("Lỗi kích hoạt 9:00 AM: " + err.message);
+      try {
+        const result = await sendMissingReportAlert();
+        if (result.success) {
+          toast.success("⚡ " + result.message);
+          const newStatus = await checkUnupdatedRestaurants();
+          setStatusCheck(newStatus);
+        } else {
+          toast.error("Lỗi kích hoạt: " + result.message);
+        }
+      } catch (fallbackErr: any) {
+        toast.error("Lỗi kích hoạt 9:00 AM: " + err.message);
+      }
     } finally {
       setIsSendingAlert(false);
     }

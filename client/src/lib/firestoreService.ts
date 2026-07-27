@@ -476,6 +476,10 @@ export interface RestaurantStatus {
   hasUpdated: boolean;
   postedBills?: number;
   totalIssued?: number;
+  utilizationRate?: number;
+  hasImageProof?: boolean;
+  imageCount?: number;
+  billNumber?: string;
   updatedAt?: string;
 }
 
@@ -505,12 +509,17 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
     try {
       const record = await getVoucherByDate(key, dateToQuery, false);
       if (record && record.updatedAt) {
+        const imageCount = (record.billImages && Array.isArray(record.billImages)) ? record.billImages.length : 0;
         updated.push({
           restaurantId: key,
           restaurantName: preset.restaurantName,
           hasUpdated: true,
           postedBills: record.postedBills ?? 0,
           totalIssued: record.totalIssued ?? 0,
+          utilizationRate: record.utilizationRate ?? 0,
+          hasImageProof: imageCount > 0,
+          imageCount,
+          billNumber: record.billNumber,
           updatedAt: record.updatedAt,
         });
       } else {

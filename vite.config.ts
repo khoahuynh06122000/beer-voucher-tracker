@@ -124,7 +124,7 @@ function vitePluginManusDebugCollector(): Plugin {
         const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
         const missing: string[] = [];
-        const updated: Array<{ name: string; postedBills: number }> = [];
+        const updated: Array<{ name: string; postedBills: number; imgCount: number; billNo?: string }> = [];
 
         for (const r of RESTAURANTS) {
           const docId = `${r.id}_${targetDateStr}`;
@@ -141,9 +141,18 @@ function vitePluginManusDebugCollector(): Plugin {
               const potatoVal = Number(fields.potatoCoupons?.integerValue || fields.potatoCoupons?.doubleValue || 0);
               const updatedAtVal = fields.updatedAt?.stringValue;
 
+              const imgValues = fields.billImages?.arrayValue?.values || [];
+              const imgCount = Array.isArray(imgValues) ? imgValues.length : 0;
+              const billNo = fields.billNumber?.stringValue;
+
               // If record exists and has timestamp or voucher data, it is UPDATED
               if (updatedAtVal || postedBillsVal > 0 || totalIssuedVal > 0 || bakeryVal > 0 || beerVal > 0 || potatoVal > 0) {
-                updated.push({ name: r.name, postedBills: postedBillsVal || bakeryVal || 1 });
+                updated.push({
+                  name: r.name,
+                  postedBills: postedBillsVal || bakeryVal || 1,
+                  imgCount,
+                  billNo
+                });
                 continue;
               }
             }
@@ -154,11 +163,17 @@ function vitePluginManusDebugCollector(): Plugin {
         }
 
         const missingText = missing.length > 0
-          ? missing.map(m => `• **${m}**: CHƯA cập nhật lần nào`).join("\n\n")
-          : "🟢 Tất cả nhà hàng đã gửi báo cáo đầy đủ!";
+          ? missing.map(m => `• **${m}**: ❌ **CHƯA** cập nhật số liệu (⚠️ Chưa có ảnh minh chứng)`).join("\n\n")
+          : "🟢 Tất cả nhà hàng đã gửi báo cáo số liệu & ảnh đầy đủ!";
 
         const updatedText = updated.length > 0
-          ? updated.map(u => `• **${u.name}**: Đã cập nhật (${u.postedBills} phiếu)`).join("\n\n")
+          ? updated.map(u => {
+              const imgStatusText = u.imgCount > 0
+                ? `📸 **Đã có ${u.imgCount} ảnh minh chứng**`
+                : `⚠️ **Chưa đính kèm ảnh minh chứng**`;
+              const billText = u.billNo ? ` (Mã bill: #${u.billNo})` : "";
+              return `• **${u.name}**: Đã nhập **${u.postedBills}** phiếu${billText}\n  └ 🖼️ **Trạng thái ảnh:** ${imgStatusText}`;
+            }).join("\n\n")
           : "Chưa có nhà hàng nào cập nhật.";
 
         return {
@@ -450,6 +465,10 @@ function vitePluginManusDebugCollector(): Plugin {
             const beer = record.beerCoupons || 0;
             const bakery = record.bakeryCoupons || 0;
 
+            const imgCount = (record.billImages && Array.isArray(record.billImages)) ? record.billImages.length : 0;
+            const hasImageProof = imgCount > 0;
+            const billNoText = record.billNumber ? ` (Mã Bill: #${record.billNumber})` : "";
+
             // Generate Visual Progress Bar
             const filledCount = Math.min(10, Math.max(0, Math.round(rate / 10)));
             const emptyCount = 10 - filledCount;
@@ -651,6 +670,29 @@ function vitePluginManusDebugCollector(): Plugin {
                       },
                       {
                         type: "Container",
+                        style: hasImageProof ? "good" : "attention",
+                        spacing: "Medium",
+                        items: [
+                          {
+                            type: "TextBlock",
+                            text: "🖼️ TÌNH TRẠNG ÁNH MINH CHỨNG BILL",
+                            weight: "Bolder",
+                            size: "Small",
+                            isSubtle: true
+                          },
+                          {
+                            type: "TextBlock",
+                            text: hasImageProof
+                              ? `📸 **ĐÃ ĐÍNH KÈM ${imgCount} ÁNH MINH CHỨNG**${billNoText}`
+                              : `⚠️ **CHƯA ĐÍNH KÈM ÁNH MINH CHỨNG BILL**${billNoText}`,
+                            weight: "Bolder",
+                            color: hasImageProof ? "Good" : "Attention",
+                            wrap: true
+                          }
+                        ]
+                      },
+                      {
+                        type: "Container",
                         style: "emphasis",
                         spacing: "Medium",
                         items: [
@@ -695,6 +737,12 @@ function vitePluginManusDebugCollector(): Plugin {
                     { name: "🧾 Đã Thu Về (Đăng Bill):", value: `**${postedBills}** phiếu` },
                     { name: "📋 Tổng Phát Hành:", value: `**${totalIssued}** phiếu` },
                     { name: "❌ Coupon Hủy:", value: `**${cancelled}** phiếu` },
+                    {
+                      name: "🖼️ Ảnh Minh Chứng Bill:",
+                      value: hasImageProof
+                        ? `📸 **Đã có ${imgCount} ảnh minh chứng**${billNoText}`
+                        : `⚠️ **Chưa có ảnh minh chứng**`
+                    },
                     ...(isMaisonKayser
                       ? [{ name: "🥐 Voucher Bánh:", value: `**${bakery}** chiếc` }]
                       : [

@@ -69,6 +69,8 @@ export async function sendMSTeamsReport(
     totalIssued: number;
     utilizationRate: number;
     createdBy?: string;
+    billNumber?: string;
+    billImages?: string[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!webhookUrl || !webhookUrl.trim()) {
@@ -116,6 +118,10 @@ export async function sendMSTeamsReport(
   const potato = record.potatoCoupons || 0;
   const beer = record.beerCoupons || 0;
   const bakery = record.bakeryCoupons || 0;
+
+  const imgCount = (record.billImages && Array.isArray(record.billImages)) ? record.billImages.length : 0;
+  const hasImageProof = imgCount > 0;
+  const billNoText = record.billNumber ? ` (Mã bill: #${record.billNumber})` : "";
 
   const filledCount = Math.min(10, Math.max(0, Math.round(rate / 10)));
   const emptyCount = 10 - filledCount;
@@ -196,6 +202,21 @@ export async function sendMSTeamsReport(
       },
       {
         type: "Container",
+        style: hasImageProof ? "good" : "attention",
+        items: [
+          {
+            type: "TextBlock",
+            text: hasImageProof
+              ? `🖼️ **ẢNH MINH CHỨNG BILL:** 📸 Đã đính kèm **${imgCount}** hình ảnh${billNoText}`
+              : `🖼️ **ẢNH MINH CHỨNG BILL:** ⚠️ Chưa đính kèm hình ảnh minh chứng bill${billNoText}`,
+            weight: "Bolder",
+            color: hasImageProof ? "Good" : "Attention",
+            wrap: true
+          }
+        ]
+      },
+      {
+        type: "Container",
         style: "emphasis",
         items: [
           {
@@ -245,6 +266,12 @@ export async function sendMSTeamsReport(
           { name: "📋 Tổng Phát Hành:", value: `**${totalIssued}** phiếu` },
           { name: "🧾 Thu Về (Đăng Bill):", value: `**${postedBills}** phiếu` },
           { name: "❌ Coupon Hủy Bỏ:", value: `**${cancelled}** phiếu` },
+          {
+            name: "🖼️ Ảnh Minh Chứng Bill:",
+            value: hasImageProof
+              ? `📸 **Đã đính kèm ${imgCount} ảnh**${billNoText}`
+              : `⚠️ **Chưa đính kèm ảnh minh chứng**`
+          },
           ...(isMaisonKayser
             ? [{ name: "🥐 Voucher Bánh:", value: `**${bakery}** chiếc` }]
             : [
@@ -334,18 +361,31 @@ export async function sendStoredMSTeamsReport(record: {
 export function getMissingReportAdaptiveCard(status: {
   checkDate: string;
   missing: Array<{ restaurantId: string; restaurantName: string }>;
-  updated: Array<{ restaurantId: string; restaurantName: string; postedBills?: number }>;
+  updated: Array<{
+    restaurantId: string;
+    restaurantName: string;
+    postedBills?: number;
+    hasImageProof?: boolean;
+    imageCount?: number;
+    billNumber?: string;
+  }>;
   totalRestaurants: number;
 }, timeStr: string) {
   const dateParts = status.checkDate.split("-");
   const formattedCheckDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
 
   const missingListText = status.missing.length > 0
-    ? status.missing.map(m => `• **${m.restaurantName}**: CHƯA cập nhật lần nào`).join("\n\n")
-    : "🟢 Tất cả nhà hàng đã gửi báo cáo đầy đủ!";
+    ? status.missing.map(m => `• **${m.restaurantName}**: ❌ **CHƯA** cập nhật số liệu (⚠️ Chưa có ảnh minh chứng)`).join("\n\n")
+    : "🟢 Tất cả nhà hàng đã gửi báo cáo số liệu & ảnh đầy đủ!";
 
   const updatedListText = status.updated.length > 0
-    ? status.updated.map(u => `• **${u.restaurantName}**: Đã cập nhật (${u.postedBills || 0} phiếu)`).join("\n\n")
+    ? status.updated.map(u => {
+        const imgStatus = (u.hasImageProof || (u.imageCount && u.imageCount > 0))
+          ? `📸 **Đã có ${u.imageCount || 1} ảnh minh chứng**`
+          : `⚠️ **Chưa có ảnh minh chứng**`;
+        const billInfo = u.billNumber ? ` (Mã bill: #${u.billNumber})` : "";
+        return `• **${u.restaurantName}**: Đã nhập **${u.postedBills || 0}** phiếu${billInfo}\n  └ 🖼️ **Trạng thái ảnh:** ${imgStatus}`;
+      }).join("\n\n")
     : "Chưa có nhà hàng nào cập nhật.";
 
   return {
