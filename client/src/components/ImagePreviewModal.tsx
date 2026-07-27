@@ -158,6 +158,35 @@ export function ImagePreviewModal({
                 <ZoomIn className="w-4 h-4" />
               </Button>
 
+              <div className="w-[1px] h-4 bg-white/20 mx-0.5" />
+
+              {/* Quick HD Zoom Presets */}
+              <button
+                type="button"
+                onClick={() => setZoom(1.8)}
+                className={`h-7 px-2 text-[10px] font-black rounded-lg transition-all ${
+                  Math.abs(zoom - 1.8) < 0.05
+                    ? "bg-amber-500 text-black shadow-md shadow-amber-500/30"
+                    : "bg-white/5 hover:bg-white/10 text-amber-300 border border-amber-500/20"
+                }`}
+                title="Phóng to 180% siêu rõ nét"
+              >
+                180% HD
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setZoom(2.5)}
+                className={`h-7 px-2 text-[10px] font-black rounded-lg transition-all ${
+                  Math.abs(zoom - 2.5) < 0.05
+                    ? "bg-amber-500 text-black shadow-md shadow-amber-500/30"
+                    : "bg-white/5 hover:bg-white/10 text-amber-300 border border-amber-500/20"
+                }`}
+                title="Phóng to 250% chi tiết"
+              >
+                250% HD
+              </button>
+
               {(zoom !== 1 || rotation !== 0) && (
                 <Button
                   type="button"
@@ -213,7 +242,7 @@ export function ImagePreviewModal({
         {/* Main Image Viewport */}
         <div className="flex-1 w-full relative bg-[#040508] overflow-auto flex items-center justify-center p-6 select-none">
           <div
-            className="transition-transform duration-200 ease-out flex items-center justify-center max-w-full max-h-full"
+            className="transition-transform duration-200 ease-out flex items-center justify-center"
             style={{
               transform: `scale(${zoom}) rotate(${rotation}deg)`,
               transformOrigin: "center center",
@@ -223,6 +252,10 @@ export function ImagePreviewModal({
               src={currentImage}
               alt={`Ảnh Bill ${currentIndex + 1}`}
               className="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 bg-black/40"
+              style={{
+                imageRendering: "high-quality",
+                WebkitBackfaceVisibility: "hidden",
+              }}
               draggable={false}
             />
           </div>

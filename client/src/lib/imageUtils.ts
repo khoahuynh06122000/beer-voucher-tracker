@@ -1,12 +1,12 @@
 /**
- * Compress an image File to a lightweight JPEG Data URL string
- * High efficiency: max 750px width/height and 0.55 JPEG quality keeps images <30KB
+ * Compress an image File to a high-definition JPEG Data URL string
+ * High quality: max 1800px width/height and 0.82 JPEG quality keeps text sharp & clear when zoomed >200%
  */
 export function compressImage(
   file: File,
-  maxWidth: number = 750,
-  maxHeight: number = 750,
-  quality: number = 0.55
+  maxWidth: number = 1800,
+  maxHeight: number = 1800,
+  quality: number = 0.82
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -35,7 +35,10 @@ export function compressImage(
           return resolve(event.target?.result as string);
         }
 
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, width, height);
+
         const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
         resolve(compressedDataUrl);
       };

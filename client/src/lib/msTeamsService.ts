@@ -1,5 +1,12 @@
 import { getSetting, checkUnupdatedRestaurants } from "./firestoreService";
 
+export function getPublicAppUrl(): string {
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return window.location.origin.replace("ais-dev-", "ais-pre-");
+  }
+  return "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app";
+}
+
 export function getExpertAssessmentText(record: {
   restaurantName: string;
   potatoCoupons?: number;
@@ -236,7 +243,7 @@ export async function sendMSTeamsReport(
       {
         type: "Action.OpenUrl",
         title: "🌐 Mở Live Dashboard Báo Cáo",
-        url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+        url: getPublicAppUrl()
       }
     ]
   };
@@ -294,7 +301,7 @@ export async function sendMSTeamsReport(
         "@type": "OpenUri",
         "name": "🌐 Mở Live Dashboard Báo Cáo",
         "targets": [
-          { "os": "default", "uri": "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app" }
+          { "os": "default", "uri": getPublicAppUrl() }
         ]
       }
     ]
@@ -449,7 +456,7 @@ export function getMissingReportAdaptiveCard(status: {
       {
         type: "Action.OpenUrl",
         title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
-        url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+        url: getPublicAppUrl()
       }
     ]
   };

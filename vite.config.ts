@@ -233,13 +233,13 @@ function vitePluginManusDebugCollector(): Plugin {
               ]
             }
           ],
-          actions: [
-            {
-              type: "Action.OpenUrl",
-              title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
-              url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
-            }
-          ]
+              actions: [
+                {
+                  type: "Action.OpenUrl",
+                  title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
+                  url: "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+                }
+              ]
         };
       }
 
@@ -714,7 +714,7 @@ function vitePluginManusDebugCollector(): Plugin {
                       {
                         type: "Action.OpenUrl",
                         title: "🌐 Mở Live Dashboard Báo Cáo",
-                        url: "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+                        url: "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
                       }
                     ]
                   }
@@ -763,7 +763,7 @@ function vitePluginManusDebugCollector(): Plugin {
                   "@type": "OpenUri",
                   "name": "🌐 Mở Dashboard Trực Tuyến",
                   "targets": [
-                    { "os": "default", "uri": "https://ais-dev-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app" }
+                    { "os": "default", "uri": "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app" }
                   ]
                 }
               ]
