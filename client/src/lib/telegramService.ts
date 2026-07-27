@@ -103,6 +103,12 @@ export async function registerTelegramWebhook(
       return { success: false, message: `Lỗi Server HTTP ${res.status}` };
     }
 
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const errText = await res.text();
+      return { success: false, message: `Lỗi phản hồi Server (HTTP ${res.status}): ${errText.substring(0, 100)}` };
+    }
+
     const data = await res.json();
     return {
       success: data.success,
@@ -116,7 +122,10 @@ export async function registerTelegramWebhook(
 export async function pollTelegramMessages(): Promise<{ success: boolean; processedCount?: number; message?: string }> {
   try {
     const res = await fetch("/api/telegram/poll");
-    if (!res.ok) return { success: false, message: "Lỗi kết nối Server" };
+    const contentType = res.headers.get("content-type") || "";
+    if (!res.ok || !contentType.includes("application/json")) {
+      return { success: false, message: `Lỗi kết nối Server (HTTP ${res.status})` };
+    }
     const data = await res.json();
     return {
       success: data.success,
