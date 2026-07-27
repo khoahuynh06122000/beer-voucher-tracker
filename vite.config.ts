@@ -514,14 +514,8 @@ function vitePluginManusDebugCollector(): Plugin {
         runTelegramPollingBatch().catch(() => {});
       }, 4000);
 
-      // Top-level unified Telegram API handler with CORS & non-fallthrough JSON responses
-      server.middlewares.use(async (req, res, next) => {
-        const rawUrl = req.originalUrl || req.url || "";
-        if (!rawUrl.startsWith("/api/telegram")) {
-          return next();
-        }
-
-        // Always set JSON & CORS headers for Telegram API routes
+      // 1. POST /api/telegram/send: Server-side proxy for sending Telegram messages
+      server.middlewares.use("/api/telegram/send", (req, res, next) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -533,142 +527,166 @@ function vitePluginManusDebugCollector(): Plugin {
           return;
         }
 
-        const parsedUrl = new URL(rawUrl, `http://${req.headers.host || "localhost"}`);
-        const pathname = parsedUrl.pathname.replace(/\/$/, ""); // Normalize trailing slash
-
-        // Route: /api/telegram/send
-        if (pathname === "/api/telegram/send") {
-          let body = "";
-          req.on("data", (chunk) => body += chunk.toString());
-          req.on("end", async () => {
-            try {
-              const { botToken, chatId, message } = JSON.parse(body || "{}");
-              if (!botToken || !chatId || !message) {
-                res.writeHead(400);
-                res.end(JSON.stringify({ success: false, message: "Thiếu botToken, chatId hoặc message" }));
-                return;
-              }
-
-              const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/sendMessage`;
-              const resp = await fetch(telegramUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: chatId.trim(),
-                  text: message,
-                  parse_mode: "HTML",
-                  disable_web_page_preview: false,
-                }),
-              });
-
-              const data = await resp.json();
-              if (resp.ok && data.ok) {
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, message: "Gửi tin nhắn Telegram thành công!" }));
-              } else {
-                res.writeHead(400);
-                res.end(JSON.stringify({ success: false, message: data.description || "Lỗi Telegram API" }));
-              }
-            } catch (e: any) {
-              res.writeHead(500);
-              res.end(JSON.stringify({ success: false, message: e.message }));
-            }
-          });
+        if (req.method !== "POST") {
+          res.writeHead(405);
+          res.end(JSON.stringify({ success: false, message: "Method Not Allowed" }));
           return;
         }
 
-        // Route: /api/telegram/poll
-        if (pathname === "/api/telegram/poll") {
+        let body = "";
+        req.on("data", (chunk) => body += chunk.toString());
+        req.on("end", async () => {
           try {
-            const result = await runTelegramPollingBatch();
-            res.writeHead(200);
-            res.end(JSON.stringify(result));
+            const { botToken, chatId, message } = JSON.parse(body || "{}");
+            if (!botToken || !chatId || !message) {
+              res.writeHead(400);
+              res.end(JSON.stringify({ success: false, message: "Thiếu botToken, chatId hoặc message" }));
+              return;
+            }
+
+            const telegramUrl = `https://api.telegram.org/bot${botToken.trim()}/sendMessage`;
+            const resp = await fetch(telegramUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId.trim(),
+                text: message,
+                parse_mode: "HTML",
+                disable_web_page_preview: false,
+              }),
+            });
+
+            const data = await resp.json();
+            if (resp.ok && data.ok) {
+              res.writeHead(200);
+              res.end(JSON.stringify({ success: true, message: "Gửi tin nhắn Telegram thành công!" }));
+            } else {
+              res.writeHead(400);
+              res.end(JSON.stringify({ success: false, message: data.description || "Lỗi Telegram API" }));
+            }
           } catch (e: any) {
             res.writeHead(500);
             res.end(JSON.stringify({ success: false, message: e.message }));
           }
+        });
+      });
+
+      // 2. GET/POST /api/telegram/poll: On-demand Telegram polling
+      server.middlewares.use("/api/telegram/poll", (req, res, next) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.setHeader("Content-Type", "application/json");
+
+        if (req.method === "OPTIONS") {
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
           return;
         }
 
-        // Route: /api/telegram/set-webhook
-        if (pathname === "/api/telegram/set-webhook") {
-          const handleSetWebhook = async (botToken: string, webhookUrl: string) => {
-            if (!botToken) {
-              res.writeHead(400);
-              res.end(JSON.stringify({ success: false, message: "Thiếu botToken" }));
-              return;
-            }
-
-            // Trigger polling check right away
-            const pollRes = await runTelegramPollingBatch();
-
+        runTelegramPollingBatch()
+          .then((result) => {
             res.writeHead(200);
-            res.end(JSON.stringify({
-              success: true,
-              message: "Kích hoạt nhận lệnh Telegram thành công! Server đã bắt đầu lắng nghe và trả lời tin nhắn tự động.",
-              pollRes
-            }));
-          };
+            res.end(JSON.stringify(result));
+          })
+          .catch((e: any) => {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: e.message }));
+          });
+      });
 
-          if (req.method === "GET") {
-            const botToken = parsedUrl.searchParams.get("botToken") || "";
-            const webhookUrl = parsedUrl.searchParams.get("webhookUrl") || "";
-            try {
-              await handleSetWebhook(botToken, webhookUrl);
-            } catch (e: any) {
-              res.writeHead(500);
-              res.end(JSON.stringify({ success: false, message: e.message }));
-            }
+      // 3. GET/POST /api/telegram/set-webhook: Registers & starts polling listener
+      server.middlewares.use("/api/telegram/set-webhook", (req, res, next) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.setHeader("Content-Type", "application/json");
+
+        if (req.method === "OPTIONS") {
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+        const handleSetWebhook = async (botToken: string, webhookUrl: string) => {
+          if (!botToken) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ success: false, message: "Thiếu botToken" }));
             return;
           }
 
-          let body = "";
-          req.on("data", (chunk) => body += chunk.toString());
-          req.on("end", async () => {
-            try {
-              const parsed = body ? JSON.parse(body) : {};
-              await handleSetWebhook(parsed.botToken || "", parsed.webhookUrl || "");
-            } catch (e: any) {
-              res.writeHead(500);
-              res.end(JSON.stringify({ success: false, message: e.message }));
-            }
+          const pollRes = await runTelegramPollingBatch();
+
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            success: true,
+            message: "Kích hoạt nhận lệnh Telegram thành công! Server đã bắt đầu lắng nghe và trả lời tin nhắn tự động.",
+            pollRes
+          }));
+        };
+
+        if (req.method === "GET") {
+          const parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+          const botToken = parsedUrl.searchParams.get("botToken") || "";
+          const webhookUrl = parsedUrl.searchParams.get("webhookUrl") || "";
+          handleSetWebhook(botToken, webhookUrl).catch((e: any) => {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: e.message }));
           });
           return;
         }
 
-        // Route: /api/telegram/webhook
-        if (pathname === "/api/telegram/webhook") {
-          let bodyStr = "";
-          req.on("data", (chunk) => bodyStr += chunk.toString());
-          req.on("end", async () => {
-            res.writeHead(200);
-            res.end(JSON.stringify({ ok: true }));
+        let body = "";
+        req.on("data", (chunk) => body += chunk.toString());
+        req.on("end", async () => {
+          try {
+            const parsed = body ? JSON.parse(body) : {};
+            await handleSetWebhook(parsed.botToken || "", parsed.webhookUrl || "");
+          } catch (e: any) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, message: e.message }));
+          }
+        });
+      });
 
-            try {
-              const update = JSON.parse(bodyStr || "{}");
-              const message = update.message || update.edited_message;
-              if (!message || !message.chat || !message.text) return;
+      // 4. POST /api/telegram/webhook: Webhook fallback handler
+      server.middlewares.use("/api/telegram/webhook", (req, res, next) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.setHeader("Content-Type", "application/json");
 
-              const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
-              const tokenResp = await fetch(tokenUrl);
-              let botToken = "";
-              if (tokenResp.ok) {
-                const tokenData = await tokenResp.json();
-                botToken = tokenData.fields?.value?.stringValue || "";
-              }
-              if (!botToken) return;
-
-              await processTelegramMessageCommand(message.text, message.chat.id, botToken);
-            } catch (err: any) {
-              console.error("Lỗi Telegram Webhook handler:", err);
-            }
-          });
+        if (req.method === "OPTIONS") {
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
           return;
         }
 
-        // Unknown /api/telegram path
-        res.writeHead(404);
-        res.end(JSON.stringify({ success: false, message: `Endpoint không tồn tại: ${pathname}` }));
+        let bodyStr = "";
+        req.on("data", (chunk) => bodyStr += chunk.toString());
+        req.on("end", async () => {
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
+
+          try {
+            const update = JSON.parse(bodyStr || "{}");
+            const message = update.message || update.edited_message;
+            if (!message || !message.chat || !message.text) return;
+
+            const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
+            const tokenResp = await fetch(tokenUrl);
+            let botToken = "";
+            if (tokenResp.ok) {
+              const tokenData = await tokenResp.json();
+              botToken = tokenData.fields?.value?.stringValue || "";
+            }
+            if (!botToken) return;
+
+            await processTelegramMessageCommand(message.text, message.chat.id, botToken);
+          } catch (err: any) {
+            console.error("Lỗi Telegram Webhook handler:", err);
+          }
+        });
       });
 
       // POST /api/ai-audit: Gemini Vision AI audit for proof images vs entered data

@@ -110,6 +110,11 @@ export default function AdminSettings() {
         setIsLoadingSetting(false);
       }
 
+      // Auto-activate Telegram Bot listener on mount if token is saved
+      if (tg.botToken) {
+        registerTelegramWebhook(tg.botToken).catch(() => {});
+      }
+
       // Check yesterday status
       setIsCheckingStatus(true);
       try {
@@ -788,28 +793,21 @@ export default function AdminSettings() {
               </ol>
             </div>
 
+            {/* Live Auto-listening Status Badge */}
+            <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-xs flex items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span>🤖 Bot AI đang tự động lắng nghe & phản hồi lệnh Telegram 24/7</span>
+              </div>
+              <span className="text-[10px] text-emerald-400/80 bg-emerald-900/40 px-2 py-0.5 rounded-full border border-emerald-500/20 hidden sm:inline">
+                Tự động hóa 100%
+              </span>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-1">
-              <Button
-                type="button"
-                onClick={handleActivateWebhook}
-                disabled={isSavingTelegram}
-                variant="outline"
-                className="w-full sm:w-auto px-4 py-2 rounded-xl border-purple-500/50 bg-purple-950/30 text-purple-300 hover:bg-purple-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2"
-              >
-                <Bot className="w-3.5 h-3.5 text-purple-400" />
-                ⚡ Kích Hoạt Lắng Nghe
-              </Button>
-
-              <Button
-                type="button"
-                onClick={handlePollTelegram}
-                variant="outline"
-                className="w-full sm:w-auto px-4 py-2 rounded-xl border-emerald-500/50 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2"
-              >
-                <Scan className="w-3.5 h-3.5 text-emerald-400" />
-                🔍 Quét Tin Nhắn Ngay
-              </Button>
-
               <Button
                 type="button"
                 onClick={handleTestTelegramSend}
@@ -818,7 +816,7 @@ export default function AdminSettings() {
                 className="w-full sm:w-auto px-4 py-2 rounded-xl border-sky-500/40 text-sky-300 hover:bg-sky-500/10 font-bold text-xs transition-all flex items-center justify-center gap-2"
               >
                 <Send className="w-3.5 h-3.5 text-sky-400" />
-                {isTestingTelegram ? "Đang gửi..." : "Gửi Thử Telegram"}
+                {isTestingTelegram ? "Đang gửi..." : "Gửi Thử Báo Cáo Telegram"}
               </Button>
 
               <Button
