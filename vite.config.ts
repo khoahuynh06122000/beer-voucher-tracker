@@ -643,6 +643,22 @@ function vitePluginManusDebugCollector(): Plugin {
             }
           }
 
+          // If cold start (offset === 0), quickly jump to the last 10 updates to skip ancient backlog
+          if (telegramPollingOffset === 0) {
+            try {
+              const initResp = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=-10&limit=10`);
+              if (initResp.ok) {
+                const initData = await initResp.json();
+                if (initData.ok && Array.isArray(initData.result) && initData.result.length > 0) {
+                  telegramPollingOffset = initData.result[0].update_id;
+                  console.log(`[TELEGRAM COLD START OFFSET JUMP] Set offset to ${telegramPollingOffset}`);
+                }
+              }
+            } catch (initErr) {
+              console.error("[TELEGRAM OFFSET INIT ERR]", initErr);
+            }
+          }
+
           // Call getUpdates
           const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&timeout=0`;
           const resp = await fetch(updatesUrl);
