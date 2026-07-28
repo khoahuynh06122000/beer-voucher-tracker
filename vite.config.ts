@@ -344,6 +344,8 @@ function vitePluginManusDebugCollector(): Plugin {
 
         const replyTelegram = async (replyHtml: string) => {
           try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
             const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -353,27 +355,38 @@ function vitePluginManusDebugCollector(): Plugin {
                 parse_mode: "HTML",
                 disable_web_page_preview: false,
               }),
-            });
-            const data = await resp.json();
+              signal: controller.signal,
+            }).finally(() => clearTimeout(timeoutId));
+
+            const data = await resp.json().catch(() => ({}));
             if (!resp.ok || !data.ok) {
               console.error(`[TELEGRAM REPLY FAIL] ChatId: ${chatId}:`, data);
-              // Fallback to plain text if HTML parsing fails
-              if (data.description && data.description.includes("parse")) {
-                const plainText = replyHtml.replace(/<[^>]+>/g, "");
-                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: chatId,
-                    text: plainText,
-                  }),
-                });
-              }
+              // Fallback to plain text if HTML parsing or Telegram API rejects formatting
+              const plainText = replyHtml.replace(/<[^>]+>/g, "");
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: plainText,
+                }),
+              });
             } else {
               console.log(`[TELEGRAM REPLY OK] ChatId: ${chatId}`);
             }
           } catch (err) {
             console.error("[TELEGRAM REPLY ERR]", err);
+            try {
+              const plainText = replyHtml.replace(/<[^>]+>/g, "");
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: plainText,
+                }),
+              });
+            } catch (_) {}
           }
         };
 
@@ -392,7 +405,7 @@ function vitePluginManusDebugCollector(): Plugin {
             normText === "xin chao" ||
             normText === "bot"
           ) {
-            const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ tự động đối soát số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Gửi báo cáo thẳng lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy thử nhắn một câu lệnh ngay để nhận kết quả!`;
+            const welcome = `<b>🤖 TRỢ LÝ AI ĐỐI SOÁT VOUCHER BIA</b>\n\nXin chào! Tôi là Bot AI hỗ trợ tự động đối soát số liệu nhà hàng & đính kèm ảnh minh chứng.\n\n<b>Cú pháp nhắn lệnh:</b>\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i> (Gửi báo cáo thẳng lên kênh MS Teams!)\n• <i>"gửi teams ngày 2026-07-27"</i>\n\n👉 Bạn hãy nhắn một ngày đối soát bất kỳ (ví dụ: <b>26/07</b> hoặc <b>27/07</b>) để nhận kết quả ngay lập tức!`;
             await replyTelegram(welcome);
             return;
           }
@@ -512,32 +525,7 @@ function vitePluginManusDebugCollector(): Plugin {
             return;
           }
 
-          // 3. Check if user request is an audit query
-          const isAuditRequest =
-            normText.includes("đối soát") ||
-            normText.includes("doi soat") ||
-            normText.includes("soi") ||
-            normText.includes("báo cáo") ||
-            normText.includes("bao cao") ||
-            normText.includes("kiểm tra") ||
-            normText.includes("kiem tra") ||
-            normText.includes("check") ||
-            normText.includes("xem") ||
-            normText.includes("dữ liệu") ||
-            normText.includes("hôm nay") ||
-            normText.includes("hom nay") ||
-            normText.includes("hôm qua") ||
-            normText.includes("hom qua") ||
-            /\b\d{1,2}[\/\-]\d{1,2}\b/.test(normText) ||
-            /\b202\d[-\/]\d{1,2}[-\/]\d{1,2}\b/.test(normText);
-
-          if (!isAuditRequest) {
-            await replyTelegram(`🤖 <b>Chưa hiểu rõ câu lệnh "${text}".</b>\n\nBạn hãy thử nhắn các câu lệnh sau:\n• <i>"đối soát hôm nay"</i>\n• <i>"đối soát hôm qua"</i>\n• <i>"đối soát 26/07"</i>\n• <i>"gửi ms teams"</i>`);
-            return;
-          }
-
-          await replyTelegram(`⏳ <b>Đang quét dữ liệu & đối soát AI cho ngày ${formattedDate}...</b>\n<i>Vui lòng đợi trong giây lát...</i>`);
-
+          // 3. For all other text inputs, treat as Audit Query for target date
           const RESTAURANTS_LIST = [
             { id: "lehoibia", name: "Lê Hội Bia" },
             { id: "nhahang1901", name: "Nhà Hàng 1901" },
@@ -613,60 +601,61 @@ function vitePluginManusDebugCollector(): Plugin {
       // Server-side offset tracker & lock for Telegram getUpdates
       let telegramPollingOffset = 0;
       let isPollingActive = false;
+      let lastPollStartTime = 0;
       let telegramWebhookCleared = false;
 
       const runTelegramPollingBatch = async () => {
-        if (isPollingActive) {
+        // Auto-recover lock if stuck for > 10s
+        if (isPollingActive && Date.now() - lastPollStartTime < 10000) {
           return { success: false, message: "Polling loop currently active" };
         }
         isPollingActive = true;
+        lastPollStartTime = Date.now();
 
         try {
           // Fetch Telegram Bot Token from Firestore settings
           const tokenUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/settings/telegram_bot_token`;
-          const tokenResp = await fetch(tokenUrl);
+          const tokenController = new AbortController();
+          const tokenTimeout = setTimeout(() => tokenController.abort(), 5000);
+          const tokenResp = await fetch(tokenUrl, { signal: tokenController.signal }).finally(() => clearTimeout(tokenTimeout));
+          
           if (!tokenResp.ok) return { success: false, message: "Chưa cấu hình Telegram Bot Token" };
 
           const tokenData = await tokenResp.json();
           const botToken = (tokenData.fields?.value?.stringValue || "").trim();
           if (!botToken) return { success: false, message: "Bot Token trống" };
 
-          // Delete Webhook ONCE so getUpdates works without HTTP 409 Conflict
+          // Always ensure webhook is cleared so getUpdates never conflicts
           if (!telegramWebhookCleared) {
             try {
-              const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+              const delController = new AbortController();
+              const delTimeout = setTimeout(() => delController.abort(), 5000);
+              const delResp = await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`, { signal: delController.signal }).finally(() => clearTimeout(delTimeout));
               const delData = await delResp.json();
-              console.log("[TELEGRAM DELETE WEBHOOK OK]", delData);
-              telegramWebhookCleared = true;
+              console.log("[TELEGRAM DELETE WEBHOOK STATUS]", delData);
+              if (delResp.ok && delData.ok) {
+                telegramWebhookCleared = true;
+              }
             } catch (e) {
               console.error("[TELEGRAM DELETE WEBHOOK ERR]", e);
             }
           }
 
-          // If cold start (offset === 0), quickly jump to the last 10 updates to skip ancient backlog
-          if (telegramPollingOffset === 0) {
-            try {
-              const initResp = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=-10&limit=10`);
-              if (initResp.ok) {
-                const initData = await initResp.json();
-                if (initData.ok && Array.isArray(initData.result) && initData.result.length > 0) {
-                  telegramPollingOffset = initData.result[0].update_id;
-                  console.log(`[TELEGRAM COLD START OFFSET JUMP] Set offset to ${telegramPollingOffset}`);
-                }
-              }
-            } catch (initErr) {
-              console.error("[TELEGRAM OFFSET INIT ERR]", initErr);
-            }
-          }
+          // Call getUpdates with offset
+          const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&limit=20&timeout=0`;
+          const upController = new AbortController();
+          const upTimeout = setTimeout(() => upController.abort(), 6000);
+          const resp = await fetch(updatesUrl, { signal: upController.signal }).finally(() => clearTimeout(upTimeout));
 
-          // Call getUpdates
-          const updatesUrl = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${telegramPollingOffset}&timeout=0`;
-          const resp = await fetch(updatesUrl);
           if (!resp.ok) {
             const errText = await resp.text();
             console.error(`[TELEGRAM GETUPDATES FAIL] HTTP ${resp.status}:`, errText);
-            if (resp.status === 409 || errText.includes("webhook")) {
-              telegramWebhookCleared = false; // Reset flag to attempt deleteWebhook on next iteration
+            if (resp.status === 409 || errText.includes("webhook") || errText.includes("Conflict")) {
+              telegramWebhookCleared = false; // Trigger deleteWebhook on next iteration
+              // Immediate deleteWebhook attempt
+              try {
+                await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+              } catch (_) {}
             }
             return { success: false, message: `Lỗi kết nối Telegram getUpdates (HTTP ${resp.status})` };
           }
@@ -680,14 +669,35 @@ function vitePluginManusDebugCollector(): Plugin {
           let processedCount = 0;
 
           for (const item of updates) {
-            // Update offset immediately so update is never processed twice
-            telegramPollingOffset = Math.max(telegramPollingOffset, item.update_id + 1);
+            // Update offset immediately so update is never re-fetched
+            if (typeof item.update_id === "number") {
+              telegramPollingOffset = Math.max(telegramPollingOffset, item.update_id + 1);
+            }
 
-            const msg = item.message || item.edited_message || item.channel_post || item.edited_channel_post;
-            if (msg && msg.chat && (msg.text || msg.caption)) {
-              const textContent = msg.text || msg.caption || "";
-              console.log(`[TELEGRAM EXECUTING CMD] UpdateID: ${item.update_id} | ChatId: ${msg.chat.id} | Text: "${textContent}"`);
-              await processTelegramMessageCommand(textContent, msg.chat.id, botToken);
+            // Extract message payload from all possible update fields
+            let textContent = "";
+            let msgChatId: number | string | null = null;
+
+            if (item.message) {
+              textContent = item.message.text || item.message.caption || "";
+              msgChatId = item.message.chat?.id;
+            } else if (item.edited_message) {
+              textContent = item.edited_message.text || item.edited_message.caption || "";
+              msgChatId = item.edited_message.chat?.id;
+            } else if (item.channel_post) {
+              textContent = item.channel_post.text || item.channel_post.caption || "";
+              msgChatId = item.channel_post.chat?.id;
+            } else if (item.edited_channel_post) {
+              textContent = item.edited_channel_post.text || item.edited_channel_post.caption || "";
+              msgChatId = item.edited_channel_post.chat?.id;
+            } else if (item.callback_query) {
+              textContent = item.callback_query.data || "";
+              msgChatId = item.callback_query.message?.chat?.id || item.callback_query.from?.id;
+            }
+
+            if (textContent && msgChatId) {
+              console.log(`[TELEGRAM EXECUTING CMD] UpdateID: ${item.update_id} | ChatId: ${msgChatId} | Text: "${textContent}"`);
+              await processTelegramMessageCommand(textContent, msgChatId, botToken);
               processedCount++;
             }
           }
