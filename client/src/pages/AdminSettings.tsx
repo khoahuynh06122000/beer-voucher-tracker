@@ -603,28 +603,28 @@ export default function AdminSettings() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-gray-400 mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+              <label className="block text-xs font-extrabold text-emerald-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-400" />
                 Từ Ngày:
               </label>
               <input
                 type="date"
                 value={exportStartDate}
                 onChange={(e) => setExportStartDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border-2 border-emerald-500/40 text-white text-xs font-bold focus:outline-none focus:border-emerald-400 shadow-xs cursor-pointer"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-gray-400 mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+              <label className="block text-xs font-extrabold text-emerald-300 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-400" />
                 Đến Ngày:
               </label>
               <input
                 type="date"
                 value={exportEndDate}
                 onChange={(e) => setExportEndDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border-2 border-emerald-500/40 text-white text-xs font-bold focus:outline-none focus:border-emerald-400 shadow-xs cursor-pointer"
               />
             </div>
 

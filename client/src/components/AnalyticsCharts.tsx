@@ -341,7 +341,7 @@ export function AnalyticsCharts({
         <Card className="p-5 rounded-xl border border-blue-500/30 bg-blue-500/5 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Tổng Voucher Phát Ra
+              Tổng Voucher Phát Hành
             </span>
             <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
               <Ticket className="w-4 h-4" />
@@ -351,14 +351,14 @@ export function AnalyticsCharts({
             {totalIssuedAll.toLocaleString("vi-VN")}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            ~ {(totalBeerAll * 0.5).toFixed(1)}L Bia & {(totalPotatoAll * 0.1).toFixed(1)}kg Khoai
+            Tổng số lượng voucher BTC / Cổng phát ra
           </p>
         </Card>
 
         <Card className="p-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Đã Thu Về Quy Đổi
+              Tổng Voucher Thu Về
             </span>
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <FileCheck className="w-4 h-4" />
@@ -368,7 +368,7 @@ export function AnalyticsCharts({
             {totalPostedAll.toLocaleString("vi-VN")}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Hóa đơn quy đổi thành công
+            ~ {(totalBeerAll * 0.5).toFixed(1)}L Bia & {(totalPotatoAll * 0.1).toFixed(1)}kg Khoai quy đổi
           </p>
         </Card>
 

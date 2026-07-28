@@ -255,3 +255,25 @@
 .dark .recharts-rectangle.recharts-tooltip-cursor {
   fill: rgba(255, 255, 255, 0.08) !important;
 }
+
+/* High-Visibility Native Date Picker Calendar Icon Fix */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 6px;
+  filter: invert(0.85) brightness(1.5);
+  transition: all 0.2s ease;
+  opacity: 0.95;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) brightness(2.2);
+  transform: scale(1.15);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2.5) drop-shadow(0 0 2px rgba(255, 255, 255, 0.6));
+  opacity: 1;
+}
+
