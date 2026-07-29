@@ -261,8 +261,8 @@ export default function Home() {
                     </h2>
                     <p className="text-xs text-muted-foreground">
                       {isAdmin
-                        ? "Phân tích biến động phát hành vé & quy đổi từng Bộ phận theo 7 ngày gần nhất"
-                        : "Thống kê chỉ số phát hành voucher trên Cloud Firestore"}
+                        ? "Phân tích biến động thu về vé & quy đổi từng Bộ phận theo 7 ngày gần nhất"
+                        : "Thống kê chỉ số voucher thu về trên Cloud Firestore"}
                     </p>
                   </div>
                 </div>

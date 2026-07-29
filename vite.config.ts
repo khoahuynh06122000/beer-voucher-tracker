@@ -951,14 +951,14 @@ function vitePluginManusDebugCollector(): Plugin {
                   if (imageParts.length > 0) {
                     const prompt = `Bạn là trợ lý AI Soát Xét Báo Cáo Nhà Hàng ("Biên bản ghi nhận sự việc" hoặc Hóa đơn/Bill).
 Hãy soi kỹ các ảnh đính kèm và đọc chữ viết tay/chữ in để trích xuất các con số thực tế trên tài liệu:
-1. Số phiếu thu về / Đăng bill
-2. Tổng phát hành
+1. Số phiếu quy đổi / Đăng bill
+2. Tổng Voucher Thu Về
 3. Số lượng bia (lít / ly / vé)
 4. Số lượng khoai tây (phần / kg)
 
 Số liệu bộ phận nhà hàng [${rec.restaurantName}] nhập khai báo là:
-- Phiếu thu về: ${rec.postedBills || 0}
-- Tổng phát hành: ${rec.totalIssued || 0}
+- Phiếu quy đổi: ${rec.postedBills || 0}
+- Tổng Voucher Thu Về: ${rec.totalIssued || 0}
 - Bia xuất: ${rec.beerCoupons || 0}
 - Khoai xuất: ${rec.potatoCoupons || 0}
 
@@ -1309,7 +1309,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                                 items: [
                                   {
                                     type: "TextBlock",
-                                    text: "TỶ LỆ PHÁT HÀNH KPI",
+                                    text: "TỶ LỆ QUY ĐỔI KPI",
                                     size: "Small",
                                     weight: "Bolder",
                                     isSubtle: true
@@ -1354,7 +1354,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                             type: "Column",
                             width: "1",
                             items: [
-                              { type: "TextBlock", text: "Phát Hành", size: "Small", isSubtle: true },
+                              { type: "TextBlock", text: "Tổng Thu Về", size: "Small", isSubtle: true },
                               { type: "TextBlock", text: `${totalIssued}`, size: "Large", weight: "Bolder" }
                             ]
                           },
@@ -1491,8 +1491,8 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                   "activitySubtitle": `📅 Ngày: ${record.date} | 👤 Người báo cáo: ${record.createdBy || "Hệ thống"}`,
                   "facts": [
                     { name: "📈 Tỷ Lệ Quy Đổi KPI:", value: `${progressBar} **${rate}%**` },
-                    { name: "🧾 Đã Thu Về (Đăng Bill):", value: `**${postedBills}** phiếu` },
-                    { name: "📋 Tổng Phát Hành:", value: `**${totalIssued}** phiếu` },
+                    { name: "📥 Tổng Voucher Thu Về:", value: `**${totalIssued}** phiếu *(Quy đổi: ${postedBills}, Hủy: ${cancelled})*` },
+                    { name: "🧾 Voucher Quy Đổi (Đăng Bill):", value: `**${postedBills}** phiếu` },
                     { name: "❌ Coupon Hủy:", value: `**${cancelled}** phiếu` },
                     {
                       name: "🖼️ Ảnh Minh Chứng Bill:",
@@ -1530,7 +1530,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
             const simpleTextPayload = {
               text: `📊 BÁO CÁO PHÂN TÍCH VOUCHER (${record.restaurantName.toUpperCase()})\n📅 Ngày: ${record.date}\n\n` +
                 `📈 Tỷ lệ KPI: ${progressBar} ${rate}%\n` +
-                `🧾 Thu Về: ${postedBills} | 📋 Phát Hành: ${totalIssued} | ❌ Hủy: ${cancelled}\n` +
+                `📥 Tổng Thu Về: ${totalIssued} (Quy đổi: ${postedBills}, Hủy: ${cancelled})\n` +
                 (isMaisonKayser ? `🥐 Voucher Bánh: ${bakery}\n` : `🍟 Khoai Tây: ${potato} | 🍺 Bia: ${beer}\n`) +
                 `\n💡 PHÂN TÍCH TỰ ĐỘNG:\n${badgeText}\n${performanceAssessment}`
             };

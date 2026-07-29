@@ -299,7 +299,7 @@ export function HistoricalDataTable() {
                 ❌ Coupon Hủy
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                📊 Tổng Coupon
+                📊 Tổng Voucher Thu Về
               </TableHead>
               <TableHead className="py-3 px-4 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Tỷ lệ quy đổi

@@ -323,68 +323,68 @@ export function AnalyticsCharts({
 
       {/* KPI Overview Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 rounded-xl border border-purple-500/30 bg-purple-500/5 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <Card className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/5 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Tỷ Lệ Quy Đổi TB
             </span>
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <Percent className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+              <Percent className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-foreground">{overallUtilizationRate}%</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Hiệu suất sử dụng voucher toàn kỳ
+          <div className="text-2xl font-extrabold text-foreground">{overallUtilizationRate}%</div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Hiệu suất quy đổi toàn kỳ
           </p>
         </Card>
 
-        <Card className="p-5 rounded-xl border border-blue-500/30 bg-blue-500/5 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Tổng Voucher Phát Hành
-            </span>
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              <Ticket className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-foreground">
-            {totalIssuedAll.toLocaleString("vi-VN")}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Tổng số lượng voucher BTC / Cổng phát ra
-          </p>
-        </Card>
-
-        <Card className="p-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <Card className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 shadow-xs ring-1 ring-emerald-500/20">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
               Tổng Voucher Thu Về
             </span>
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <FileCheck className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
+              <Ticket className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-foreground">
-            {totalPostedAll.toLocaleString("vi-VN")}
+          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+            {totalIssuedAll.toLocaleString("vi-VN")}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            ~ {(totalBeerAll * 0.5).toFixed(1)}L Bia & {(totalPotatoAll * 0.1).toFixed(1)}kg Khoai quy đổi
+          <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+            = {totalPostedAll.toLocaleString("vi-VN")} Quy đổi + {totalCancelledAll.toLocaleString("vi-VN")} Hủy
           </p>
         </Card>
 
-        <Card className="p-5 rounded-xl border border-amber-500/30 bg-amber-500/5 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Nhà Hàng Dẫn Đầu
+        <Card className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Voucher Quy Đổi
             </span>
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <Award className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <FileCheck className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-lg font-extrabold text-foreground truncate">
+          <div className="text-2xl font-extrabold text-foreground">
+            {totalPostedAll.toLocaleString("vi-VN")}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Đã quy đổi ra hóa đơn
+          </p>
+        </Card>
+
+        <Card className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Top Nhà Hàng
+            </span>
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <Award className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-base font-extrabold text-foreground truncate">
             {topRestaurant ? topRestaurant.name : "N/A"}
           </div>
-          <p className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1">
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1">
             {topRestaurant ? `${topRestaurant.utilizationRate}% quy đổi (${topRestaurant.postedBills} HD)` : "Chưa có số liệu"}
           </p>
         </Card>
@@ -462,7 +462,7 @@ export function AnalyticsCharts({
               <div>
                 <h4 className="font-extrabold text-base text-foreground flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-amber-500" />
-                  Báo Cáo Biểu Đồ Tổng Hợp (Phát Hành, Quy Đổi & Xu Hướng %)
+                  Báo Cáo Biểu Đồ Tổng Hợp (Thu Về, Quy Đổi & Xu Hướng %)
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Thống kê kết hợp số lượng coupon & đường tỷ lệ quy đổi trong giai đoạn {startDate} → {endDate}
@@ -508,7 +508,7 @@ export function AnalyticsCharts({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }} />
-                <Bar yAxisId="left" dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                <Bar yAxisId="left" dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng Voucher Thu Về" />
                 <Bar yAxisId="left" dataKey="postedBills" fill="#10b981" radius={[4, 4, 0, 0]} name="Hóa đơn quy đổi" />
                 <Bar yAxisId="left" dataKey="cancelled" fill="#ef4444" radius={[4, 4, 0, 0]} name="Đã hủy" />
                 <Line
@@ -553,7 +553,7 @@ export function AnalyticsCharts({
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
                   <div className="bg-background p-2.5 rounded-lg border border-border/60">
-                    <span className="text-muted-foreground block text-[11px]">Phát hành TB:</span>
+                    <span className="text-muted-foreground block text-[11px]">Thu về TB:</span>
                     <strong className="text-blue-600 dark:text-blue-400 text-sm font-extrabold">
                       {avgIssuedPerDay.toLocaleString()}
                     </strong>{" "}
@@ -578,7 +578,7 @@ export function AnalyticsCharts({
                 <div className="space-y-1.5 text-xs">
                   {peakIssuedDay && (
                     <div className="flex justify-between items-center bg-background p-2 rounded-lg border border-border/60">
-                      <span className="text-muted-foreground">Phát hành nhiều nhất:</span>
+                      <span className="text-muted-foreground">Thu về nhiều nhất:</span>
                       <div className="text-right">
                         <strong className="text-foreground font-bold">{peakIssuedDay.date}</strong>
                         <span className="ml-1.5 text-blue-600 font-extrabold">({peakIssuedDay.totalIssued.toLocaleString()} vch)</span>
@@ -668,7 +668,7 @@ export function AnalyticsCharts({
 
                   <div className="space-y-1.5 text-xs text-muted-foreground mb-3">
                     <div className="flex justify-between">
-                      <span>Tổng phát ra:</span>
+                      <span>Tổng Thu Về:</span>
                       <strong className="text-foreground">{r.totalIssued.toLocaleString()}</strong>
                     </div>
                     <div className="flex justify-between">
@@ -705,7 +705,7 @@ export function AnalyticsCharts({
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-foreground flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-amber-500" />
-                Cơ Cấu Coupon Phát Hành (Khoai Tây vs Beer vs Hủy)
+                Cơ Cấu Coupon Thu Về (Khoai Tây vs Beer vs Hủy)
               </h4>
             </div>
             {pieCouponData.length > 0 ? (
@@ -790,7 +790,7 @@ export function AnalyticsCharts({
                 />
                 <Legend wrapperStyle={{ fontSize: "12px" }} />
                 <Bar dataKey="postedBills" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Hóa đơn quy đổi" />
-                <Bar dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                <Bar dataKey="totalIssued" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Tổng Voucher Thu Về" />
               </BarChart>
             </ResponsiveContainer>
           </Card>

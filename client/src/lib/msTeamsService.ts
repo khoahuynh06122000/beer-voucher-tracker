@@ -58,7 +58,7 @@ export function generateAnalysisText(record: {
   utilizationRate: number;
 }): string {
   const assessment = getExpertAssessmentText(record);
-  return `${assessment}\n\n**Chi Tiết Số Liệu Tổng Quan:**\n• **Thu về (Đăng bill):** ${record.postedBills} phiếu\n• **Phát hành:** ${record.totalIssued} phiếu\n• **Hủy bỏ:** ${record.cancelled} phiếu`;
+  return `${assessment}\n\n**Chi Tiết Số Liệu Tổng Quan:**\n• **Tổng Voucher Thu Về:** ${record.totalIssued} phiếu (= Quy đổi: ${record.postedBills} + Hủy: ${record.cancelled})\n• **Voucher Quy Đổi:** ${record.postedBills} phiếu\n• **Hủy bỏ:** ${record.cancelled} phiếu`;
 }
 
 const lastSentCache = new Map<string, number>();
@@ -185,7 +185,7 @@ export async function sendMSTeamsReport(
             type: "Column",
             width: "1",
             items: [
-              { type: "TextBlock", text: "Phát Hành", size: "Small", isSubtle: true },
+              { type: "TextBlock", text: "Tổng Thu Về", size: "Small", isSubtle: true },
               { type: "TextBlock", text: `${totalIssued}`, size: "Large", weight: "Bolder" }
             ]
           },
@@ -270,8 +270,8 @@ export async function sendMSTeamsReport(
         "activitySubtitle": `📅 Ngày: **${record.date}**  |  👤 Người báo cáo: **${record.createdBy || "Hệ thống"}**`,
         "facts": [
           { name: "📈 Tỷ Lệ KPI:", value: `${progressBar}  **${rate}%** (${badgeText})` },
-          { name: "📋 Tổng Phát Hành:", value: `**${totalIssued}** phiếu` },
-          { name: "🧾 Thu Về (Đăng Bill):", value: `**${postedBills}** phiếu` },
+          { name: "📥 Tổng Voucher Thu Về:", value: `**${totalIssued}** phiếu *(Quy đổi: ${postedBills}, Hủy: ${cancelled})*` },
+          { name: "🧾 Voucher Quy Đổi (Đăng Bill):", value: `**${postedBills}** phiếu` },
           { name: "❌ Coupon Hủy Bỏ:", value: `**${cancelled}** phiếu` },
           {
             name: "🖼️ Ảnh Minh Chứng Bill:",

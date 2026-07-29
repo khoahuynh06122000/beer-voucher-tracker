@@ -148,12 +148,12 @@ export function formatTelegramAIAuditReport(
         : "❓";
 
     html += `${icon} <b>${res.restaurantName}</b>:\n`;
-    html += `   └ Số liệu BP nhập: <b>${res.dataEntered.postedBills}</b> phiếu thu | Tổng phát hành: <b>${res.dataEntered.totalIssued}</b>\n`;
+    html += `   └ Số liệu BP nhập: Quy đổi <b>${res.dataEntered.postedBills}</b> | Hủy <b>${res.dataEntered.cancelled}</b> | Tổng thu về: <b>${res.dataEntered.totalIssued}</b>\n`;
 
     if (res.status === "NO_IMAGES") {
       html += `   └ ⚠️ <i>Không có ảnh minh chứng đính kèm.</i>\n`;
     } else if (res.status === "MISMATCH") {
-      html += `   └ 🔍 AI soi ảnh bóc tách: Phiếu thu <b>${res.aiExtracted.postedBills ?? "?"}</b> | Tổng PH <b>${res.aiExtracted.totalIssued ?? "?"}</b>\n`;
+      html += `   └ 🔍 AI soi ảnh bóc tách: Phiếu thu <b>${res.aiExtracted.postedBills ?? "?"}</b> | Tổng Thu Về <b>${res.aiExtracted.totalIssued ?? "?"}</b>\n`;
       res.discrepancies.forEach((disc) => {
         html += `   └ 🚨 <b>${disc}</b>\n`;
       });

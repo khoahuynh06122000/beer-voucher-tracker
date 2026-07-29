@@ -472,8 +472,8 @@ export default function AdminSettings() {
         "STT",
         "Ngày",
         "Tên Nhà Hàng",
-        "Phiếu Thu Về (Đăng Bill)",
-        "Tổng Phát Hành",
+        "Voucher Quy Đổi (Đăng Bill)",
+        "Tổng Voucher Thu Về",
         "Tỷ Lệ Quy Đổi (%)",
         "Coupon Hủy",
         "Voucher Bánh (Maison Kayser)",
@@ -998,12 +998,12 @@ export default function AdminSettings() {
                           </div>
 
                           <div className="p-2 rounded-xl bg-black/40 border border-white/5">
-                            <span className="text-[10px] text-gray-400 block font-medium">Tổng Phát Hành (BP)</span>
+                            <span className="text-[10px] text-gray-400 block font-medium">Tổng Voucher Thu Về (BP)</span>
                             <span className="font-black text-amber-300">{item.dataEntered.totalIssued}</span>
                           </div>
 
                           <div className="p-2 rounded-xl bg-black/40 border border-white/5">
-                            <span className="text-[10px] text-gray-400 block font-medium">AI Đọc Phát Hành</span>
+                            <span className="text-[10px] text-gray-400 block font-medium">AI Đọc Tổng Thu Về</span>
                             <span className="font-black text-purple-300">
                               {item.aiExtracted.totalIssued !== undefined && item.aiExtracted.totalIssued !== null
                                 ? item.aiExtracted.totalIssued

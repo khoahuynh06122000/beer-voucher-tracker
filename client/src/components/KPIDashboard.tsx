@@ -817,15 +817,15 @@ export function KPIDashboard({
 
           {/* Side-by-Side Grid: Chart on Left (7 cols), Simple Analysis on Right (5 cols) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Chart: Diễn Biến Phát Hành & Quy Đổi Hàng Ngày */}
+            {/* Chart: Diễn Biến Thu Về & Quy Đổi Hàng Ngày */}
             <Card className="lg:col-span-7 p-4 sm:p-5 rounded-2xl border border-border/80 bg-card shadow-xs flex flex-col justify-between">
               <div className="border-b border-border/60 pb-2.5">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <BarChart2 className="w-4 h-4 text-amber-500" />
-                  <span>Biểu Đồ Quy Đổi &amp; Phát Hành - {userDept.meta.name}</span>
+                  <span>Biểu Đồ Quy Đổi &amp; Thu Về - {userDept.meta.name}</span>
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Cột vàng: Phát ra | Cột xanh: Khách đã đổi | Đường xanh lá: Tỷ lệ (%)
+                  Cột vàng: Thu về | Cột xanh: Khách đã đổi | Đường xanh lá: Tỷ lệ (%)
                 </p>
               </div>
 
@@ -866,7 +866,7 @@ export function KPIDashboard({
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
-                    <Bar yAxisId="left" dataKey="issued" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tổng phát ra" />
+                    <Bar yAxisId="left" dataKey="issued" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Tổng Thu Về" />
                     <Bar yAxisId="left" dataKey="posted" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Đã quy đổi" />
                     <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={2.5} name="Tỷ lệ quy đổi %" dot={{ r: 4 }} />
                   </ComposedChart>
@@ -884,22 +884,28 @@ export function KPIDashboard({
                   </h4>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Tổng Phát Hành</div>
+                    <div className="text-[10px] text-muted-foreground font-medium">Tổng Voucher Thu Về</div>
                     <div className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
                       {userDept.totalIssued.toLocaleString("vi-VN")}
                     </div>
                   </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold">Voucher Quy Đổi</div>
+                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {(userDept.totalPosted + userDept.totalCancelled).toLocaleString("vi-VN")}
+                    </div>
+                  </div>
                   <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Đã Quy Đổi</div>
+                    <div className="text-[10px] text-muted-foreground font-medium">Đã Quy Đổi</div>
                     <div className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5">
                       {userDept.totalPosted.toLocaleString("vi-VN")}
                     </div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                    <div className="text-[11px] text-muted-foreground font-medium">Tỷ Lệ Quy Đổi</div>
-                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
+                    <div className="text-[10px] text-muted-foreground font-medium">Tỷ Lệ Quy Đổi</div>
+                    <div className="text-base font-black text-purple-600 dark:text-purple-400 mt-0.5">
                       {userDept.overallRate}%
                     </div>
                   </div>
@@ -985,7 +991,7 @@ export function KPIDashboard({
                   <span>Nhật Ký Số Liệu Hàng Ngày ({userDept.meta.name})</span>
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Số lượng voucher phát ra, đã đổi và mức độ tăng/giảm so với ngày trước đó
+                  Số lượng voucher thu về, đã đổi và mức độ tăng/giảm so với ngày trước đó
                 </p>
               </div>
             </div>
@@ -995,7 +1001,7 @@ export function KPIDashboard({
                 <thead className="bg-muted/70 text-muted-foreground uppercase text-[10px] font-extrabold tracking-wider border-b border-border">
                   <tr>
                     <th className="px-4 py-3">Ngày</th>
-                    <th className="px-3 py-3 text-right">Phát Hành</th>
+                    <th className="px-3 py-3 text-right">Tổng Thu Về</th>
                     <th className="px-3 py-3 text-right">Khách Đã Đổi</th>
                     <th className="px-3 py-3 text-right">Chưa Dùng / Đã Hủy</th>
                     <th className="px-3 py-3 text-center">Tỷ Lệ Đổi</th>
@@ -1006,7 +1012,7 @@ export function KPIDashboard({
                   {userDept.dailyList.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                        Chưa có dữ liệu phát hành trong khoảng thời gian này.
+                        Chưa có dữ liệu thu về trong khoảng thời gian này.
                       </td>
                     </tr>
                   ) : (
@@ -1096,7 +1102,7 @@ export function KPIDashboard({
                   );
                   if (sortedDepts.length === 0) return "Chưa có dữ liệu trong kỳ.";
                   const topDept = sortedDepts[0];
-                  return `${topDept.meta.name} đóng góp khối lượng phát hành lớn nhất với ${topDept.totalIssued.toLocaleString("vi-VN")} vé (trung bình ${topDept.avgDaily.toLocaleString("vi-VN")} vé/ngày).`;
+                  return `${topDept.meta.name} đóng góp khối lượng thu về lớn nhất với ${topDept.totalIssued.toLocaleString("vi-VN")} vé (trung bình ${topDept.avgDaily.toLocaleString("vi-VN")} vé/ngày).`;
                 })()}
               </p>
             </div>
@@ -1137,7 +1143,7 @@ export function KPIDashboard({
                   if (maxUp && maxUp.diff > 0) {
                     return `Ngày ${latestDate}: ${maxUp.restaurantName} tăng trưởng +${maxUp.diff.toLocaleString("vi-VN")} vé (+${maxUp.pctChange}%) so với ngày trước.`;
                   }
-                  return `Ngày ${latestDate}: Biến động phát hành ở mức cân bằng giữa các nhà hàng.`;
+                  return `Ngày ${latestDate}: Biến động thu về ở mức cân bằng giữa các nhà hàng.`;
                 })()}
               </p>
             </div>
@@ -1184,20 +1190,28 @@ export function KPIDashboard({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div className="p-2.5 rounded-xl bg-background border border-border/60">
-                    <span className="text-[10px] text-muted-foreground font-semibold block">
-                      Tổng Phát Ra
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                    <span className="text-[9px] text-muted-foreground font-semibold block">
+                      Phát Ra
                     </span>
-                    <span className="text-base font-black text-foreground">
+                    <span className="text-sm font-extrabold text-foreground">
                       {dept.totalIssued.toLocaleString("vi-VN")}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-background border border-border/60">
-                    <span className="text-[10px] text-muted-foreground font-semibold block">
-                      Đã Quy Đổi
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold block">
+                      Thu Về
                     </span>
-                    <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                      {(dept.totalPosted + dept.totalCancelled).toLocaleString("vi-VN")}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-background border border-border/60">
+                    <span className="text-[9px] text-muted-foreground font-semibold block">
+                      Quy Đổi
+                    </span>
+                    <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
                       {dept.totalPosted.toLocaleString("vi-VN")}
                     </span>
                   </div>
@@ -1216,7 +1230,7 @@ export function KPIDashboard({
                   </div>
                   {dept.peakRecord && (
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground font-medium">Đỉnh Phát Hành:</span>
+                      <span className="text-muted-foreground font-medium">Đỉnh Thu Về:</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         {dept.peakRecord.date} ({dept.peakRecord.totalIssued?.toLocaleString("vi-VN")})
                       </span>
@@ -1234,7 +1248,7 @@ export function KPIDashboard({
             <div>
               <h4 className="text-sm sm:text-base font-extrabold text-foreground flex items-center gap-2">
                 <BarChart2 className="w-4 h-4 text-amber-500" />
-                <span>Bảng Ma Trận Khối Lượng Phát Hành &amp; Quy Đổi Theo Nhà Hàng (FP&amp;A Time-Series Matrix)</span>
+                <span>Bảng Ma Trận Khối Lượng Thu Về &amp; Quy Đổi Theo Nhà Hàng (FP&amp;A Time-Series Matrix)</span>
               </h4>
               <p className="text-[11px] text-muted-foreground">
                 Mỗi bộ phận được nhóm riêng theo dòng, các cột thể hiện chuỗi thời gian ngày thực hiện
@@ -1297,7 +1311,7 @@ export function KPIDashboard({
                           </td>
 
                           <td className="px-3 py-3 font-bold text-muted-foreground align-middle border-r border-border/50 space-y-1 text-[11px]">
-                            <div className="text-foreground font-extrabold">Phát Hành</div>
+                            <div className="text-foreground font-extrabold">Tổng Thu Về</div>
                             <div className="text-blue-600 dark:text-blue-400">Đã Quy Đổi</div>
                             <div className="text-emerald-600 dark:text-emerald-400">% Chuyển Đổi</div>
                           </td>
@@ -1373,10 +1387,10 @@ export function KPIDashboard({
               <div>
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <BarChart2 className="w-4 h-4 text-amber-500" />
-                  <span>Diễn Biến Phát Hành Theo Ngày Của Các Bộ Phận</span>
+                  <span>Diễn Biến Thu Về Theo Ngày Của Các Bộ Phận</span>
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Trực quan hóa khối lượng vé phát hành từng ngày giúp nhận diện xu hướng &amp; peak day
+                  Trực quan hóa khối lượng vé thu về từng ngày giúp nhận diện xu hướng &amp; peak day
                 </p>
               </div>
             </div>
@@ -1426,10 +1440,10 @@ export function KPIDashboard({
               <div>
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <PieChartIcon className="w-4 h-4 text-blue-500" />
-                  <span>So Sánh Tỷ Lệ Quy Đổi Thực Thu vs Phát Hành</span>
+                  <span>So Sánh Tỷ Lệ Quy Đổi Thực Thu vs Tổng Thu Về</span>
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  So sánh khối lượng phát hành, quy đổi và % hiệu suất chuyển đổi của từng nhà hàng
+                  So sánh khối lượng thu về, quy đổi và % hiệu suất chuyển đổi của từng nhà hàng
                 </p>
               </div>
             </div>
@@ -1471,7 +1485,7 @@ export function KPIDashboard({
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
-                  <Bar yAxisId="left" dataKey="Tổng Phát Ra" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="Tổng Thu Về" fill="#94a3b8" radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="left" dataKey="Đã Quy Đổi" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Line
                     yAxisId="right"
