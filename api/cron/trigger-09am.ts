@@ -7,7 +7,7 @@
  *   - Vercel Cron (khai báo trong vercel.json) chạy mỗi sáng
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getLiveMissingStatus, getFirestoreSetting } from "../../server/botCore.js";
+import { getLiveMissingStatus, getFirestoreSetting, runWeeklyPreventiveAudit } from "../../server/botCore.js";
 
 export default async function handler(_req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
@@ -79,9 +79,25 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       console.error("Lỗi gửi Telegram tự động:", tgErr);
     }
 
+    // 3. THỨ 2 hàng tuần: chạy thêm ĐỐI SOÁT PHÒNG NGỪA (AI chọn ngày nghi ngờ + Gemini soi ảnh)
+    // Giờ VN (UTC+7); getUTCDay(): 0=CN, 1=Thứ 2. Gộp vào cron ngày để không vượt giới hạn cron của Hobby.
+    let weekly: any = null;
+    try {
+      const vnDay = new Date(Date.now() + 7 * 3600 * 1000).getUTCDay();
+      if (vnDay === 1) {
+        const r = await runWeeklyPreventiveAudit();
+        weekly = { chosenDate: r.chosenDate, reason: r.reason, telegramSent: r.sent };
+        messageList.push(`Weekly Audit: soi ngày ${r.chosenDate}${r.sent ? " (đã gửi Telegram)" : ""}`);
+        if (r.sent) sentSuccess = true;
+      }
+    } catch (wErr: any) {
+      console.error("Lỗi weekly preventive audit:", wErr);
+      messageList.push("Weekly Audit lỗi: " + (wErr?.message || String(wErr)));
+    }
+
     const finalMessage = messageList.length > 0 ? messageList.join(" | ") : "Chưa cấu hình kênh nhận thông báo.";
     res.writeHead(200);
-    res.end(JSON.stringify({ success: sentSuccess, message: finalMessage, card }));
+    res.end(JSON.stringify({ success: sentSuccess, message: finalMessage, card, weekly }));
   } catch (e: any) {
     res.writeHead(500);
     res.end(JSON.stringify({ success: false, error: e?.message || String(e) }));

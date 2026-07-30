@@ -507,6 +507,178 @@ export function buildAuditTeamsCard(targetDate: string, results: AuditResult[]) 
   };
 }
 
+// ===========================================================================
+// ĐỐI SOÁT PHÒNG NGỪA HÀNG TUẦN (tự động thứ 2):
+// AI rà số liệu 7 ngày -> chọn 1 ngày nghi ngờ sai số nhất -> Gemini soi ảnh
+// ngày đó -> gửi báo cáo về Telegram.
+// ===========================================================================
+
+const firestoreDocUrlMasked = (path: string, fields: string[]) =>
+  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${path}?${fields
+    .map((f) => `mask.fieldPaths=${f}`)
+    .join("&")}&key=${FIREBASE_API_KEY}`;
+
+/** Thời điểm hiện tại theo giờ VN (UTC+7), đọc bằng getUTC* sẽ ra giờ VN. */
+const vnNowDate = (): Date => new Date(Date.now() + 7 * 3600 * 1000);
+const toYmd = (d: Date): string =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+
+interface DayRow {
+  name: string;
+  hasDoc: boolean;
+  postedBills: number;
+  totalIssued: number;
+  beerCoupons: number;
+  potatoCoupons: number;
+  cancelled: number;
+  bakeryCoupons: number;
+}
+interface DaySummary {
+  date: string;
+  rows: DayRow[];
+}
+
+/** Lấy số liệu (KHÔNG tải ảnh — dùng field mask) cho nhiều ngày. */
+async function getWeekSummaries(dates: string[]): Promise<DaySummary[]> {
+  const fields = ["postedBills", "totalIssued", "beerCoupons", "potatoCoupons", "cancelled", "bakeryCoupons"];
+  return Promise.all(
+    dates.map(async (date): Promise<DaySummary> => {
+      const rows = await Promise.all(
+        RESTAURANTS.map(async (r): Promise<DayRow> => {
+          const empty: DayRow = { name: r.name, hasDoc: false, postedBills: 0, totalIssued: 0, beerCoupons: 0, potatoCoupons: 0, cancelled: 0, bakeryCoupons: 0 };
+          try {
+            const resp = await fetch(firestoreDocUrlMasked(`vouchers/${r.id}_${date}`, fields));
+            if (!resp.ok) return empty;
+            const data = await resp.json();
+            const f = data.fields;
+            if (!f) return empty;
+            return {
+              name: r.name,
+              hasDoc: true,
+              postedBills: numField(f.postedBills),
+              totalIssued: numField(f.totalIssued),
+              beerCoupons: numField(f.beerCoupons),
+              potatoCoupons: numField(f.potatoCoupons),
+              cancelled: numField(f.cancelled),
+              bakeryCoupons: numField(f.bakeryCoupons),
+            };
+          } catch {
+            return empty;
+          }
+        }),
+      );
+      return { date, rows };
+    }),
+  );
+}
+
+/** Nhờ AI chọn 1 ngày nghi ngờ sai số nhất trong tuần (fallback heuristic). */
+async function pickSuspiciousDay(summaries: DaySummary[]): Promise<{ date: string; reason: string }> {
+  const withData = summaries.filter((s) => s.rows.some((r) => r.hasDoc));
+  if (withData.length === 0) {
+    return { date: summaries[summaries.length - 1]?.date || toYmd(vnNowDate()), reason: "Không có dữ liệu nào trong tuần để phân tích." };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+      const table = summaries
+        .map(
+          (s) =>
+            `Ngày ${s.date}:\n` +
+            s.rows
+              .map(
+                (r) =>
+                  `  - ${r.name}: quyDoi=${r.postedBills}, tongThuVe=${r.totalIssued}, bia=${r.beerCoupons}, khoai=${r.potatoCoupons}, huy=${r.cancelled}, banh=${r.bakeryCoupons}${r.hasDoc ? "" : " (chưa nhập)"}`,
+              )
+              .join("\n"),
+        )
+        .join("\n");
+      const prompt = `Bạn là kiểm soát viên nội bộ F&B. Dưới đây là số liệu voucher 7 ngày của các nhà hàng (do bộ phận tự nhập tay). Hãy chọn DUY NHẤT 1 ngày có dấu hiệu NGHI NGỜ SAI SỐ cao nhất, dựa trên bất thường như: số nhảy vọt hoặc tụt bất thường so với các ngày khác, tỷ lệ bia/khoai lệch lạ, Tổng thu về không khớp với Quy đổi cộng Hủy, số liệu tròn trịa đáng ngờ, hoặc thiếu nhất quán.
+Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
+{"date":"YYYY-MM-DD","reason":"lý do ngắn gọn 1-2 câu vì sao ngày này đáng soi kỹ"}
+
+${table}`;
+      const resp = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: [{ role: "user", parts: [{ text: prompt }] }] });
+      const raw = (resp.text || "").replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      if (parsed.date && summaries.some((s) => s.date === parsed.date)) {
+        return { date: parsed.date, reason: parsed.reason || "AI đánh giá ngày này có rủi ro sai số cao nhất." };
+      }
+    } catch (e) {
+      console.error("[pickSuspiciousDay AI err]", e);
+    }
+  }
+
+  // Fallback heuristic: ngày có chênh lệch |TổngThuVề - (QuyĐổi + Hủy)| lớn nhất
+  let best = withData[0];
+  let bestScore = -1;
+  for (const s of withData) {
+    let score = 0;
+    for (const r of s.rows) {
+      if (!r.hasDoc) continue;
+      score += Math.abs(r.totalIssued - (r.postedBills + r.cancelled));
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return { date: best.date, reason: "Chọn theo heuristic: ngày có chênh lệch Tổng thu về so với (Quy đổi + Hủy) lớn nhất (AI text không khả dụng)." };
+}
+
+/** Gửi 1 tin nhắn chủ động tới chat Telegram đã cấu hình (telegram_chat_id). */
+export async function sendTelegramBroadcast(html: string): Promise<boolean> {
+  const [botToken, chatId] = await Promise.all([
+    getFirestoreSetting("telegram_bot_token"),
+    getFirestoreSetting("telegram_chat_id"),
+  ]);
+  if (!botToken || !chatId) return false;
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: "HTML", disable_web_page_preview: false }),
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (resp.ok && d.ok) return true;
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: html.replace(/<[^>]+>/g, "") }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Chạy đối soát phòng ngừa tuần: rà 7 ngày -> chọn ngày nghi ngờ -> soi Gemini -> gửi Telegram. */
+export async function runWeeklyPreventiveAudit(
+  opts: { send?: boolean } = {},
+): Promise<{ chosenDate: string; reason: string; sent: boolean; results: AuditResult[] }> {
+  const shouldSend = opts.send !== false;
+  const base = vnNowDate();
+  const dates: string[] = [];
+  for (let i = 1; i <= 7; i++) dates.push(toYmd(new Date(base.getTime() - i * 86400000)));
+
+  const summaries = await getWeekSummaries(dates);
+  const { date: chosenDate, reason } = await pickSuspiciousDay(summaries);
+  const results = await auditDateWithGemini(chosenDate);
+
+  const dp = chosenDate.split("-");
+  const formatted = `${dp[2]}/${dp[1]}/${dp[0]}`;
+  let html = `<b>🔎 ĐỐI SOÁT PHÒNG NGỪA TUẦN (tự động thứ 2)</b>\n`;
+  html += `🤖 AI đã rà 7 ngày gần nhất và chọn ngày <b>${formatted}</b> để soi kỹ bằng Gemini.\n`;
+  html += `🧠 <b>Lý do nghi ngờ:</b> <i>${reason}</i>\n\n`;
+  html += formatAuditReportHtml(chosenDate, results);
+
+  const sent = shouldSend ? await sendTelegramBroadcast(html) : false;
+  return { chosenDate, reason, sent, results };
+}
+
 /**
  * Xử lý 1 câu lệnh chat Telegram và tự trả lời qua Bot API.
  * Hỗ trợ: /start /help, đối soát Gemini theo ngày, và "gửi ms teams".
