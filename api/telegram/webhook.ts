@@ -13,7 +13,7 @@ import {
   getTelegramBotToken,
   processTelegramMessageCommand,
   readJsonBody,
-} from "../../server/botCore";
+} from "../../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");

@@ -7,7 +7,7 @@
  *   { webhookUrl, customPayload } -> gửi thẳng payload tuỳ ý
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readJsonBody, LIVE_DASHBOARD_URL } from "../server/botCore";
+import { readJsonBody, LIVE_DASHBOARD_URL } from "../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");

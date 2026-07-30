@@ -22,9 +22,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  let core: typeof import("../../server/botCore");
+  let core: typeof import("../../server/botCore.js");
   try {
-    core = await import("../../server/botCore");
+    core = await import("../../server/botCore.js");
   } catch (err: any) {
     res.writeHead(200);
     res.end(JSON.stringify({

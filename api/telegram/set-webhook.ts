@@ -9,7 +9,7 @@
  * cần tiến trình chạy nền 24/7 (khác với polling của bản dev local).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getTelegramBotToken } from "../../server/botCore";
+import { getTelegramBotToken } from "../../server/botCore.js";
 
 function resolveOrigin(req: IncomingMessage): string {
   const proto =
@@ -40,7 +40,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     // Cho phép truyền qua body (POST JSON) nếu không có trên query
     if ((!botToken || !webhookUrl) && req.method === "POST") {
-      const { readJsonBody } = await import("../../server/botCore");
+      const { readJsonBody } = await import("../../server/botCore.js");
       const body = await readJsonBody(req);
       botToken = botToken || (body.botToken || "").trim();
       webhookUrl = webhookUrl || (body.webhookUrl || "").trim();

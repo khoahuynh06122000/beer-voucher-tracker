@@ -7,7 +7,7 @@
  *   - Vercel Cron (khai báo trong vercel.json) chạy mỗi sáng
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getLiveMissingStatus, getFirestoreSetting } from "../../server/botCore";
+import { getLiveMissingStatus, getFirestoreSetting } from "../../server/botCore.js";
 
 export default async function handler(_req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
