@@ -3,6 +3,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
   "installCommand": "npm install --legacy-peer-deps",
+  "functions": {
+    "api/telegram/webhook.ts": { "maxDuration": 60 },
+    "api/ai-audit.ts": { "maxDuration": 60 },
+    "api/cron/trigger-09am.ts": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/cron/trigger-09am", "schedule": "0 2 * * *" }
   ],
