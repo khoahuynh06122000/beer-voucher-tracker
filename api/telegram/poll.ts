@@ -4,9 +4,11 @@
  * Trên production (Vercel) bot chạy ở chế độ WEBHOOK real-time nên KHÔNG cần
  * poll thủ công. Endpoint này giữ lại để nút "Kiểm tra tin nhắn" trong
  * AdminSettings không báo lỗi, và trả về thông báo trạng thái rõ ràng.
+ *
+ * (Tạm thời có nhánh chẩn đoán: nếu import botCore lỗi thì trả JSON mô tả lỗi
+ * thay vì để function crash 500 — giúp xác định nguyên nhân trên Vercel.)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { getTelegramBotToken } from "../../server/botCore";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -20,8 +22,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  let core: typeof import("../../server/botCore");
   try {
-    const botToken = await getTelegramBotToken();
+    core = await import("../../server/botCore");
+  } catch (err: any) {
+    res.writeHead(200);
+    res.end(JSON.stringify({
+      success: false,
+      diag: "IMPORT_BOTCORE_FAILED",
+      error: String(err?.stack || err?.message || err),
+    }));
+    return;
+  }
+
+  try {
+    const botToken = await core.getTelegramBotToken();
     let webhookInfo: any = {};
     if (botToken) {
       const infoResp = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`).catch(() => null);
@@ -41,6 +56,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }));
   } catch (err: any) {
     res.writeHead(200);
-    res.end(JSON.stringify({ success: false, message: err?.message || String(err) }));
+    res.end(JSON.stringify({ success: false, diag: "RUNTIME", error: String(err?.stack || err?.message || err) }));
   }
 }
