@@ -156,7 +156,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
     }
 
     res.writeHead(200);
-    res.end(JSON.stringify({ success: true, checkDate, results }));
+    res.end(JSON.stringify({ success: true, checkDate, envKeyPresent: !!process.env.GEMINI_API_KEY, results }));
   } catch (e: any) {
     res.writeHead(500);
     res.end(JSON.stringify({ success: false, error: e?.message || String(e) }));
