@@ -13,8 +13,17 @@
 
 import type { IncomingMessage } from "node:http";
 
-export const FIREBASE_PROJECT_ID =
+// LƯU Ý: đây là các giá trị CÔNG KHAI lấy từ web config (firebase-applet-config.json),
+// KHÔNG phải secret. Điểm mấu chốt từng gây lỗi CONSUMER_INVALID:
+//  - projectId thật là "peak-jigsaw-h8gvj" (không phải chuỗi ai-studio-... — đó là DATABASE id)
+//  - Firestore dùng NAMED database, không phải "(default)"
+//  - REST bắt buộc kèm ?key=<apiKey> để hợp lệ ở tầng API consumer.
+export const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "peak-jigsaw-h8gvj";
+export const FIRESTORE_DATABASE_ID =
+  process.env.FIRESTORE_DATABASE_ID ||
   "ai-studio-beervoucher-cd7e66ad-a681-4c93-a133-30df0862fdee";
+export const FIREBASE_API_KEY =
+  process.env.FIREBASE_API_KEY || "AIzaSyA2J7pChKraAovbslqBL4xB5fn0JU-UsNs";
 
 export const LIVE_DASHBOARD_URL =
   "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app";
@@ -27,7 +36,7 @@ export const RESTAURANTS = [
 ];
 
 const firestoreDocUrl = (path: string) =>
-  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`;
+  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${path}?key=${FIREBASE_API_KEY}`;
 
 /** Đọc 1 giá trị chuỗi từ collection `settings` (settings/{key}.value). */
 export async function getFirestoreSetting(key: string): Promise<string> {
