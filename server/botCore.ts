@@ -101,20 +101,21 @@ interface UpdatedRestaurant {
  * (mặc định hôm qua) và dựng MS Teams Adaptive Card cảnh báo lệch.
  */
 export async function getLiveMissingStatus(dateStr?: string) {
-  const now = new Date();
+  // Giờ VN (UTC+7): shift epoch +7h rồi đọc bằng getUTC* để ra đúng giờ Việt Nam
+  // dù server Vercel chạy ở UTC. Trước đây in giờ UTC nên nhìn tưởng chạy lúc 2h sáng.
+  const now = new Date(Date.now() + 7 * 3600 * 1000);
   let targetDateStr = dateStr;
   if (!targetDateStr) {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const y = yesterday.getFullYear();
-    const m = String(yesterday.getMonth() + 1).padStart(2, "0");
-    const d = String(yesterday.getDate()).padStart(2, "0");
+    const yesterday = new Date(now.getTime() - 86400000);
+    const y = yesterday.getUTCFullYear();
+    const m = String(yesterday.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(yesterday.getUTCDate()).padStart(2, "0");
     targetDateStr = `${y}-${m}-${d}`;
   }
 
   const dateParts = targetDateStr.split("-");
   const formattedCheckDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-  const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+  const timeStr = `${now.getUTCHours().toString().padStart(2, "0")}:${now.getUTCMinutes().toString().padStart(2, "0")}:${now.getUTCSeconds().toString().padStart(2, "0")} ${now.getUTCDate()}/${now.getUTCMonth() + 1}/${now.getUTCFullYear()} (giờ VN)`;
 
   const missing: string[] = [];
   const updated: UpdatedRestaurant[] = [];
