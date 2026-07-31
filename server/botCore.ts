@@ -308,8 +308,9 @@ export interface AuditResult {
 const GEMINI_EXTRACT_PROMPT = `Bạn là KIỂM SOÁT VIÊN đọc chứng từ voucher bia nhà hàng. Ảnh có thể gồm HÓA ĐƠN IN (máy in, liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Làm ĐÚNG 3 bước:
 
 MÔ HÌNH 2 NGUỒN (nhớ kỹ):
-- HÓA ĐƠN IN = phần ĐÃ QUY ĐỔI: cho biết SỐ LY BIA (mỗi ly 250ml), SỐ PHẦN KHOAI TÂY (mỗi phần 0.1kg), và SỐ BÁNH (với nhà hàng Maison Kayser). KHÔNG chứa vé hủy và tổng vé.
-- BIÊN BẢN GIAO NHẬN (viết tay) = nơi ghi TỔNG VÉ và VÉ HỦY/THỪA (hóa đơn in không có 2 số này).
+- HÓA ĐƠN IN = phần ĐÃ QUY ĐỔI: cho biết SỐ LY BIA (mỗi ly 250ml), SỐ PHẦN KHOAI TÂY (mỗi phần 0.1kg), và SỐ BÁNH (Maison Kayser).
+- BIÊN BẢN GIAO NHẬN (viết tay) = nơi ghi TỔNG VÉ ("voucher nhận được X phiếu") và VÉ HỦY/THỪA.
+- QUAN TRỌNG: Nếu ảnh KHÔNG có hóa đơn in, thì số lượng ĐÃ QUY ĐỔI (bia/khoai/bánh) thường được ghi NGAY trên biên bản (vd: "phát ra 2622 cái bánh, gồm Croissant 1041, Pain au chocolat 888, Raisin danish 693"). Khi đó hãy lấy số đã quy đổi từ biên bản.
 
 BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin, CẢ phần in LẪN viết tay:
 - Hóa đơn IN (hóa đơn nhiệt): MỖI dòng có 1 SỐ đứng ngay cạnh tên món = SỐ LƯỢNG (vd "296 GOLDEN BRIDGE 25" = 296 ly Golden; "40 HELIOS 250ML" = 40 ly Helios; dòng khoai tây = số phần khoai). Lấy CHÍNH số này. TUYỆT ĐỐI BỎ QUA cột "QTY"/"PRICE"/"Net Total"/"TOTAL" nếu bằng 0 — đó là hóa đơn voucher/FOC (giá 0), KHÔNG phải số lượng = 0.
@@ -326,10 +327,10 @@ Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
   "tongLyBiaIn": number|null,                        // tổng ly bia từ hóa đơn IN
   "tongLyBiaTay": number|null,                       // tổng ly bia từ viết tay
   "tongLyBia": number|null,                          // số ly bia ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
-  "khoaiQty": number|null,                           // số phần khoai tây trên hóa đơn IN (null/0 nếu không có)
-  "banhQty": number|null,                            // số bánh trên hóa đơn IN (Maison Kayser; null/0 nếu không có)
+  "khoaiQty": number|null,                           // số phần khoai đã quy đổi (hóa đơn IN, hoặc biên bản nếu không có hóa đơn in); null/0 nếu không có
+  "banhQty": number|null,                            // số bánh đã quy đổi/phát ra (Maison; hóa đơn IN hoặc biên bản, vd "phát ra 2622 cái bánh"); null/0 nếu không có
   "soVeCP": number|null,                             // số vé/CP viết tay (null nếu không chắc)
-  "tongVe": number|null,                             // TỔNG VÉ đọc trên BIÊN BẢN GIAO NHẬN (null nếu biên bản không ghi)
+  "tongVe": number|null,                             // TỔNG VÉ trên biên bản (vd "voucher nhận được 2622 phiếu"); null nếu biên bản không ghi
   "veHuy": number|null,                              // VÉ HỦY đọc trên BIÊN BẢN GIAO NHẬN (null nếu không ghi)
   "ngay": string|null,
   "internalNotes": [string],                         // các điểm KHÔNG nhất quán trong chứng từ
