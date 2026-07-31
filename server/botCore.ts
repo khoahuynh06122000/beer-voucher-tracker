@@ -326,7 +326,7 @@ Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
   "vietTay": [{"ten": string, "soLy": number}],     // các dòng bia viết tay, [] nếu không có
   "tongLyBiaIn": number|null,                        // tổng ly bia từ hóa đơn IN
   "tongLyBiaTay": number|null,                       // tổng ly bia từ viết tay
-  "tongLyBia": number|null,                          // số ly bia ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
+  "tongLyBia": number|null,                          // số ly bia ĐÃ QUY ĐỔI đáng tin nhất (ưu tiên hóa đơn IN; nếu không có hóa đơn in thì lấy từ biên bản)
   "khoaiQty": number|null,                           // số phần khoai đã quy đổi (hóa đơn IN, hoặc biên bản nếu không có hóa đơn in); null/0 nếu không có
   "banhQty": number|null,                            // số bánh đã quy đổi/phát ra (Maison; hóa đơn IN hoặc biên bản, vd "phát ra 2622 cái bánh"); null/0 nếu không có
   "soVeCP": number|null,                             // số vé/CP viết tay (null nếu không chắc)
@@ -347,8 +347,75 @@ const entered = (rec: VoucherRec) => ({
 });
 
 /**
- * Đối soát 1 record: Gemini trích số (ly bia, CP ghi tay) -> code tính CP hợp lý
- * = tổng ly bia ÷ 2 -> đối chiếu 3 bên (bia÷2 ↔ CP ghi tay ↔ số bộ phận nhập).
+ * Gọi model Vision để trích số từ ảnh. Thử GEMINI trước (trực tiếp); nếu lỗi hoặc
+ * hết lượt (429) thì FALLBACK sang OPENROUTER (OpenAI-compatible). Trả text thô.
+ * Cần GEMINI_API_KEY và/hoặc OPENROUTER_API_KEY (+ tùy chọn OPENROUTER_MODEL).
+ */
+async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
+  const imgs = dataUrls.slice(0, 3);
+  let lastErr: any = null;
+
+  // 1) Gemini trực tiếp
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const parts = imgs
+        .map((u) => {
+          const m = u.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+          return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
+        })
+        .filter(Boolean);
+      const resp = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
+      });
+      const t = (resp.text || "").trim();
+      if (t) return t;
+      throw new Error("Gemini trả rỗng");
+    } catch (e: any) {
+      lastErr = e;
+      console.error("[VISION] Gemini lỗi, thử OpenRouter:", e?.message || e);
+    }
+  }
+
+  // 2) Fallback OpenRouter (OpenAI-compatible, hỗ trợ data URI ảnh)
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    try {
+      const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+      const content: any[] = [{ type: "text", text: promptText }];
+      for (const u of imgs) content.push({ type: "image_url", image_url: { url: u } });
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${orKey}`,
+          "Content-Type": "application/json",
+          "X-Title": "Beer Voucher Audit",
+        },
+        body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(`OpenRouter HTTP ${resp.status}: ${t.slice(0, 200)}`);
+      }
+      const data = await resp.json();
+      const t = (data?.choices?.[0]?.message?.content || "").trim();
+      if (t) return t;
+      throw new Error("OpenRouter trả rỗng");
+    } catch (e: any) {
+      lastErr = e;
+      console.error("[VISION] OpenRouter lỗi:", e?.message || e);
+    }
+  }
+
+  throw lastErr || new Error("Không có model AI khả dụng (thiếu GEMINI_API_KEY & OPENROUTER_API_KEY).");
+}
+
+/**
+ * Đối soát 1 record: Vision trích số (ly bia/khoai/bánh, tổng vé, vé hủy) -> code
+ * tính vé quy đổi (bia ÷2, khoai/bánh 1:1) và đối chiếu với số bộ phận nhập.
  */
 export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
   const base = {
@@ -362,29 +429,17 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
   if (rec.billImages.length === 0) {
     return { ...base, status: "NO_IMAGES", discrepancies: ["⚠️ Đã nhập số liệu nhưng CHƯA đính kèm ảnh minh chứng."], summaryNote: "Thiếu ảnh để đối soát AI." };
   }
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
   }
   try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    const imageParts = rec.billImages
-      .slice(0, 3)
-      .map((imgUrl) => {
-        const m = imgUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-        return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
-      })
-      .filter(Boolean);
-    if (imageParts.length === 0) {
+    const dataUrls = rec.billImages.filter((u) => /^data:image\/[a-zA-Z]+;base64,/.test(u));
+    if (dataUrls.length === 0) {
       return { ...base, status: "ERROR", discrepancies: ["Ảnh không đúng định dạng base64 để đọc."], summaryNote: "Không đọc được ảnh." };
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: GEMINI_EXTRACT_PROMPT }, ...(imageParts as any[])] }],
-    });
-    const raw = (response.text || "").replace(/```json/g, "").replace(/```/g, "").trim();
+    const rawText = await extractRawFromImages(GEMINI_EXTRACT_PROMPT, dataUrls);
+    const raw = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
     const g = JSON.parse(raw);
 
     const num = (v: any): number | null => (typeof v === "number" && isFinite(v) ? v : null);
