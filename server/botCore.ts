@@ -307,28 +307,31 @@ export interface AuditResult {
 // do code tự tính (không lệ thuộc AI đọc chữ tay).
 const GEMINI_EXTRACT_PROMPT = `Bạn là KIỂM SOÁT VIÊN đọc chứng từ voucher bia nhà hàng. Ảnh có thể gồm HÓA ĐƠN IN (máy in, liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Làm ĐÚNG 3 bước:
 
-BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin trên ảnh, CẢ phần in LẪN viết tay:
-- Hóa đơn IN (thường là hóa đơn nhiệt): MỖI dòng bia có 1 SỐ đứng ngay cạnh tên = SỐ LY của loại đó (vd "296 GOLDEN BRIDGE 25" = 296 ly Golden; "40 HELIOS 250ML" = 40 ly Helios). Lấy CHÍNH số này làm số ly. TUYỆT ĐỐI BỎ QUA cột "QTY"/"PRICE"/"Net Total"/"TOTAL" nếu chúng bằng 0 — đó là hóa đơn voucher/FOC (miễn phí, giá 0), KHÔNG phải số ly = 0.
-- Biên bản VIẾT TAY: từng loại bia + số ly; số "vé / CP / voucher / phiếu"; tổng vé; vé hủy/thừa; ngày (nếu có). Đọc chữ số thật cẩn thận (dễ nhầm 6↔0, 1↔7, thêm/thiếu chữ số).
+MÔ HÌNH 2 NGUỒN (nhớ kỹ):
+- HÓA ĐƠN IN = phần ĐÃ QUY ĐỔI: cho biết SỐ LY BIA (mỗi ly 250ml) và SỐ PHẦN KHOAI TÂY (mỗi phần 0.1kg). KHÔNG chứa vé hủy và tổng vé.
+- BIÊN BẢN GIAO NHẬN (viết tay) = nơi ghi TỔNG VÉ và VÉ HỦY/THỪA (hóa đơn in không có 2 số này).
 
-BƯỚC 2 — TỰ SOÁT NỘI BỘ (rất quan trọng): đối chiếu phần IN với phần VIẾT TAY:
-- Nếu cùng 1 loại bia mà số in khác số viết tay (vd Helios in 40 nhưng tay ghi 210) → ghi rõ vào "internalNotes".
-- Mỗi ly bia = 250ml; số vé/CP thường = TỔNG LY ÷ 2. Nếu số CP viết tay không bằng tổng ly ÷ 2 → ghi chú.
+BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin, CẢ phần in LẪN viết tay:
+- Hóa đơn IN (hóa đơn nhiệt): MỖI dòng có 1 SỐ đứng ngay cạnh tên món = SỐ LƯỢNG (vd "296 GOLDEN BRIDGE 25" = 296 ly Golden; "40 HELIOS 250ML" = 40 ly Helios; dòng khoai tây = số phần khoai). Lấy CHÍNH số này. TUYỆT ĐỐI BỎ QUA cột "QTY"/"PRICE"/"Net Total"/"TOTAL" nếu bằng 0 — đó là hóa đơn voucher/FOC (giá 0), KHÔNG phải số lượng = 0.
+- Biên bản giao nhận VIẾT TAY: số "vé / CP / voucher / phiếu"; TỔNG VÉ; VÉ HỦY / vé thừa; ngày. Đọc chữ số thật cẩn thận (dễ nhầm 6↔0, 1↔7, thêm/thiếu chữ số).
 
-BƯỚC 3 — CHỐT SỐ ĐÁNG TIN: với mỗi chỉ tiêu chọn con số đáng tin nhất, ƯU TIÊN HÓA ĐƠN IN (rõ hơn chữ tay). Tự đánh giá độ tin cậy.
+BƯỚC 2 — TỰ SOÁT NỘI BỘ: đối chiếu phần IN với phần viết tay. Nếu cùng 1 món mà số in khác số viết tay (vd Helios in 40 nhưng tay ghi 210) → ghi rõ vào "internalNotes".
+
+BƯỚC 3 — CHỐT SỐ ĐÁNG TIN: ƯU TIÊN HÓA ĐƠN IN cho số ly bia/khoai; lấy tổng vé & vé hủy từ biên bản giao nhận. Tự đánh giá độ tin cậy.
 
 Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
 {
   "hoaDonIn": [{"ten": string, "soLy": number}],   // các dòng bia trên hóa đơn IN, [] nếu không có
   "vietTay": [{"ten": string, "soLy": number}],     // các dòng bia viết tay, [] nếu không có
-  "tongLyBiaIn": number|null,                        // tổng ly từ hóa đơn IN
-  "tongLyBiaTay": number|null,                       // tổng ly từ viết tay
-  "tongLyBia": number|null,                          // số ly ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
+  "tongLyBiaIn": number|null,                        // tổng ly bia từ hóa đơn IN
+  "tongLyBiaTay": number|null,                       // tổng ly bia từ viết tay
+  "tongLyBia": number|null,                          // số ly bia ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
+  "khoaiQty": number|null,                           // số phần khoai tây trên hóa đơn IN (null/0 nếu không có)
   "soVeCP": number|null,                             // số vé/CP viết tay (null nếu không chắc)
-  "tongVe": number|null,
-  "veHuy": number|null,
+  "tongVe": number|null,                             // TỔNG VÉ đọc trên BIÊN BẢN GIAO NHẬN (null nếu biên bản không ghi)
+  "veHuy": number|null,                              // VÉ HỦY đọc trên BIÊN BẢN GIAO NHẬN (null nếu không ghi)
   "ngay": string|null,
-  "internalNotes": [string],                         // các điểm KHÔNG nhất quán ngay trong chứng từ
+  "internalNotes": [string],                         // các điểm KHÔNG nhất quán trong chứng từ
   "confidence": "cao"|"trung binh"|"thap",
   "note": string
 }`;
@@ -385,63 +388,91 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     const num = (v: any): number | null => (typeof v === "number" && isFinite(v) ? v : null);
     const tongLyBiaIn = num(g.tongLyBiaIn);
     const tongLyBiaTay = num(g.tongLyBiaTay);
-    const tongLyBia = num(g.tongLyBia) ?? tongLyBiaIn ?? tongLyBiaTay;
-    let soVeCP = num(g.soVeCP);
-    const tongVe = num(g.tongVe);
-    const veHuy = num(g.veHuy);
+    const biaLy = num(g.tongLyBia) ?? tongLyBiaIn ?? tongLyBiaTay; // số ly bia đã quy đổi (Bills IN)
+    const khoaiQty = num(g.khoaiQty);                              // số phần khoai (Bills IN)
+    const bbTongVe = num(g.tongVe);                                // tổng vé (biên bản giao nhận)
+    const bbVeHuy = num(g.veHuy);                                  // vé hủy (biên bản giao nhận)
     const internalNotes: string[] = Array.isArray(g.internalNotes)
       ? g.internalNotes.filter((x: any) => typeof x === "string" && x.trim())
       : [];
     const confidence = typeof g.confidence === "string" ? g.confidence : "";
 
-    // Gemini hay nhầm: điền TỔNG LY BIA vào ô số vé/CP. Nếu soVeCP trùng tổng ly bia
-    // thì coi như không đọc được số vé ghi tay (tránh dòng đối chiếu chéo sai lệch).
-    if (soVeCP != null && tongLyBia != null && soVeCP === tongLyBia) soVeCP = null;
-
-    // CP hợp lý: ưu tiên bia÷2 (từ hóa đơn IN, đáng tin hơn chữ tay); nếu không có ly bia thì lấy CP ghi tay
-    const expectedCP = tongLyBia != null ? Math.round(tongLyBia / 2) : null;
-    const reasonable = expectedCP ?? soVeCP;
-    const enteredVe = rec.postedBills;
+    // Vé quy đổi = số ly/phần ÷ 2 (1 vé = 2 ly bia hoặc 2 phần khoai). Nguồn: HÓA ĐƠN IN.
+    const beerVe = biaLy != null ? Math.round(biaLy / 2) : null;
+    const potatoVe = khoaiQty != null && khoaiQty > 0 ? Math.round(khoaiQty / 2) : (khoaiQty === 0 ? 0 : null);
+    const hasRedeemed = beerVe != null || (potatoVe != null && (khoaiQty ?? 0) > 0);
+    const postedExpected = (beerVe ?? 0) + (potatoVe ?? 0);
 
     const disc: string[] = [];
     let status: AuditStatus = "MATCH";
+    const mismatch = () => { status = "MISMATCH"; };
 
-    if (reasonable != null) {
-      if (enteredVe !== reasonable) {
-        status = "MISMATCH";
-        const basis = expectedCP != null ? `${tongLyBia} ly bia ÷ 2` : "CP ghi tay trên biên bản";
-        disc.push(`Số vé bộ phận nhập <b>${enteredVe}</b> ≠ CP hợp lý <b>${reasonable}</b> (${basis}) — chênh ${Math.abs(enteredVe - reasonable)} vé.`);
+    // 1) Vé bia quy đổi (Bills IN ÷2) vs beerCoupons app
+    if (beerVe != null) {
+      if (beerVe !== rec.beerCoupons) {
+        mismatch();
+        disc.push(`🍺 Vé bia: hóa đơn IN <b>${biaLy}</b> ly ÷2 = <b>${beerVe}</b> vé ≠ app nhập <b>${rec.beerCoupons}</b> — chênh ${Math.abs(beerVe - rec.beerCoupons)}.`);
+      } else {
+        disc.push(`🍺 Vé bia khớp: ${beerVe} (= ${biaLy} ly ÷2).`);
       }
     } else {
-      disc.push("Không đọc được số ly bia lẫn số vé trên ảnh để tính CP đối chiếu.");
+      disc.push("🍺 Không đọc được số ly bia trên hóa đơn IN để tính vé bia.");
     }
 
-    // Điểm KHÔNG nhất quán ngay trong chứng từ (do Gemini tự soát in vs viết tay)
-    for (const n of internalNotes) disc.push(`🔎 Trong chứng từ: ${n}`);
+    // 2) Vé khoai quy đổi (chỉ khi có khoai)
+    if (potatoVe != null && (khoaiQty ?? 0) > 0) {
+      if (potatoVe !== rec.potatoCoupons) {
+        mismatch();
+        disc.push(`🍟 Vé khoai: hóa đơn IN <b>${khoaiQty}</b> phần ÷2 = <b>${potatoVe}</b> vé ≠ app nhập <b>${rec.potatoCoupons}</b>.`);
+      } else {
+        disc.push(`🍟 Vé khoai khớp: ${potatoVe}.`);
+      }
+    }
+
+    // 3) Tổng vé quy đổi (bia + khoai) vs postedBills app
+    if (hasRedeemed && postedExpected !== rec.postedBills) {
+      mismatch();
+      disc.push(`🎟️ Tổng vé quy đổi: hóa đơn IN = <b>${postedExpected}</b> ≠ app nhập <b>${rec.postedBills}</b>.`);
+    }
+
+    // 4) Tổng vé thu về — nguồn: BIÊN BẢN GIAO NHẬN
+    if (bbTongVe != null) {
+      if (bbTongVe !== rec.totalIssued) {
+        mismatch();
+        disc.push(`Σ Tổng vé (biên bản giao nhận) <b>${bbTongVe}</b> ≠ app nhập <b>${rec.totalIssued}</b>.`);
+      } else {
+        disc.push(`Σ Tổng vé khớp: ${bbTongVe}.`);
+      }
+    } else {
+      disc.push("Σ Chưa đọc được Tổng vé trên biên bản giao nhận để đối chiếu.");
+    }
+
+    // 5) Vé hủy — nguồn: BIÊN BẢN GIAO NHẬN
+    if (bbVeHuy != null) {
+      if (bbVeHuy !== rec.cancelled) {
+        mismatch();
+        disc.push(`❌ Vé hủy (biên bản giao nhận) <b>${bbVeHuy}</b> ≠ app nhập <b>${rec.cancelled}</b>.`);
+      } else {
+        disc.push(`❌ Vé hủy khớp: ${bbVeHuy}.`);
+      }
+    } else {
+      disc.push("❌ Chưa đọc được Vé hủy trên biên bản giao nhận để đối chiếu.");
+    }
+
+    // Điểm không nhất quán trong chứng từ (Gemini tự soát in vs viết tay)
+    for (const n of internalNotes) disc.push(`🔎 ${n}`);
     if (tongLyBiaIn != null && tongLyBiaTay != null && tongLyBiaIn !== tongLyBiaTay && tongLyBiaIn > 0) {
-      disc.push(`🔎 Tổng ly bia không khớp giữa 2 nguồn: hóa đơn IN ${tongLyBiaIn} vs biên bản tay ${tongLyBiaTay}. Số dùng để tính CP: ${tongLyBia}.`);
+      disc.push(`🔎 Số ly bia: hóa đơn IN ${tongLyBiaIn} vs viết tay ${tongLyBiaTay}; dùng số hóa đơn IN (${biaLy}).`);
     }
 
-    // Đối chiếu chéo với CP ghi tay CHỈ khi đọc được và KHỚP bia÷2 (xác nhận thêm).
-    if (soVeCP != null && expectedCP != null && soVeCP === expectedCP) {
-      disc.push(`✓ Số CP ghi tay khớp bia÷2 (${soVeCP}) — xác nhận thêm.`);
-    }
-    if (tongVe == null) disc.push("Không có tổng vé thu về trên biên bản để đối chiếu.");
-    if (veHuy == null) disc.push("Không có vé hủy trên biên bản để đối chiếu.");
-
-    const items = Array.isArray(g.hoaDonIn) && g.hoaDonIn.length
-      ? g.hoaDonIn
-      : Array.isArray(g.vietTay)
-        ? g.vietTay
-        : [];
-    const breakdown = items.length ? items.map((x: any) => `${x.ten} ${x.soLy}`).join(", ") : "?";
-    const mlText = tongLyBia != null ? ` = ${tongLyBia * 250}ml` : "";
-    const confText = confidence ? ` [độ tin cậy: ${confidence}]` : "";
-    const summaryNote = `Bia: ${breakdown} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. Vé bộ phận nhập: ${enteredVe}.${confText}`;
+    const biaL = biaLy != null ? (biaLy * 0.25).toFixed(1) : "?";
+    const khoaiKg = khoaiQty != null ? (khoaiQty * 0.1).toFixed(1) : "0";
+    const confText = confidence ? ` [tin cậy: ${confidence}]` : "";
+    const summaryNote = `Hóa đơn IN (đã quy đổi): ${biaLy ?? "?"} ly bia = ${biaL}L; khoai ${khoaiQty ?? 0} phần = ${khoaiKg}kg. Vé quy đổi ≈ ${postedExpected} (bia ${beerVe ?? 0} + khoai ${potatoVe ?? 0}). App nhập: bia ${rec.beerCoupons}, khoai ${rec.potatoCoupons}, tổng quy đổi ${rec.postedBills}, thu về ${rec.totalIssued}, hủy ${rec.cancelled}.${confText}`;
 
     return {
       ...base,
-      aiExtracted: { postedBills: reasonable, totalIssued: tongVe, beerCoupons: tongLyBia, potatoCoupons: null },
+      aiExtracted: { postedBills: postedExpected, totalIssued: bbTongVe, beerCoupons: beerVe, potatoCoupons: potatoVe },
       status,
       discrepancies: disc,
       summaryNote,
@@ -508,16 +539,11 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
     }
     html += `   └ BP nhập: Quy đổi <b>${r.dataEntered.postedBills}</b> | Tổng thu về <b>${r.dataEntered.totalIssued}</b> | Bia <b>${r.dataEntered.beerCoupons}</b> | Khoai <b>${r.dataEntered.potatoCoupons}</b>\n`;
     if (r.status === "MATCH") {
-      const cp = r.aiExtracted.postedBills;
-      if (cp == null) {
-        html += `   └ ✅ AI soi ${r.imageCount} ảnh: không đủ dữ liệu số để kết luận sai lệch.\n`;
-      } else {
-        html += `   └ ✅ AI soi ${r.imageCount} ảnh: CP hợp lý <b>${cp}</b> (bia÷2) KHỚP số nhập <b>${r.dataEntered.postedBills}</b>.\n`;
-      }
-      for (const d of r.discrepancies) html += `   └ ℹ️ ${d}\n`;
+      html += `   └ ✅ AI soi ${r.imageCount} ảnh — không phát hiện sai lệch:\n`;
+      for (const d of r.discrepancies) html += `   └ ${d}\n`;
     } else if (r.status === "MISMATCH") {
-      html += `   └ 🔍 Bia <b>${r.aiExtracted.beerCoupons ?? "?"}</b> ly ÷ 2 → CP hợp lý <b>${r.aiExtracted.postedBills ?? "?"}</b> | Bộ phận nhập <b>${r.dataEntered.postedBills}</b>\n`;
-      for (const d of r.discrepancies) html += `   └ 🚨 ${d}\n`;
+      html += `   └ 🚨 AI soi ${r.imageCount} ảnh — CÓ sai lệch:\n`;
+      for (const d of r.discrepancies) html += `   └ ${d}\n`;
     } else {
       for (const d of r.discrepancies) html += `   └ ${d}\n`;
     }
