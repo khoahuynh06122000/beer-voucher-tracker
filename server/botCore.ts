@@ -380,11 +380,14 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
         return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
       })
       .filter(Boolean);
+    // gemini-2.5-flash đã bị Google ngừng cấp cho tài khoản mới -> mặc định model còn
+    // cấp cho mọi tài khoản. Đổi qua env GEMINI_MODEL nếu cần.
+    const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
     for (let i = 0; i < geminiKeys.length; i++) {
       try {
         const ai = new GoogleGenAI({ apiKey: geminiKeys[i] });
         const resp = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: geminiModel,
           contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
         });
         const t = (resp.text || "").trim();
