@@ -38,9 +38,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     const botToken = await core.getTelegramBotToken();
     let webhookInfo: any = {};
+    let botInfo: any = {};
     if (botToken) {
       const infoResp = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`).catch(() => null);
       if (infoResp) webhookInfo = (await infoResp.json().catch(() => ({}))).result || {};
+      const meResp = await fetch(`https://api.telegram.org/bot${botToken}/getMe`).catch(() => null);
+      if (meResp) botInfo = (await meResp.json().catch(() => ({}))).result || {};
     }
 
     const hasWebhook = !!webhookInfo.url;
@@ -56,6 +59,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       lastError: webhookInfo.last_error_message || null,
       lastErrorDate: webhookInfo.last_error_date || null,
       maxConnections: webhookInfo.max_connections ?? null,
+      botUsername: botInfo.username || null,
+      botId: botInfo.id || null,
+      botName: botInfo.first_name || null,
     }));
   } catch (err: any) {
     res.writeHead(200);
