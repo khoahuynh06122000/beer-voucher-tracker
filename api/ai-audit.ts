@@ -52,7 +52,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     );
 
     res.writeHead(200);
-    res.end(JSON.stringify({ success: true, checkDate, envKeyPresent: !!process.env.GEMINI_API_KEY, results }));
+    res.end(JSON.stringify({
+      success: true,
+      checkDate,
+      envKeyPresent: !!process.env.GEMINI_API_KEY,
+      orKeyPresent: !!process.env.OPENROUTER_API_KEY,
+      orModel: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
+      results,
+    }));
   } catch (e: any) {
     res.writeHead(500);
     res.end(JSON.stringify({ success: false, error: e?.message || String(e) }));
