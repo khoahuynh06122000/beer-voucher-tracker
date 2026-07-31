@@ -370,9 +370,15 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   let gemErr = "";
   let orErr = "";
 
-  // 1) Gemini trực tiếp — thử lần lượt từng key (key sau fallback khi key trước 429)
-  const geminiKeys = getGeminiKeys();
-  if (geminiKeys.length) {
+  // 1) Gemini trực tiếp — thử lần lượt từng key, MỖI KEY dùng model riêng.
+  // key#1 (project cũ) mặc định gemini-2.5-flash; key#2/#3 (project mới, không còn
+  // quyền 2.5) mặc định gemini-2.0-flash. Đổi qua GEMINI_MODEL / GEMINI2_MODEL / GEMINI3_MODEL.
+  const geminiConfigs = [
+    { key: (process.env.GEMINI_API_KEY || "").trim(), model: process.env.GEMINI_MODEL || "gemini-2.5-flash" },
+    { key: (process.env.GEMINI2_API_KEY || "").trim(), model: process.env.GEMINI2_MODEL || "gemini-2.0-flash" },
+    { key: (process.env.GEMINI3_API_KEY || "").trim(), model: process.env.GEMINI3_MODEL || "gemini-2.0-flash" },
+  ].filter((c) => c.key);
+  if (geminiConfigs.length) {
     const { GoogleGenAI } = await import("@google/genai");
     const parts = imgs
       .map((u) => {
@@ -380,22 +386,20 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
         return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
       })
       .filter(Boolean);
-    // gemini-2.5-flash đã bị Google ngừng cấp cho tài khoản mới -> mặc định model còn
-    // cấp cho mọi tài khoản. Đổi qua env GEMINI_MODEL nếu cần.
-    const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-    for (let i = 0; i < geminiKeys.length; i++) {
+    for (let i = 0; i < geminiConfigs.length; i++) {
+      const { key, model } = geminiConfigs[i];
       try {
-        const ai = new GoogleGenAI({ apiKey: geminiKeys[i] });
+        const ai = new GoogleGenAI({ apiKey: key });
         const resp = await ai.models.generateContent({
-          model: geminiModel,
+          model,
           contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
         });
         const t = (resp.text || "").trim();
         if (t) return t;
         throw new Error("Gemini trả rỗng");
       } catch (e: any) {
-        gemErr = `key#${i + 1}: ${e?.message || String(e)}`;
-        console.error(`[VISION] Gemini key#${i + 1} lỗi:`, e?.message || e);
+        gemErr = `key#${i + 1}(${model}): ${e?.message || String(e)}`;
+        console.error(`[VISION] Gemini key#${i + 1} (${model}) lỗi:`, e?.message || e);
       }
     }
   }
@@ -432,7 +436,7 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   }
 
   const parts: string[] = [];
-  parts.push(geminiKeys.length ? `Gemini(${geminiKeys.length} key): ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
+  parts.push(geminiConfigs.length ? `Gemini(${geminiConfigs.length} key): ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
   parts.push(getOpenRouterKey() ? `OpenRouter(${process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free"}): ${orErr || "?"}` : "OpenRouter: (chưa cấu hình)");
   throw new Error(parts.join(" | "));
 }
