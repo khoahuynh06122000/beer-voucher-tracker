@@ -398,15 +398,16 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       disc.push("Không đọc được số ly bia lẫn số vé trên ảnh để tính CP đối chiếu.");
     }
 
-    // Đối chiếu chéo: CP ghi tay vs bia÷2
-    if (soVeCP != null && expectedCP != null && soVeCP !== expectedCP) {
-      disc.push(`Lưu ý: CP ghi tay (${soVeCP}) khác bia÷2 (${expectedCP}) — có thể do đọc chữ tay hoặc ghi nhầm trên biên bản.`);
+    // Đối chiếu chéo với CP ghi tay CHỈ khi Gemini đọc được và KHỚP bia÷2 (xác nhận thêm).
+    // Không báo khi lệch, vì OCR chữ viết tay không đáng tin — căn cứ chính là bia÷2 (hóa đơn in).
+    if (soVeCP != null && expectedCP != null && soVeCP === expectedCP) {
+      disc.push(`✓ Số CP ghi tay trên biên bản (${soVeCP}) khớp với bia÷2 — xác nhận thêm.`);
     }
     if (tongVe == null) disc.push("Không có tổng vé thu về trên biên bản để đối chiếu.");
     if (veHuy == null) disc.push("Không có vé hủy trên biên bản để đối chiếu.");
 
     const mlText = tongLyBia != null ? ` = ${tongLyBia * 250}ml` : "";
-    const summaryNote = `Bia: ${g.beerBreakdown || "?"} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. CP ghi tay: ${soVeCP ?? "?"}. Vé bộ phận nhập: ${enteredVe}.`;
+    const summaryNote = `Bia: ${g.beerBreakdown || "?"} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. Vé bộ phận nhập: ${enteredVe}.`;
 
     return {
       ...base,
