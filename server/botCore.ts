@@ -359,33 +359,41 @@ export const getOpenRouterKey = (): string =>
     process.env.OPENROUTER_API ||
     "").trim();
 
+/** Danh sách key Gemini theo thứ tự ưu tiên (key sau là fallback khi key trước hết lượt). */
+export const getGeminiKeys = (): string[] =>
+  [process.env.GEMINI_API_KEY, process.env.GEMINI2_API_KEY, process.env.GEMINI3_API_KEY]
+    .map((k) => (k || "").trim())
+    .filter(Boolean);
+
 async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
   const imgs = dataUrls.slice(0, 3);
   let gemErr = "";
   let orErr = "";
 
-  // 1) Gemini trực tiếp
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    try {
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const parts = imgs
-        .map((u) => {
-          const m = u.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-          return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
-        })
-        .filter(Boolean);
-      const resp = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
-      });
-      const t = (resp.text || "").trim();
-      if (t) return t;
-      throw new Error("Gemini trả rỗng");
-    } catch (e: any) {
-      gemErr = e?.message || String(e);
-      console.error("[VISION] Gemini lỗi, thử OpenRouter:", gemErr);
+  // 1) Gemini trực tiếp — thử lần lượt từng key (key sau fallback khi key trước 429)
+  const geminiKeys = getGeminiKeys();
+  if (geminiKeys.length) {
+    const { GoogleGenAI } = await import("@google/genai");
+    const parts = imgs
+      .map((u) => {
+        const m = u.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+        return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
+      })
+      .filter(Boolean);
+    for (let i = 0; i < geminiKeys.length; i++) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKeys[i] });
+        const resp = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
+        });
+        const t = (resp.text || "").trim();
+        if (t) return t;
+        throw new Error("Gemini trả rỗng");
+      } catch (e: any) {
+        gemErr = `key#${i + 1}: ${e?.message || String(e)}`;
+        console.error(`[VISION] Gemini key#${i + 1} lỗi:`, e?.message || e);
+      }
     }
   }
 
@@ -421,7 +429,7 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   }
 
   const parts: string[] = [];
-  parts.push(geminiKey ? `Gemini: ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
+  parts.push(geminiKeys.length ? `Gemini(${geminiKeys.length} key): ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
   parts.push(getOpenRouterKey() ? `OpenRouter(${process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free"}): ${orErr || "?"}` : "OpenRouter: (chưa cấu hình)");
   throw new Error(parts.join(" | "));
 }
@@ -442,7 +450,7 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
   if (rec.billImages.length === 0) {
     return { ...base, status: "NO_IMAGES", discrepancies: ["⚠️ Đã nhập số liệu nhưng CHƯA đính kèm ảnh minh chứng."], summaryNote: "Thiếu ảnh để đối soát AI." };
   }
-  if (!process.env.GEMINI_API_KEY && !getOpenRouterKey()) {
+  if (getGeminiKeys().length === 0 && !getOpenRouterKey()) {
     return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
   }
   try {
