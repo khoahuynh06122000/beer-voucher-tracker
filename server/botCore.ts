@@ -372,9 +372,13 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
 
     const num = (v: any): number | null => (typeof v === "number" && isFinite(v) ? v : null);
     const tongLyBia = num(g.tongLyBia);
-    const soVeCP = num(g.soVeCP);
+    let soVeCP = num(g.soVeCP);
     const tongVe = num(g.tongVe);
     const veHuy = num(g.veHuy);
+
+    // Gemini hay nhầm: điền TỔNG LY BIA vào ô số vé/CP. Nếu soVeCP trùng tổng ly bia
+    // thì coi như không đọc được số vé ghi tay (tránh dòng đối chiếu chéo sai lệch).
+    if (soVeCP != null && tongLyBia != null && soVeCP === tongLyBia) soVeCP = null;
 
     // CP hợp lý: ưu tiên bia÷2 (từ hóa đơn IN, đáng tin hơn chữ tay); nếu không có ly bia thì lấy CP ghi tay
     const expectedCP = tongLyBia != null ? Math.round(tongLyBia / 2) : null;
