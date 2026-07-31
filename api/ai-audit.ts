@@ -57,7 +57,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       checkDate,
       envKeyPresent: !!process.env.GEMINI_API_KEY,
       orKeyPresent: !!getOpenRouterKey(),
-      orModel: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
+      orModel: process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
       results,
     }));
   } catch (e: any) {
