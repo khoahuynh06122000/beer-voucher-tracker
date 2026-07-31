@@ -364,9 +364,10 @@ export const getOpenRouterKey = (): string =>
 /** Rút gọn lỗi provider thành 1 câu ngắn gọn (tránh dump nguyên JSON vào báo cáo). */
 const shortErr = (e: string): string => {
   if (!e) return "?";
+  if (/PerDay|RequestsPerDay|per day|limit:\s*0|"limit":\s*0/i.test(e)) return "HẾT LƯỢT NGÀY (đợi reset ~14h chiều mai)";
   const retry = e.match(/retry(?:Delay)?["']?\s*[:=]?\s*["']?(\d+(?:\.\d+)?)s/i) || e.match(/(\d+)\s*s\b/);
   if (/429|RESOURCE_EXHAUSTED|rate.?limit|too many|quota/i.test(e)) {
-    return retry ? `hết lượt (thử lại sau ~${Math.ceil(Number(retry[1]))}s)` : "hết lượt (rate limit)";
+    return retry ? `hết lượt/phút (thử lại sau ~${Math.ceil(Number(retry[1]))}s)` : "hết lượt (rate limit)";
   }
   if (/\b402\b|more credits|insufficient/i.test(e)) return "cần nạp credit (402)";
   if (/no longer available|\b404\b|not found|no endpoints/i.test(e)) return "model không khả dụng (404)";
@@ -382,17 +383,15 @@ export const getGeminiKeys = (): string[] =>
 
 async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
   const imgs = dataUrls.slice(0, 3);
-  let gemErr = "";
-  let orErr = "";
+  const srcErrs: string[] = []; // "GEMINI_API_KEY (model): <lý do ngắn>"
 
-  // 1) Gemini trực tiếp — thử lần lượt từng key, MỖI KEY dùng model riêng.
-  // key#1 (project cũ) mặc định gemini-2.5-flash; key#2/#3 (project mới, không còn
-  // quyền 2.5) mặc định gemini-2.0-flash. Đổi qua GEMINI_MODEL / GEMINI2_MODEL / GEMINI3_MODEL.
+  // 1) Gemini — thử lần lượt từng key (nêu TÊN biến), mỗi key model riêng.
   const geminiConfigs = [
-    { key: (process.env.GEMINI_API_KEY || "").trim(), model: process.env.GEMINI_MODEL || "gemini-2.5-flash" },
-    { key: (process.env.GEMINI2_API_KEY || "").trim(), model: process.env.GEMINI2_MODEL || "gemini-2.0-flash" },
-    { key: (process.env.GEMINI3_API_KEY || "").trim(), model: process.env.GEMINI3_MODEL || "gemini-2.0-flash" },
+    { name: "GEMINI_API_KEY", key: (process.env.GEMINI_API_KEY || "").trim(), model: process.env.GEMINI_MODEL || "gemini-2.5-flash" },
+    { name: "GEMINI2_API_KEY", key: (process.env.GEMINI2_API_KEY || "").trim(), model: process.env.GEMINI2_MODEL || "gemini-2.0-flash" },
+    { name: "GEMINI3_API_KEY", key: (process.env.GEMINI3_API_KEY || "").trim(), model: process.env.GEMINI3_MODEL || "gemini-2.0-flash" },
   ].filter((c) => c.key);
+
   if (geminiConfigs.length) {
     const { GoogleGenAI } = await import("@google/genai");
     const parts = imgs
@@ -401,40 +400,54 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
         return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
       })
       .filter(Boolean);
-    for (let i = 0; i < geminiConfigs.length; i++) {
-      const { key, model } = geminiConfigs[i];
-      try {
-        const ai = new GoogleGenAI({ apiKey: key });
+
+    for (const cfg of geminiConfigs) {
+      const callOnce = async () => {
+        const ai = new GoogleGenAI({ apiKey: cfg.key });
         const resp = await ai.models.generateContent({
-          model,
+          model: cfg.model,
           contents: [{ role: "user", parts: [{ text: promptText }, ...(parts as any[])] }],
         });
         const t = (resp.text || "").trim();
-        if (t) return t;
-        throw new Error("Gemini trả rỗng");
-      } catch (e: any) {
-        gemErr = `key#${i + 1}(${model}): ${e?.message || String(e)}`;
-        console.error(`[VISION] Gemini key#${i + 1} (${model}) lỗi:`, e?.message || e);
+        if (!t) throw new Error("Gemini trả rỗng");
+        return t;
+      };
+      try {
+        return await callOnce();
+      } catch (e1: any) {
+        const m1 = e1?.message || String(e1);
+        const isRateLimit = /429|RESOURCE_EXHAUSTED|rate.?limit|too many/i.test(m1);
+        const isPerDay = /PerDay|RequestsPerDay|per day|limit:\s*0|"limit":\s*0/i.test(m1);
+        const rd = m1.match(/retry(?:Delay)?["']?\s*[:=]?\s*["']?(\d+(?:\.\d+)?)s/i);
+        const waitS = rd ? Math.min(Math.ceil(Number(rd[1])) + 1, 25) : 0;
+        // Tự CHỜ rồi thử lại 1 lần nếu là hết lượt THEO PHÚT (retryDelay ngắn), KHÔNG phải hết ngày
+        if (isRateLimit && !isPerDay && waitS > 0) {
+          console.log(`[VISION] ${cfg.name} 429/phút — chờ ${waitS}s rồi thử lại...`);
+          await new Promise((r) => setTimeout(r, waitS * 1000));
+          try {
+            return await callOnce();
+          } catch (e2: any) {
+            srcErrs.push(`${cfg.name} (${cfg.model}): ${shortErr(e2?.message || String(e2))}`);
+            continue;
+          }
+        }
+        srcErrs.push(`${cfg.name} (${cfg.model}): ${shortErr(m1)}`);
+        console.error(`[VISION] ${cfg.name} (${cfg.model}) lỗi:`, m1);
       }
     }
   }
 
   // 2) Fallback OpenRouter (OpenAI-compatible, hỗ trợ data URI ảnh)
   const orKey = getOpenRouterKey();
+  const orModel = process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
   if (orKey) {
     try {
-      // Mặc định model MIỄN PHÍ có vision của OpenRouter (không cần nạp credit). Đổi bằng env OPENROUTER_MODEL.
-      const model = process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
       const content: any[] = [{ type: "text", text: promptText }];
       for (const u of imgs) content.push({ type: "image_url", image_url: { url: u } });
       const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${orKey}`,
-          "Content-Type": "application/json",
-          "X-Title": "Beer Voucher Audit",
-        },
-        body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
+        headers: { Authorization: `Bearer ${orKey}`, "Content-Type": "application/json", "X-Title": "Beer Voucher Audit" },
+        body: JSON.stringify({ model: orModel, messages: [{ role: "user", content }] }),
       });
       if (!resp.ok) {
         const t = await resp.text();
@@ -442,19 +455,16 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
       }
       const data = await resp.json();
       const t = (data?.choices?.[0]?.message?.content || "").trim();
-      if (t) return t;
-      throw new Error("OpenRouter trả rỗng");
+      if (!t) throw new Error("OpenRouter trả rỗng");
+      return t;
     } catch (e: any) {
-      orErr = e?.message || String(e);
-      console.error("[VISION] OpenRouter lỗi:", orErr);
+      srcErrs.push(`OpenRouter (${orModel}): ${shortErr(e?.message || String(e))}`);
+      console.error("[VISION] OpenRouter lỗi:", e?.message || e);
     }
   }
 
-  const parts: string[] = [];
-  if (geminiConfigs.length) parts.push(`Gemini: ${shortErr(gemErr)}`);
-  if (getOpenRouterKey()) parts.push(`OpenRouter: ${shortErr(orErr)}`);
-  if (!parts.length) parts.push("chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY");
-  throw new Error(parts.join("; "));
+  if (!srcErrs.length) srcErrs.push("chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY");
+  throw new Error(srcErrs.join(" | "));
 }
 
 /**
@@ -592,7 +602,7 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       summaryNote,
     };
   } catch (e: any) {
-    const msg = (e?.message || String(e)).replace(/\s+/g, " ").slice(0, 200);
+    const msg = (e?.message || String(e)).replace(/\s+/g, " ").slice(0, 400);
     const isBusy = /hết lượt|rate.?limit|429|quota|credit|402|RESOURCE_EXHAUSTED|không khả dụng/i.test(msg);
     return {
       ...base,
@@ -694,9 +704,22 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
 export function buildAiBusyNotice(results: AuditResult[]): string | null {
   const busy = results.filter((r) => r.aiBusy);
   if (!busy.length) return null;
-  const retry = busy.map((r) => r.aiErrorDetail || "").join(" ").match(/~?(\d+)\s*s/);
-  const retryTxt = retry ? ` Thử lại sau ~${retry[1]}s.` : " Thử lại sau ít phút.";
-  return `⏳ <b>Nguồn AI đang hết lượt</b> — ${busy.length} nhà hàng chưa soi được ảnh: ${busy.map((r) => r.restaurantName).join(", ")}.${retryTxt}`;
+  const detail = busy[0].aiErrorDetail || "";
+  const perDay = /HẾT LƯỢT NGÀY|per day|PerDay/i.test(detail);
+  const retry = detail.match(/~?(\d+)\s*s/);
+  const retryTxt = perDay
+    ? " Hết lượt trong NGÀY — đợi reset (khoảng 14h chiều mai) hoặc bật billing/đổi key."
+    : retry
+      ? ` Thử lại sau ~${retry[1]}s rồi nhắn lại nhé.`
+      : " Thử lại sau ít phút.";
+  let msg = `⏳ <b>NGUỒN AI ĐANG HẾT LƯỢT</b>\n`;
+  msg += `${busy.length} nhà hàng chưa soi được ảnh: <b>${busy.map((r) => r.restaurantName).join(", ")}</b>.${retryTxt}`;
+  const srcs = detail.split(" | ").filter(Boolean);
+  if (srcs.length) {
+    msg += `\n\n<b>Nguồn nào đang hết:</b>\n`;
+    msg += srcs.map((s) => `• ${s}`).join("\n");
+  }
+  return msg;
 }
 
 /** Dựng MS Teams Adaptive Card từ kết quả audit (nhấn mạnh sai lệch). */
