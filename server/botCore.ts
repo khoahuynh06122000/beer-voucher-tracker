@@ -493,7 +493,14 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       summaryNote,
     };
   } catch (e: any) {
-    return { ...base, status: "ERROR", discrepancies: [`Lỗi OCR AI: ${e?.message || String(e)}`], summaryNote: "Không đọc được ảnh bằng AI." };
+    const msg = e?.message || String(e);
+    const is429 = /\b429\b|rate.?limit|quota|RESOURCE_EXHAUSTED|too many requests/i.test(msg);
+    return {
+      ...base,
+      status: "ERROR",
+      discrepancies: [is429 ? "⏳ Gemini tạm hết lượt (giới hạn quota) — vui lòng thử lại sau ít phút." : `Lỗi OCR AI: ${msg}`],
+      summaryNote: is429 ? "Tạm hết lượt Gemini, thử lại sau ít phút." : "Không đọc được ảnh bằng AI.",
+    };
   }
 }
 
