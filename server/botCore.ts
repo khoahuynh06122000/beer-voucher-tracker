@@ -308,7 +308,7 @@ export interface AuditResult {
 const GEMINI_EXTRACT_PROMPT = `Bạn là KIỂM SOÁT VIÊN đọc chứng từ voucher bia nhà hàng. Ảnh có thể gồm HÓA ĐƠN IN (máy in, liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Làm ĐÚNG 3 bước:
 
 BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin trên ảnh, CẢ phần in LẪN viết tay:
-- Hóa đơn IN: từng dòng (tên bia + số ly).
+- Hóa đơn IN (thường là hóa đơn nhiệt): MỖI dòng bia có 1 SỐ đứng ngay cạnh tên = SỐ LY của loại đó (vd "296 GOLDEN BRIDGE 25" = 296 ly Golden; "40 HELIOS 250ML" = 40 ly Helios). Lấy CHÍNH số này làm số ly. TUYỆT ĐỐI BỎ QUA cột "QTY"/"PRICE"/"Net Total"/"TOTAL" nếu chúng bằng 0 — đó là hóa đơn voucher/FOC (miễn phí, giá 0), KHÔNG phải số ly = 0.
 - Biên bản VIẾT TAY: từng loại bia + số ly; số "vé / CP / voucher / phiếu"; tổng vé; vé hủy/thừa; ngày (nếu có). Đọc chữ số thật cẩn thận (dễ nhầm 6↔0, 1↔7, thêm/thiếu chữ số).
 
 BƯỚC 2 — TỰ SOÁT NỘI BỘ (rất quan trọng): đối chiếu phần IN với phần VIẾT TAY:
@@ -418,8 +418,8 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
 
     // Điểm KHÔNG nhất quán ngay trong chứng từ (do Gemini tự soát in vs viết tay)
     for (const n of internalNotes) disc.push(`🔎 Trong chứng từ: ${n}`);
-    if (tongLyBiaIn != null && tongLyBiaTay != null && tongLyBiaIn !== tongLyBiaTay) {
-      disc.push(`🔎 Tổng ly bia: hóa đơn IN ${tongLyBiaIn} vs biên bản tay ${tongLyBiaTay} — dùng số hóa đơn IN để tính.`);
+    if (tongLyBiaIn != null && tongLyBiaTay != null && tongLyBiaIn !== tongLyBiaTay && tongLyBiaIn > 0) {
+      disc.push(`🔎 Tổng ly bia không khớp giữa 2 nguồn: hóa đơn IN ${tongLyBiaIn} vs biên bản tay ${tongLyBiaTay}. Số dùng để tính CP: ${tongLyBia}.`);
     }
 
     // Đối chiếu chéo với CP ghi tay CHỈ khi đọc được và KHỚP bia÷2 (xác nhận thêm).
