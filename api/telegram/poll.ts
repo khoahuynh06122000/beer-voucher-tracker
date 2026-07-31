@@ -53,6 +53,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         : `⚠️ Webhook chưa được đăng ký. Hãy bấm "Kích hoạt Bot" hoặc lưu lại Bot Token để đăng ký webhook.`,
       webhookUrl: webhookInfo.url || null,
       pendingUpdates: webhookInfo.pending_update_count ?? 0,
+      lastError: webhookInfo.last_error_message || null,
+      lastErrorDate: webhookInfo.last_error_date || null,
+      maxConnections: webhookInfo.max_connections ?? null,
     }));
   } catch (err: any) {
     res.writeHead(200);
