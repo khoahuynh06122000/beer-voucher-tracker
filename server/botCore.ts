@@ -302,33 +302,23 @@ export interface AuditResult {
   summaryNote: string;
 }
 
-export const GEMINI_AUDIT_PROMPT = (rec: VoucherRec) => `Bạn là trợ lý AI đối soát chứng từ voucher bia của nhà hàng. Ảnh đính kèm thường là "BIÊN BẢN GHI NHẬN SỰ VIỆC" (BBGN) hoặc hóa đơn/bill, viết tay hoặc in.
+// Prompt CHỈ TRÍCH XUẤT SỐ — không để Gemini tự kết luận đúng/sai. Phép ÷2 và
+// đối chiếu 3 bên do code tự tính để tránh lệ thuộc việc đọc chữ tay của AI.
+const GEMINI_EXTRACT_PROMPT = `Bạn đọc chứng từ voucher bia của nhà hàng — thường gồm HÓA ĐƠN IN (liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Nhiệm vụ: CHỈ TRÍCH XUẤT SỐ, tuyệt đối KHÔNG tự kết luận đúng/sai.
 
-ĐỊNH NGHĨA & QUY TẮC ĐỌC (tuân thủ NGHIÊM, KHÔNG suy diễn, KHÔNG bịa số):
-1. "VÉ" (đồng nghĩa: CP, VOUCHER, COUPON, "phiếu"): là SỐ PHIẾU bộ phận thu về / quy đổi. ĐÂY là con số chính để đối chiếu với số bộ phận nhập. Chỉ lấy con số đi kèm nhãn vé/CP/voucher/coupon/phiếu.
-2. Số lượng BIA theo từng loại (Golden, Atlas, Luna, Eclipse, Helios, Tiger, ...): MỖI đơn vị = 1 ly 250ml. ĐÂY KHÔNG PHẢI LÀ SỐ VÉ. TUYỆT ĐỐI KHÔNG được lấy tổng số ly bia để điền vào ô số vé/phiếu. App tự quy đổi (tổng ly × 250ml) nên KHÔNG báo lệch phần bia.
-3. Các chỉ tiêu "vé hủy", "vé thừa", "tổng vé": CHỈ lấy khi biên bản ghi RÕ. Nếu KHÔNG có trên ảnh → để null VÀ thêm câu "Không có [tên chỉ tiêu] trên biên bản để đối chiếu" vào discrepancies. KHÔNG coi việc thiếu chỉ tiêu là sai lệch.
+QUY TẮC:
+1. Số lượng BIA theo từng loại (Golden, Atlas, Luna, Eclipse, Helios, Tiger, ...): mỗi đơn vị = 1 ly 250ml. ƯU TIÊN đọc từ HÓA ĐƠN IN vì rõ hơn chữ tay. Cộng tất cả các loại lại để ra TỔNG LY BIA.
+2. "Số vé / CP / voucher / phiếu": con số (thường viết tay) đi kèm nhãn này trên biên bản. Đọc CẨN THẬN từng chữ số, RẤT dễ nhầm (6↔0, 1↔7, thêm/thiếu chữ số). Nếu không chắc thì để null.
+3. "Tổng vé", "vé hủy", "vé thừa": CHỈ lấy nếu ghi RÕ; nếu không có để null.
 
-Số liệu bộ phận nhà hàng [${rec.restaurantName}] đã nhập vào app:
-- Số vé quy đổi: ${rec.postedBills}
-- Tổng vé thu về: ${rec.totalIssued}
-- Vé hủy: ${rec.cancelled}
-
-NHIỆM VỤ:
-- So SỐ VÉ đọc được trên ảnh với "Số vé quy đổi" đã nhập. CHỈ báo sai lệch khi cùng MỘT chỉ tiêu xuất hiện RÕ trên ảnh và khác số đã nhập (ví dụ: "Số vé trên ảnh là 800 nhưng nhập 772").
-- Nếu ảnh KHÔNG có con số vé để đối chiếu → KHÔNG báo sai lệch; đặt ocrPostedBills=null và ghi "Không có số vé trên biên bản để đối chiếu" trong discrepancies.
-- Tính tổng số ly bia (nếu có) chỉ để THAM KHẢO, nêu trong summaryNote kèm quy đổi ml (tổng ly × 250ml). Bia KHÔNG bao giờ là sai lệch.
-
-Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc trong markdown:
+Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
 {
-  "ocrPostedBills": số VÉ quy đổi đọc trên ảnh (number) hoặc null nếu ảnh không có số vé,
-  "ocrTotalIssued": tổng vé đọc trên ảnh (number) hoặc null nếu không có,
-  "ocrBeerCoupons": số VÉ bia nếu ghi rõ (number) hoặc null (KHÔNG điền tổng ly bia vào đây),
-  "ocrPotatoCoupons": số vé khoai nếu ghi rõ (number) hoặc null,
-  "ocrTongLyBia": tổng số ly bia các loại cộng lại (number) hoặc null,
-  "isMatch": true nếu các chỉ tiêu CÓ trên ảnh đều khớp số nhập HOẶC ảnh không có số vé để đối chiếu; false CHỈ khi có chỉ tiêu cùng loại khác nhau rõ ràng,
-  "discrepancies": [danh sách câu ngắn: sai lệch THẬT của cùng chỉ tiêu, và các câu "Không có ... trên biên bản để đối chiếu"],
-  "summaryNote": "1 câu tóm tắt, có nêu tổng ly bia và quy đổi ml nếu đọc được"
+  "tongLyBia": tổng số ly bia các loại cộng lại (number) hoặc null,
+  "beerBreakdown": "liệt kê ngắn, vd: Golden 296, Atlas 418, Luna 338, Eclipse 240, Helios 40",
+  "soVeCP": số vé/CP/phiếu đọc được trên biên bản (number) hoặc null,
+  "tongVe": tổng vé (number) hoặc null,
+  "veHuy": số vé hủy (number) hoặc null,
+  "note": "ghi chú nếu chữ khó đọc hoặc có điểm bất thường"
 }`;
 
 const entered = (rec: VoucherRec) => ({
@@ -339,24 +329,104 @@ const entered = (rec: VoucherRec) => ({
   cancelled: rec.cancelled,
 });
 
-/** Chạy Gemini đối soát cho 4 nhà hàng của 1 ngày (song song). */
-export async function auditDateWithGemini(targetDate: string): Promise<AuditResult[]> {
-  const recs = await Promise.all(
-    RESTAURANTS.map((r) => getVoucherRecord(r.id, r.name, targetDate)),
-  );
+/**
+ * Đối soát 1 record: Gemini trích số (ly bia, CP ghi tay) -> code tính CP hợp lý
+ * = tổng ly bia ÷ 2 -> đối chiếu 3 bên (bia÷2 ↔ CP ghi tay ↔ số bộ phận nhập).
+ */
+export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
+  const base = {
+    restaurantId: rec.restaurantId,
+    restaurantName: rec.restaurantName,
+    date: rec.date,
+    imageCount: rec.billImages.length,
+    dataEntered: entered(rec),
+    aiExtracted: {} as AuditResult["aiExtracted"],
+  };
+  if (rec.billImages.length === 0) {
+    return { ...base, status: "NO_IMAGES", discrepancies: ["⚠️ Đã nhập số liệu nhưng CHƯA đính kèm ảnh minh chứng."], summaryNote: "Thiếu ảnh để đối soát AI." };
+  }
   const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
+  }
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
+    const imageParts = rec.billImages
+      .slice(0, 3)
+      .map((imgUrl) => {
+        const m = imgUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+        return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
+      })
+      .filter(Boolean);
+    if (imageParts.length === 0) {
+      return { ...base, status: "ERROR", discrepancies: ["Ảnh không đúng định dạng base64 để đọc."], summaryNote: "Không đọc được ảnh." };
+    }
 
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user", parts: [{ text: GEMINI_EXTRACT_PROMPT }, ...(imageParts as any[])] }],
+    });
+    const raw = (response.text || "").replace(/```json/g, "").replace(/```/g, "").trim();
+    const g = JSON.parse(raw);
+
+    const num = (v: any): number | null => (typeof v === "number" && isFinite(v) ? v : null);
+    const tongLyBia = num(g.tongLyBia);
+    const soVeCP = num(g.soVeCP);
+    const tongVe = num(g.tongVe);
+    const veHuy = num(g.veHuy);
+
+    // CP hợp lý: ưu tiên bia÷2 (từ hóa đơn IN, đáng tin hơn chữ tay); nếu không có ly bia thì lấy CP ghi tay
+    const expectedCP = tongLyBia != null ? Math.round(tongLyBia / 2) : null;
+    const reasonable = expectedCP ?? soVeCP;
+    const enteredVe = rec.postedBills;
+
+    const disc: string[] = [];
+    let status: AuditStatus = "MATCH";
+
+    if (reasonable != null) {
+      if (enteredVe !== reasonable) {
+        status = "MISMATCH";
+        const basis = expectedCP != null ? `${tongLyBia} ly bia ÷ 2` : "CP ghi tay trên biên bản";
+        disc.push(`Số vé bộ phận nhập <b>${enteredVe}</b> ≠ CP hợp lý <b>${reasonable}</b> (${basis}) — chênh ${Math.abs(enteredVe - reasonable)} vé.`);
+      }
+    } else {
+      disc.push("Không đọc được số ly bia lẫn số vé trên ảnh để tính CP đối chiếu.");
+    }
+
+    // Đối chiếu chéo: CP ghi tay vs bia÷2
+    if (soVeCP != null && expectedCP != null && soVeCP !== expectedCP) {
+      disc.push(`Lưu ý: CP ghi tay (${soVeCP}) khác bia÷2 (${expectedCP}) — có thể do đọc chữ tay hoặc ghi nhầm trên biên bản.`);
+    }
+    if (tongVe == null) disc.push("Không có tổng vé thu về trên biên bản để đối chiếu.");
+    if (veHuy == null) disc.push("Không có vé hủy trên biên bản để đối chiếu.");
+
+    const mlText = tongLyBia != null ? ` = ${tongLyBia * 250}ml` : "";
+    const summaryNote = `Bia: ${g.beerBreakdown || "?"} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. CP ghi tay: ${soVeCP ?? "?"}. Vé bộ phận nhập: ${enteredVe}.`;
+
+    return {
+      ...base,
+      aiExtracted: { postedBills: reasonable, totalIssued: tongVe, beerCoupons: tongLyBia, potatoCoupons: null },
+      status,
+      discrepancies: disc,
+      summaryNote,
+    };
+  } catch (e: any) {
+    return { ...base, status: "ERROR", discrepancies: [`Lỗi OCR AI: ${e?.message || String(e)}`], summaryNote: "Không đọc được ảnh bằng AI." };
+  }
+}
+
+/** Chạy đối soát cho 4 nhà hàng của 1 ngày (song song). */
+export async function auditDateWithGemini(targetDate: string): Promise<AuditResult[]> {
+  const recs = await Promise.all(RESTAURANTS.map((r) => getVoucherRecord(r.id, r.name, targetDate)));
   return Promise.all(
     RESTAURANTS.map(async (r, i): Promise<AuditResult> => {
       const rec = recs[i];
-      const skeleton = {
-        restaurantId: r.id,
-        restaurantName: r.name,
-        date: targetDate,
-      };
       if (!rec) {
         return {
-          ...skeleton,
+          restaurantId: r.id,
+          restaurantName: r.name,
+          date: targetDate,
           imageCount: 0,
           dataEntered: { postedBills: 0, totalIssued: 0, beerCoupons: 0, potatoCoupons: 0, cancelled: 0 },
           aiExtracted: {},
@@ -365,50 +435,7 @@ export async function auditDateWithGemini(targetDate: string): Promise<AuditResu
           summaryNote: "Nhà hàng chưa gửi báo cáo.",
         };
       }
-      const base = { ...skeleton, imageCount: rec.billImages.length, dataEntered: entered(rec), aiExtracted: {} as AuditResult["aiExtracted"] };
-      if (rec.billImages.length === 0) {
-        return { ...base, status: "NO_IMAGES", discrepancies: ["⚠️ Đã nhập số liệu nhưng CHƯA đính kèm ảnh minh chứng."], summaryNote: "Thiếu ảnh để đối soát AI." };
-      }
-      if (!apiKey) {
-        return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
-      }
-      try {
-        const { GoogleGenAI } = await import("@google/genai");
-        const ai = new GoogleGenAI({ apiKey });
-        const imageParts = rec.billImages
-          .slice(0, 3)
-          .map((imgUrl) => {
-            const m = imgUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-            return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
-          })
-          .filter(Boolean);
-
-        if (imageParts.length === 0) {
-          return { ...base, status: "ERROR", discrepancies: ["Ảnh không đúng định dạng base64 để đọc."], summaryNote: "Không đọc được ảnh." };
-        }
-
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: GEMINI_AUDIT_PROMPT(rec) }, ...(imageParts as any[])] }],
-        });
-        let raw = (response.text || "").replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(raw);
-        const disc: string[] = parsed.discrepancies || [];
-        return {
-          ...base,
-          aiExtracted: {
-            postedBills: parsed.ocrPostedBills,
-            totalIssued: parsed.ocrTotalIssued,
-            beerCoupons: parsed.ocrBeerCoupons,
-            potatoCoupons: parsed.ocrPotatoCoupons,
-          },
-          status: parsed.isMatch === false ? "MISMATCH" : "MATCH",
-          discrepancies: disc,
-          summaryNote: parsed.summaryNote || "Đã đối soát với AI.",
-        };
-      } catch (e: any) {
-        return { ...base, status: "ERROR", discrepancies: [`Lỗi OCR AI: ${e?.message || String(e)}`], summaryNote: "Không đọc được ảnh bằng AI." };
-      }
+      return auditOneVoucher(rec);
     }),
   );
 }
@@ -446,16 +473,16 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
     }
     html += `   └ BP nhập: Quy đổi <b>${r.dataEntered.postedBills}</b> | Tổng thu về <b>${r.dataEntered.totalIssued}</b> | Bia <b>${r.dataEntered.beerCoupons}</b> | Khoai <b>${r.dataEntered.potatoCoupons}</b>\n`;
     if (r.status === "MATCH") {
-      const ve = r.aiExtracted.postedBills;
-      if (ve == null) {
-        html += `   └ ✅ AI soi ${r.imageCount} ảnh: không phát hiện sai lệch (biên bản không có số vé rõ để đối chiếu số phiếu).\n`;
+      const cp = r.aiExtracted.postedBills;
+      if (cp == null) {
+        html += `   └ ✅ AI soi ${r.imageCount} ảnh: không đủ dữ liệu số để kết luận sai lệch.\n`;
       } else {
-        html += `   └ ✅ AI soi ${r.imageCount} ảnh: số vé đọc được <b>${ve}</b> KHỚP với số nhập.\n`;
+        html += `   └ ✅ AI soi ${r.imageCount} ảnh: CP hợp lý <b>${cp}</b> (bia÷2) KHỚP số nhập <b>${r.dataEntered.postedBills}</b>.\n`;
       }
       for (const d of r.discrepancies) html += `   └ ℹ️ ${d}\n`;
     } else if (r.status === "MISMATCH") {
-      html += `   └ 🔍 AI đọc trên ảnh: Số vé <b>${r.aiExtracted.postedBills ?? "?"}</b> | Tổng vé <b>${r.aiExtracted.totalIssued ?? "?"}</b>\n`;
-      for (const d of r.discrepancies) html += `   └ 🚨 <b>${d}</b>\n`;
+      html += `   └ 🔍 Bia <b>${r.aiExtracted.beerCoupons ?? "?"}</b> ly ÷ 2 → CP hợp lý <b>${r.aiExtracted.postedBills ?? "?"}</b> | Bộ phận nhập <b>${r.dataEntered.postedBills}</b>\n`;
+      for (const d of r.discrepancies) html += `   └ 🚨 ${d}\n`;
     } else {
       for (const d of r.discrepancies) html += `   └ ${d}\n`;
     }
