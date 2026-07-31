@@ -351,6 +351,14 @@ const entered = (rec: VoucherRec) => ({
  * hết lượt (429) thì FALLBACK sang OPENROUTER (OpenAI-compatible). Trả text thô.
  * Cần GEMINI_API_KEY và/hoặc OPENROUTER_API_KEY (+ tùy chọn OPENROUTER_MODEL).
  */
+/** Lấy key OpenRouter, chấp nhận vài cách đặt tên biến (tránh lỗi hoa/thường). */
+export const getOpenRouterKey = (): string =>
+  (process.env.OPENROUTER_API_KEY ||
+    process.env.Openrouter_API ||
+    process.env.OPENROUTER_KEY ||
+    process.env.OPENROUTER_API ||
+    "").trim();
+
 async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
   const imgs = dataUrls.slice(0, 3);
   let lastErr: any = null;
@@ -381,7 +389,7 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   }
 
   // 2) Fallback OpenRouter (OpenAI-compatible, hỗ trợ data URI ảnh)
-  const orKey = process.env.OPENROUTER_API_KEY;
+  const orKey = getOpenRouterKey();
   if (orKey) {
     try {
       const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
@@ -429,7 +437,7 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
   if (rec.billImages.length === 0) {
     return { ...base, status: "NO_IMAGES", discrepancies: ["⚠️ Đã nhập số liệu nhưng CHƯA đính kèm ảnh minh chứng."], summaryNote: "Thiếu ảnh để đối soát AI." };
   }
-  if (!process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+  if (!process.env.GEMINI_API_KEY && !getOpenRouterKey()) {
     return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
   }
   try {

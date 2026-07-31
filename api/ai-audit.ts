@@ -7,7 +7,7 @@
  * "Soi Ảnh" luôn cho kết quả nhất quán. Cần GEMINI_API_KEY trên Vercel.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readJsonBody, auditOneVoucher, type VoucherRec } from "../server/botCore.js";
+import { readJsonBody, auditOneVoucher, getOpenRouterKey, type VoucherRec } from "../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -56,7 +56,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       success: true,
       checkDate,
       envKeyPresent: !!process.env.GEMINI_API_KEY,
-      orKeyPresent: !!process.env.OPENROUTER_API_KEY,
+      orKeyPresent: !!getOpenRouterKey(),
       orModel: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
       results,
     }));
