@@ -308,7 +308,7 @@ export interface AuditResult {
 const GEMINI_EXTRACT_PROMPT = `Bạn là KIỂM SOÁT VIÊN đọc chứng từ voucher bia nhà hàng. Ảnh có thể gồm HÓA ĐƠN IN (máy in, liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Làm ĐÚNG 3 bước:
 
 MÔ HÌNH 2 NGUỒN (nhớ kỹ):
-- HÓA ĐƠN IN = phần ĐÃ QUY ĐỔI: cho biết SỐ LY BIA (mỗi ly 250ml) và SỐ PHẦN KHOAI TÂY (mỗi phần 0.1kg). KHÔNG chứa vé hủy và tổng vé.
+- HÓA ĐƠN IN = phần ĐÃ QUY ĐỔI: cho biết SỐ LY BIA (mỗi ly 250ml), SỐ PHẦN KHOAI TÂY (mỗi phần 0.1kg), và SỐ BÁNH (với nhà hàng Maison Kayser). KHÔNG chứa vé hủy và tổng vé.
 - BIÊN BẢN GIAO NHẬN (viết tay) = nơi ghi TỔNG VÉ và VÉ HỦY/THỪA (hóa đơn in không có 2 số này).
 
 BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin, CẢ phần in LẪN viết tay:
@@ -327,6 +327,7 @@ Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
   "tongLyBiaTay": number|null,                       // tổng ly bia từ viết tay
   "tongLyBia": number|null,                          // số ly bia ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
   "khoaiQty": number|null,                           // số phần khoai tây trên hóa đơn IN (null/0 nếu không có)
+  "banhQty": number|null,                            // số bánh trên hóa đơn IN (Maison Kayser; null/0 nếu không có)
   "soVeCP": number|null,                             // số vé/CP viết tay (null nếu không chắc)
   "tongVe": number|null,                             // TỔNG VÉ đọc trên BIÊN BẢN GIAO NHẬN (null nếu biên bản không ghi)
   "veHuy": number|null,                              // VÉ HỦY đọc trên BIÊN BẢN GIAO NHẬN (null nếu không ghi)
@@ -390,6 +391,7 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     const tongLyBiaTay = num(g.tongLyBiaTay);
     const biaLy = num(g.tongLyBia) ?? tongLyBiaIn ?? tongLyBiaTay; // số ly bia đã quy đổi (Bills IN)
     const khoaiQty = num(g.khoaiQty);                              // số phần khoai (Bills IN)
+    const banhQty = num(g.banhQty);                                // số bánh Maison (Bills IN)
     const bbTongVe = num(g.tongVe);                                // tổng vé (biên bản giao nhận)
     const bbVeHuy = num(g.veHuy);                                  // vé hủy (biên bản giao nhận)
     const internalNotes: string[] = Array.isArray(g.internalNotes)
@@ -397,39 +399,50 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       : [];
     const confidence = typeof g.confidence === "string" ? g.confidence : "";
 
-    // Vé quy đổi = số ly/phần ÷ 2 (1 vé = 2 ly bia hoặc 2 phần khoai). Nguồn: HÓA ĐƠN IN.
-    const beerVe = biaLy != null ? Math.round(biaLy / 2) : null;
-    const potatoVe = khoaiQty != null && khoaiQty > 0 ? Math.round(khoaiQty / 2) : (khoaiQty === 0 ? 0 : null);
-    const hasRedeemed = beerVe != null || (potatoVe != null && (khoaiQty ?? 0) > 0);
-    const postedExpected = (beerVe ?? 0) + (potatoVe ?? 0);
+    // Quy đổi VÉ từ hóa đơn IN: BIA 2 ly = 1 vé (÷2); KHOAI và BÁNH (Maison) tỷ lệ 1:1.
+    const beerVe = biaLy != null && biaLy > 0 ? Math.round(biaLy / 2) : null;
+    const potatoVe = khoaiQty != null && khoaiQty > 0 ? khoaiQty : null;
+    const bakeryVe = banhQty != null && banhQty > 0 ? banhQty : null;
+    const hasRedeemed = beerVe != null || potatoVe != null || bakeryVe != null;
+    const postedExpected = (beerVe ?? 0) + (potatoVe ?? 0) + (bakeryVe ?? 0);
 
     const disc: string[] = [];
     let status: AuditStatus = "MATCH";
     const mismatch = () => { status = "MISMATCH"; };
 
-    // 1) Vé bia quy đổi (Bills IN ÷2) vs beerCoupons app
+    // 1) Vé bia = số ly ÷ 2
     if (beerVe != null) {
       if (beerVe !== rec.beerCoupons) {
         mismatch();
-        disc.push(`🍺 Vé bia: hóa đơn IN <b>${biaLy}</b> ly ÷2 = <b>${beerVe}</b> vé ≠ app nhập <b>${rec.beerCoupons}</b> — chênh ${Math.abs(beerVe - rec.beerCoupons)}.`);
+        disc.push(`🍺 Vé bia: hóa đơn IN <b>${biaLy}</b> ly ÷2 = <b>${beerVe}</b> ≠ app nhập <b>${rec.beerCoupons}</b> — chênh ${Math.abs(beerVe - rec.beerCoupons)}.`);
       } else {
         disc.push(`🍺 Vé bia khớp: ${beerVe} (= ${biaLy} ly ÷2).`);
       }
-    } else {
-      disc.push("🍺 Không đọc được số ly bia trên hóa đơn IN để tính vé bia.");
     }
 
-    // 2) Vé khoai quy đổi (chỉ khi có khoai)
-    if (potatoVe != null && (khoaiQty ?? 0) > 0) {
+    // 2) Vé khoai = số phần (tỷ lệ 1:1)
+    if (potatoVe != null) {
       if (potatoVe !== rec.potatoCoupons) {
         mismatch();
-        disc.push(`🍟 Vé khoai: hóa đơn IN <b>${khoaiQty}</b> phần ÷2 = <b>${potatoVe}</b> vé ≠ app nhập <b>${rec.potatoCoupons}</b>.`);
+        disc.push(`🍟 Vé khoai: hóa đơn IN <b>${potatoVe}</b> phần (1:1) ≠ app nhập <b>${rec.potatoCoupons}</b>.`);
       } else {
         disc.push(`🍟 Vé khoai khớp: ${potatoVe}.`);
       }
     }
 
-    // 3) Tổng vé quy đổi (bia + khoai) vs postedBills app
+    // 3) Vé bánh (Maison Kayser) = số bánh (tỷ lệ 1:1)
+    if (bakeryVe != null) {
+      if (bakeryVe !== rec.bakeryCoupons) {
+        mismatch();
+        disc.push(`🥐 Vé bánh: hóa đơn IN <b>${bakeryVe}</b> (1:1) ≠ app nhập <b>${rec.bakeryCoupons}</b>.`);
+      } else {
+        disc.push(`🥐 Vé bánh khớp: ${bakeryVe}.`);
+      }
+    }
+
+    if (!hasRedeemed) disc.push("Không đọc được số lượng bia/khoai/bánh trên hóa đơn IN để tính vé quy đổi.");
+
+    // 4) Tổng vé quy đổi vs postedBills app
     if (hasRedeemed && postedExpected !== rec.postedBills) {
       mismatch();
       disc.push(`🎟️ Tổng vé quy đổi: hóa đơn IN = <b>${postedExpected}</b> ≠ app nhập <b>${rec.postedBills}</b>.`);
@@ -465,10 +478,11 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       disc.push(`🔎 Số ly bia: hóa đơn IN ${tongLyBiaIn} vs viết tay ${tongLyBiaTay}; dùng số hóa đơn IN (${biaLy}).`);
     }
 
-    const biaL = biaLy != null ? (biaLy * 0.25).toFixed(1) : "?";
+    const biaL = biaLy != null ? (biaLy * 0.25).toFixed(1) : "0";
     const khoaiKg = khoaiQty != null ? (khoaiQty * 0.1).toFixed(1) : "0";
+    const banhTxt = banhQty != null && banhQty > 0 ? `, bánh ${banhQty} (1:1)` : "";
     const confText = confidence ? ` [tin cậy: ${confidence}]` : "";
-    const summaryNote = `Hóa đơn IN (đã quy đổi): ${biaLy ?? "?"} ly bia = ${biaL}L; khoai ${khoaiQty ?? 0} phần = ${khoaiKg}kg. Vé quy đổi ≈ ${postedExpected} (bia ${beerVe ?? 0} + khoai ${potatoVe ?? 0}). App nhập: bia ${rec.beerCoupons}, khoai ${rec.potatoCoupons}, tổng quy đổi ${rec.postedBills}, thu về ${rec.totalIssued}, hủy ${rec.cancelled}.${confText}`;
+    const summaryNote = `Hóa đơn IN (đã quy đổi): bia ${biaLy ?? 0} ly = ${biaL}L, khoai ${khoaiQty ?? 0} phần = ${khoaiKg}kg${banhTxt}. Vé quy đổi ≈ ${postedExpected} (bia ${beerVe ?? 0} + khoai ${potatoVe ?? 0} + bánh ${bakeryVe ?? 0}). App nhập: bia ${rec.beerCoupons}, khoai ${rec.potatoCoupons}, bánh ${rec.bakeryCoupons}, tổng quy đổi ${rec.postedBills}, thu về ${rec.totalIssued}, hủy ${rec.cancelled}.${confText}`;
 
     return {
       ...base,
