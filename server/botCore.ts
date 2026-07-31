@@ -361,7 +361,8 @@ export const getOpenRouterKey = (): string =>
 
 async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
   const imgs = dataUrls.slice(0, 3);
-  let lastErr: any = null;
+  let gemErr = "";
+  let orErr = "";
 
   // 1) Gemini trực tiếp
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -383,8 +384,8 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
       if (t) return t;
       throw new Error("Gemini trả rỗng");
     } catch (e: any) {
-      lastErr = e;
-      console.error("[VISION] Gemini lỗi, thử OpenRouter:", e?.message || e);
+      gemErr = e?.message || String(e);
+      console.error("[VISION] Gemini lỗi, thử OpenRouter:", gemErr);
     }
   }
 
@@ -414,12 +415,15 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
       if (t) return t;
       throw new Error("OpenRouter trả rỗng");
     } catch (e: any) {
-      lastErr = e;
-      console.error("[VISION] OpenRouter lỗi:", e?.message || e);
+      orErr = e?.message || String(e);
+      console.error("[VISION] OpenRouter lỗi:", orErr);
     }
   }
 
-  throw lastErr || new Error("Không có model AI khả dụng (thiếu GEMINI_API_KEY & OPENROUTER_API_KEY).");
+  const parts: string[] = [];
+  parts.push(geminiKey ? `Gemini: ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
+  parts.push(getOpenRouterKey() ? `OpenRouter(${process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free"}): ${orErr || "?"}` : "OpenRouter: (chưa cấu hình)");
+  throw new Error(parts.join(" | "));
 }
 
 /**
@@ -558,12 +562,12 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     };
   } catch (e: any) {
     const msg = e?.message || String(e);
-    const is429 = /\b429\b|rate.?limit|quota|RESOURCE_EXHAUSTED|too many requests/i.test(msg);
+    const is429 = /\b429\b|rate.?limit|quota|RESOURCE_EXHAUSTED|too many requests|requires more credits|402/i.test(msg);
     return {
       ...base,
       status: "ERROR",
-      discrepancies: [is429 ? "⏳ Gemini tạm hết lượt (giới hạn quota) — vui lòng thử lại sau ít phút." : `Lỗi OCR AI: ${msg}`],
-      summaryNote: is429 ? "Tạm hết lượt Gemini, thử lại sau ít phút." : "Không đọc được ảnh bằng AI.",
+      discrepancies: [is429 ? `⏳ Nguồn AI tạm hết lượt / cần credit — thử lại sau. Chi tiết: ${msg}` : `Lỗi OCR AI: ${msg}`],
+      summaryNote: is429 ? "Nguồn AI tạm hết lượt, thử lại sau." : "Không đọc được ảnh bằng AI.",
     };
   }
 }
