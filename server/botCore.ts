@@ -302,23 +302,35 @@ export interface AuditResult {
   summaryNote: string;
 }
 
-// Prompt CHỈ TRÍCH XUẤT SỐ — không để Gemini tự kết luận đúng/sai. Phép ÷2 và
-// đối chiếu 3 bên do code tự tính để tránh lệ thuộc việc đọc chữ tay của AI.
-const GEMINI_EXTRACT_PROMPT = `Bạn đọc chứng từ voucher bia của nhà hàng — thường gồm HÓA ĐƠN IN (liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Nhiệm vụ: CHỈ TRÍCH XUẤT SỐ, tuyệt đối KHÔNG tự kết luận đúng/sai.
+// Prompt quy trình 3 BƯỚC: đọc HẾT thông tin (in + viết tay) -> TỰ SOÁT nội bộ
+// chứng từ -> CHỐT số đáng tin. Gemini chỉ đọc & soát, còn phép ÷2 và so với app
+// do code tự tính (không lệ thuộc AI đọc chữ tay).
+const GEMINI_EXTRACT_PROMPT = `Bạn là KIỂM SOÁT VIÊN đọc chứng từ voucher bia nhà hàng. Ảnh có thể gồm HÓA ĐƠN IN (máy in, liệt kê số ly từng loại bia) và/hoặc BIÊN BẢN GHI NHẬN SỰ VIỆC (viết tay). Làm ĐÚNG 3 bước:
 
-QUY TẮC:
-1. Số lượng BIA theo từng loại (Golden, Atlas, Luna, Eclipse, Helios, Tiger, ...): mỗi đơn vị = 1 ly 250ml. ƯU TIÊN đọc từ HÓA ĐƠN IN vì rõ hơn chữ tay. Cộng tất cả các loại lại để ra TỔNG LY BIA.
-2. "Số vé / CP / voucher / phiếu": con số (thường viết tay) đi kèm nhãn này trên biên bản. Đọc CẨN THẬN từng chữ số, RẤT dễ nhầm (6↔0, 1↔7, thêm/thiếu chữ số). Nếu không chắc thì để null.
-3. "Tổng vé", "vé hủy", "vé thừa": CHỈ lấy nếu ghi RÕ; nếu không có để null.
+BƯỚC 1 — ĐỌC HẾT: Trích TẤT CẢ thông tin trên ảnh, CẢ phần in LẪN viết tay:
+- Hóa đơn IN: từng dòng (tên bia + số ly).
+- Biên bản VIẾT TAY: từng loại bia + số ly; số "vé / CP / voucher / phiếu"; tổng vé; vé hủy/thừa; ngày (nếu có). Đọc chữ số thật cẩn thận (dễ nhầm 6↔0, 1↔7, thêm/thiếu chữ số).
+
+BƯỚC 2 — TỰ SOÁT NỘI BỘ (rất quan trọng): đối chiếu phần IN với phần VIẾT TAY:
+- Nếu cùng 1 loại bia mà số in khác số viết tay (vd Helios in 40 nhưng tay ghi 210) → ghi rõ vào "internalNotes".
+- Mỗi ly bia = 250ml; số vé/CP thường = TỔNG LY ÷ 2. Nếu số CP viết tay không bằng tổng ly ÷ 2 → ghi chú.
+
+BƯỚC 3 — CHỐT SỐ ĐÁNG TIN: với mỗi chỉ tiêu chọn con số đáng tin nhất, ƯU TIÊN HÓA ĐƠN IN (rõ hơn chữ tay). Tự đánh giá độ tin cậy.
 
 Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc markdown:
 {
-  "tongLyBia": tổng số ly bia các loại cộng lại (number) hoặc null,
-  "beerBreakdown": "liệt kê ngắn, vd: Golden 296, Atlas 418, Luna 338, Eclipse 240, Helios 40",
-  "soVeCP": số vé/CP/phiếu đọc được trên biên bản (number) hoặc null,
-  "tongVe": tổng vé (number) hoặc null,
-  "veHuy": số vé hủy (number) hoặc null,
-  "note": "ghi chú nếu chữ khó đọc hoặc có điểm bất thường"
+  "hoaDonIn": [{"ten": string, "soLy": number}],   // các dòng bia trên hóa đơn IN, [] nếu không có
+  "vietTay": [{"ten": string, "soLy": number}],     // các dòng bia viết tay, [] nếu không có
+  "tongLyBiaIn": number|null,                        // tổng ly từ hóa đơn IN
+  "tongLyBiaTay": number|null,                       // tổng ly từ viết tay
+  "tongLyBia": number|null,                          // số ly ĐÁNG TIN nhất (ưu tiên hóa đơn IN)
+  "soVeCP": number|null,                             // số vé/CP viết tay (null nếu không chắc)
+  "tongVe": number|null,
+  "veHuy": number|null,
+  "ngay": string|null,
+  "internalNotes": [string],                         // các điểm KHÔNG nhất quán ngay trong chứng từ
+  "confidence": "cao"|"trung binh"|"thap",
+  "note": string
 }`;
 
 const entered = (rec: VoucherRec) => ({
@@ -371,10 +383,16 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     const g = JSON.parse(raw);
 
     const num = (v: any): number | null => (typeof v === "number" && isFinite(v) ? v : null);
-    const tongLyBia = num(g.tongLyBia);
+    const tongLyBiaIn = num(g.tongLyBiaIn);
+    const tongLyBiaTay = num(g.tongLyBiaTay);
+    const tongLyBia = num(g.tongLyBia) ?? tongLyBiaIn ?? tongLyBiaTay;
     let soVeCP = num(g.soVeCP);
     const tongVe = num(g.tongVe);
     const veHuy = num(g.veHuy);
+    const internalNotes: string[] = Array.isArray(g.internalNotes)
+      ? g.internalNotes.filter((x: any) => typeof x === "string" && x.trim())
+      : [];
+    const confidence = typeof g.confidence === "string" ? g.confidence : "";
 
     // Gemini hay nhầm: điền TỔNG LY BIA vào ô số vé/CP. Nếu soVeCP trùng tổng ly bia
     // thì coi như không đọc được số vé ghi tay (tránh dòng đối chiếu chéo sai lệch).
@@ -398,16 +416,28 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       disc.push("Không đọc được số ly bia lẫn số vé trên ảnh để tính CP đối chiếu.");
     }
 
-    // Đối chiếu chéo với CP ghi tay CHỈ khi Gemini đọc được và KHỚP bia÷2 (xác nhận thêm).
-    // Không báo khi lệch, vì OCR chữ viết tay không đáng tin — căn cứ chính là bia÷2 (hóa đơn in).
+    // Điểm KHÔNG nhất quán ngay trong chứng từ (do Gemini tự soát in vs viết tay)
+    for (const n of internalNotes) disc.push(`🔎 Trong chứng từ: ${n}`);
+    if (tongLyBiaIn != null && tongLyBiaTay != null && tongLyBiaIn !== tongLyBiaTay) {
+      disc.push(`🔎 Tổng ly bia: hóa đơn IN ${tongLyBiaIn} vs biên bản tay ${tongLyBiaTay} — dùng số hóa đơn IN để tính.`);
+    }
+
+    // Đối chiếu chéo với CP ghi tay CHỈ khi đọc được và KHỚP bia÷2 (xác nhận thêm).
     if (soVeCP != null && expectedCP != null && soVeCP === expectedCP) {
-      disc.push(`✓ Số CP ghi tay trên biên bản (${soVeCP}) khớp với bia÷2 — xác nhận thêm.`);
+      disc.push(`✓ Số CP ghi tay khớp bia÷2 (${soVeCP}) — xác nhận thêm.`);
     }
     if (tongVe == null) disc.push("Không có tổng vé thu về trên biên bản để đối chiếu.");
     if (veHuy == null) disc.push("Không có vé hủy trên biên bản để đối chiếu.");
 
+    const items = Array.isArray(g.hoaDonIn) && g.hoaDonIn.length
+      ? g.hoaDonIn
+      : Array.isArray(g.vietTay)
+        ? g.vietTay
+        : [];
+    const breakdown = items.length ? items.map((x: any) => `${x.ten} ${x.soLy}`).join(", ") : "?";
     const mlText = tongLyBia != null ? ` = ${tongLyBia * 250}ml` : "";
-    const summaryNote = `Bia: ${g.beerBreakdown || "?"} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. Vé bộ phận nhập: ${enteredVe}.`;
+    const confText = confidence ? ` [độ tin cậy: ${confidence}]` : "";
+    const summaryNote = `Bia: ${breakdown} → tổng ${tongLyBia ?? "?"} ly${mlText}. CP hợp lý (bia÷2) ≈ ${reasonable ?? "?"}. Vé bộ phận nhập: ${enteredVe}.${confText}`;
 
     return {
       ...base,
