@@ -6,7 +6,7 @@
  * nếu thiếu key vẫn trả kết quả (không OCR) để client không lỗi.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readJsonBody } from "../server/botCore.js";
+import { readJsonBody, GEMINI_AUDIT_PROMPT } from "../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -71,30 +71,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           }).filter(Boolean);
 
           if (imageParts.length > 0) {
-            const prompt = `Bạn là trợ lý AI Soát Xét Báo Cáo Nhà Hàng ("Biên bản ghi nhận sự việc" hoặc Hóa đơn/Bill).
-Hãy soi kỹ các ảnh đính kèm và đọc chữ viết tay/chữ in để trích xuất các con số thực tế trên tài liệu:
-1. Số phiếu quy đổi / Đăng bill
-2. Tổng Voucher Thu Về
-3. Số lượng bia (lít / ly / vé)
-4. Số lượng khoai tây (phần / kg)
-
-Số liệu bộ phận nhà hàng [${rec.restaurantName}] nhập khai báo là:
-- Phiếu quy đổi: ${rec.postedBills || 0}
-- Tổng Voucher Thu Về: ${rec.totalIssued || 0}
-- Bia xuất: ${rec.beerCoupons || 0}
-- Khoai xuất: ${rec.potatoCoupons || 0}
-
-So sánh số liệu đọc trên ảnh với số liệu khai báo.
-Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block:
-{
-  "ocrPostedBills": number_hoặc_null,
-  "ocrTotalIssued": number_hoặc_null,
-  "ocrBeerCoupons": number_hoặc_null,
-  "ocrPotatoCoupons": number_hoặc_null,
-  "isMatch": true_hoặc_false,
-  "discrepancies": ["chi tiết sai lệch nếu có (ví dụ: Ảnh ghi 1116 nhưng khai báo 1142)")],
-  "summaryNote": "Tóm tắt ngắn gọn 1 câu"
-}`;
+            const prompt = GEMINI_AUDIT_PROMPT(rec);
 
             const response = await ai.models.generateContent({
               model: "gemini-2.5-flash",
@@ -124,7 +101,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                 beerCoupons: parsed.ocrBeerCoupons,
                 potatoCoupons: parsed.ocrPotatoCoupons,
               },
-              status: parsed.isMatch ? "MATCH" : (parsed.discrepancies?.length > 0 ? "MISMATCH" : "MATCH"),
+              status: parsed.isMatch === false ? "MISMATCH" : "MATCH",
               discrepancies: parsed.discrepancies || [],
               summaryNote: parsed.summaryNote || "Đã đối soát với AI thành công.",
             });

@@ -302,29 +302,33 @@ export interface AuditResult {
   summaryNote: string;
 }
 
-const GEMINI_AUDIT_PROMPT = (rec: VoucherRec) => `Bạn là trợ lý AI Soát Xét Báo Cáo Nhà Hàng ("Biên bản ghi nhận sự việc" hoặc Hóa đơn/Bill).
-Hãy soi kỹ các ảnh đính kèm và đọc chữ viết tay/chữ in để trích xuất các con số thực tế trên tài liệu:
-1. Số phiếu quy đổi / Đăng bill
-2. Tổng Voucher Thu Về
-3. Số lượng bia (lít / ly / vé)
-4. Số lượng khoai tây (phần / kg)
+export const GEMINI_AUDIT_PROMPT = (rec: VoucherRec) => `Bạn là trợ lý AI đối soát chứng từ voucher bia của nhà hàng. Ảnh đính kèm thường là "BIÊN BẢN GHI NHẬN SỰ VIỆC" (BBGN) hoặc hóa đơn/bill, viết tay hoặc in.
 
-Số liệu bộ phận nhà hàng [${rec.restaurantName}] nhập khai báo là:
-- Phiếu quy đổi: ${rec.postedBills}
-- Tổng Voucher Thu Về: ${rec.totalIssued}
-- Bia xuất: ${rec.beerCoupons}
-- Khoai xuất: ${rec.potatoCoupons}
+ĐỊNH NGHĨA & QUY TẮC ĐỌC (tuân thủ NGHIÊM, KHÔNG suy diễn, KHÔNG bịa số):
+1. "VÉ" (đồng nghĩa: CP, VOUCHER, COUPON, "phiếu"): là SỐ PHIẾU bộ phận thu về / quy đổi. ĐÂY là con số chính để đối chiếu với số bộ phận nhập. Chỉ lấy con số đi kèm nhãn vé/CP/voucher/coupon/phiếu.
+2. Số lượng BIA theo từng loại (Golden, Atlas, Luna, Eclipse, Helios, Tiger, ...): MỖI đơn vị = 1 ly 250ml. ĐÂY KHÔNG PHẢI LÀ SỐ VÉ. TUYỆT ĐỐI KHÔNG được lấy tổng số ly bia để điền vào ô số vé/phiếu. App tự quy đổi (tổng ly × 250ml) nên KHÔNG báo lệch phần bia.
+3. Các chỉ tiêu "vé hủy", "vé thừa", "tổng vé": CHỈ lấy khi biên bản ghi RÕ. Nếu KHÔNG có trên ảnh → để null VÀ thêm câu "Không có [tên chỉ tiêu] trên biên bản để đối chiếu" vào discrepancies. KHÔNG coi việc thiếu chỉ tiêu là sai lệch.
 
-So sánh số liệu đọc trên ảnh với số liệu khai báo.
-Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block:
+Số liệu bộ phận nhà hàng [${rec.restaurantName}] đã nhập vào app:
+- Số vé quy đổi: ${rec.postedBills}
+- Tổng vé thu về: ${rec.totalIssued}
+- Vé hủy: ${rec.cancelled}
+
+NHIỆM VỤ:
+- So SỐ VÉ đọc được trên ảnh với "Số vé quy đổi" đã nhập. CHỈ báo sai lệch khi cùng MỘT chỉ tiêu xuất hiện RÕ trên ảnh và khác số đã nhập (ví dụ: "Số vé trên ảnh là 800 nhưng nhập 772").
+- Nếu ảnh KHÔNG có con số vé để đối chiếu → KHÔNG báo sai lệch; đặt ocrPostedBills=null và ghi "Không có số vé trên biên bản để đối chiếu" trong discrepancies.
+- Tính tổng số ly bia (nếu có) chỉ để THAM KHẢO, nêu trong summaryNote kèm quy đổi ml (tổng ly × 250ml). Bia KHÔNG bao giờ là sai lệch.
+
+Chỉ trả về DUY NHẤT 1 JSON hợp lệ, KHÔNG bọc trong markdown:
 {
-  "ocrPostedBills": number_hoặc_null,
-  "ocrTotalIssued": number_hoặc_null,
-  "ocrBeerCoupons": number_hoặc_null,
-  "ocrPotatoCoupons": number_hoặc_null,
-  "isMatch": true_hoặc_false,
-  "discrepancies": ["chi tiết sai lệch nếu có (ví dụ: Ảnh ghi 1116 nhưng khai báo 1142)"],
-  "summaryNote": "Tóm tắt ngắn gọn 1 câu"
+  "ocrPostedBills": số VÉ quy đổi đọc trên ảnh (number) hoặc null nếu ảnh không có số vé,
+  "ocrTotalIssued": tổng vé đọc trên ảnh (number) hoặc null nếu không có,
+  "ocrBeerCoupons": số VÉ bia nếu ghi rõ (number) hoặc null (KHÔNG điền tổng ly bia vào đây),
+  "ocrPotatoCoupons": số vé khoai nếu ghi rõ (number) hoặc null,
+  "ocrTongLyBia": tổng số ly bia các loại cộng lại (number) hoặc null,
+  "isMatch": true nếu các chỉ tiêu CÓ trên ảnh đều khớp số nhập HOẶC ảnh không có số vé để đối chiếu; false CHỈ khi có chỉ tiêu cùng loại khác nhau rõ ràng,
+  "discrepancies": [danh sách câu ngắn: sai lệch THẬT của cùng chỉ tiêu, và các câu "Không có ... trên biên bản để đối chiếu"],
+  "summaryNote": "1 câu tóm tắt, có nêu tổng ly bia và quy đổi ml nếu đọc được"
 }`;
 
 const entered = (rec: VoucherRec) => ({
@@ -398,7 +402,7 @@ export async function auditDateWithGemini(targetDate: string): Promise<AuditResu
             beerCoupons: parsed.ocrBeerCoupons,
             potatoCoupons: parsed.ocrPotatoCoupons,
           },
-          status: parsed.isMatch ? "MATCH" : (disc.length > 0 ? "MISMATCH" : "MATCH"),
+          status: parsed.isMatch === false ? "MISMATCH" : "MATCH",
           discrepancies: disc,
           summaryNote: parsed.summaryNote || "Đã đối soát với AI.",
         };
@@ -442,9 +446,15 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
     }
     html += `   └ BP nhập: Quy đổi <b>${r.dataEntered.postedBills}</b> | Tổng thu về <b>${r.dataEntered.totalIssued}</b> | Bia <b>${r.dataEntered.beerCoupons}</b> | Khoai <b>${r.dataEntered.potatoCoupons}</b>\n`;
     if (r.status === "MATCH") {
-      html += `   └ ✅ AI soi ${r.imageCount} ảnh: <b>KHỚP</b> với chứng từ.\n`;
+      const ve = r.aiExtracted.postedBills;
+      if (ve == null) {
+        html += `   └ ✅ AI soi ${r.imageCount} ảnh: không phát hiện sai lệch (biên bản không có số vé rõ để đối chiếu số phiếu).\n`;
+      } else {
+        html += `   └ ✅ AI soi ${r.imageCount} ảnh: số vé đọc được <b>${ve}</b> KHỚP với số nhập.\n`;
+      }
+      for (const d of r.discrepancies) html += `   └ ℹ️ ${d}\n`;
     } else if (r.status === "MISMATCH") {
-      html += `   └ 🔍 AI đọc ảnh: Quy đổi <b>${r.aiExtracted.postedBills ?? "?"}</b> | Tổng <b>${r.aiExtracted.totalIssued ?? "?"}</b> | Bia <b>${r.aiExtracted.beerCoupons ?? "?"}</b> | Khoai <b>${r.aiExtracted.potatoCoupons ?? "?"}</b>\n`;
+      html += `   └ 🔍 AI đọc trên ảnh: Số vé <b>${r.aiExtracted.postedBills ?? "?"}</b> | Tổng vé <b>${r.aiExtracted.totalIssued ?? "?"}</b>\n`;
       for (const d of r.discrepancies) html += `   └ 🚨 <b>${d}</b>\n`;
     } else {
       for (const d of r.discrepancies) html += `   └ ${d}\n`;
