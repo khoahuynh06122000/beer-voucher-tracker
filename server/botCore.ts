@@ -392,8 +392,8 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   const orKey = getOpenRouterKey();
   if (orKey) {
     try {
-      // Mặc định model MIỄN PHÍ của OpenRouter (không cần nạp credit). Đổi bằng env OPENROUTER_MODEL.
-      const model = process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
+      // Mặc định model MIỄN PHÍ có vision của OpenRouter (không cần nạp credit). Đổi bằng env OPENROUTER_MODEL.
+      const model = process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
       const content: any[] = [{ type: "text", text: promptText }];
       for (const u of imgs) content.push({ type: "image_url", image_url: { url: u } });
       const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
