@@ -359,6 +359,19 @@ export const getOpenRouterKey = (): string =>
     process.env.OPENROUTER_API ||
     "").trim();
 
+/** Rút gọn lỗi provider thành 1 câu ngắn gọn (tránh dump nguyên JSON vào báo cáo). */
+const shortErr = (e: string): string => {
+  if (!e) return "?";
+  const retry = e.match(/retry(?:Delay)?["']?\s*[:=]?\s*["']?(\d+(?:\.\d+)?)s/i) || e.match(/(\d+)\s*s\b/);
+  if (/429|RESOURCE_EXHAUSTED|rate.?limit|too many|quota/i.test(e)) {
+    return retry ? `hết lượt (thử lại sau ~${Math.ceil(Number(retry[1]))}s)` : "hết lượt (rate limit)";
+  }
+  if (/\b402\b|more credits|insufficient/i.test(e)) return "cần nạp credit (402)";
+  if (/no longer available|\b404\b|not found|no endpoints/i.test(e)) return "model không khả dụng (404)";
+  if (/\b401\b|unauthorized|api key/i.test(e)) return "key không hợp lệ (401)";
+  return e.replace(/\s+/g, " ").slice(0, 80);
+};
+
 /** Danh sách key Gemini theo thứ tự ưu tiên (key sau là fallback khi key trước hết lượt). */
 export const getGeminiKeys = (): string[] =>
   [process.env.GEMINI_API_KEY, process.env.GEMINI2_API_KEY, process.env.GEMINI3_API_KEY]
@@ -436,9 +449,10 @@ async function extractRawFromImages(promptText: string, dataUrls: string[]): Pro
   }
 
   const parts: string[] = [];
-  parts.push(geminiConfigs.length ? `Gemini(${geminiConfigs.length} key): ${gemErr || "?"}` : "Gemini: (chưa cấu hình)");
-  parts.push(getOpenRouterKey() ? `OpenRouter(${process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free"}): ${orErr || "?"}` : "OpenRouter: (chưa cấu hình)");
-  throw new Error(parts.join(" | "));
+  if (geminiConfigs.length) parts.push(`Gemini: ${shortErr(gemErr)}`);
+  if (getOpenRouterKey()) parts.push(`OpenRouter: ${shortErr(orErr)}`);
+  if (!parts.length) parts.push("chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY");
+  throw new Error(parts.join("; "));
 }
 
 /**
@@ -576,13 +590,13 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
       summaryNote,
     };
   } catch (e: any) {
-    const msg = e?.message || String(e);
-    const is429 = /\b429\b|rate.?limit|quota|RESOURCE_EXHAUSTED|too many requests|requires more credits|402/i.test(msg);
+    const msg = (e?.message || String(e)).replace(/\s+/g, " ").slice(0, 200);
+    const isBusy = /hết lượt|rate.?limit|429|quota|credit|402|RESOURCE_EXHAUSTED|không khả dụng/i.test(msg);
     return {
       ...base,
       status: "ERROR",
-      discrepancies: [is429 ? `⏳ Nguồn AI tạm hết lượt / cần credit — thử lại sau. Chi tiết: ${msg}` : `Lỗi OCR AI: ${msg}`],
-      summaryNote: is429 ? "Nguồn AI tạm hết lượt, thử lại sau." : "Không đọc được ảnh bằng AI.",
+      discrepancies: [isBusy ? `⏳ Nguồn AI bận/hết lượt — thử lại sau. (${msg})` : `Lỗi OCR AI: ${msg}`],
+      summaryNote: isBusy ? "Nguồn AI tạm hết lượt, thử lại sau." : "Không đọc được ảnh bằng AI.",
     };
   }
 }
