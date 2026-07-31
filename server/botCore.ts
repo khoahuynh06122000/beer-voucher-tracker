@@ -300,6 +300,8 @@ export interface AuditResult {
   status: AuditStatus;
   discrepancies: string[];
   summaryNote: string;
+  aiBusy?: boolean; // true khi ERROR do nguồn AI hết lượt/bận (để tách ra tin nhắn riêng)
+  aiErrorDetail?: string; // chi tiết ngắn lỗi AI (KHÔNG đưa vào báo cáo — chỉ dùng cho tin nhắn riêng)
 }
 
 // Prompt quy trình 3 BƯỚC: đọc HẾT thông tin (in + viết tay) -> TỰ SOÁT nội bộ
@@ -595,8 +597,11 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     return {
       ...base,
       status: "ERROR",
-      discrepancies: [isBusy ? `⏳ Nguồn AI bận/hết lượt — thử lại sau. (${msg})` : `Lỗi OCR AI: ${msg}`],
-      summaryNote: isBusy ? "Nguồn AI tạm hết lượt, thử lại sau." : "Không đọc được ảnh bằng AI.",
+      // KHÔNG nhét chi tiết lỗi vào báo cáo — chỉ 1 dòng ngắn. Chi tiết để riêng ở aiErrorDetail.
+      discrepancies: [isBusy ? "chưa soi được ảnh — sẽ thử lại (xem tin nhắn kèm)" : "chưa soi được ảnh (lỗi đọc)"],
+      summaryNote: isBusy ? "Nguồn AI tạm hết lượt." : "Không đọc được ảnh bằng AI.",
+      aiBusy: isBusy,
+      aiErrorDetail: msg,
     };
   }
 }
@@ -642,11 +647,14 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
   const mismatch = results.filter((r) => r.status === "MISMATCH").length;
   const noImg = results.filter((r) => r.status === "NO_IMAGES").length;
   const noData = results.filter((r) => r.status === "NO_DATA").length;
+  const err = results.filter((r) => r.status === "ERROR").length;
   const noKey = results.some((r) => r.status === "NO_KEY");
 
-  let html = `<b>🤖 ĐỐI SOÁT AI (Gemini soi ảnh vs số nhập)</b>\n`;
+  let html = `<b>🤖 ĐỐI SOÁT AI (soi ảnh vs số nhập)</b>\n`;
   html += `📅 <b>Ngày:</b> ${formatted}  |  ⏱ ${new Date().toLocaleTimeString("vi-VN")}\n`;
-  html += `📊 Khớp 🟢${match} | Sai lệch 🚨${mismatch} | Thiếu ảnh ⚠️${noImg} | Chưa nhập ⬜${noData}\n`;
+  html += `📊 Khớp 🟢${match} | Sai lệch 🚨${mismatch} | Thiếu ảnh ⚠️${noImg} | Chưa nhập ⬜${noData}`;
+  if (err > 0) html += ` | Chưa soi được ❓${err}`;
+  html += `\n`;
   if (noKey) html += `🔧 <i>Server chưa cấu hình GEMINI_API_KEY — chưa soi được ảnh.</i>\n`;
   html += `\n`;
 
@@ -654,6 +662,10 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
     html += `${AUDIT_ICON[r.status]} <b>${r.restaurantName}</b>\n`;
     if (r.status === "NO_DATA") {
       html += `   └ ❌ Chưa nhập số liệu.\n\n`;
+      continue;
+    }
+    if (r.status === "ERROR") {
+      html += `   └ ${r.discrepancies[0] || "chưa soi được ảnh"}.\n\n`;
       continue;
     }
     html += `   └ BP nhập: Quy đổi <b>${r.dataEntered.postedBills}</b> | Tổng thu về <b>${r.dataEntered.totalIssued}</b> | Bia <b>${r.dataEntered.beerCoupons}</b> | Khoai <b>${r.dataEntered.potatoCoupons}</b>\n`;
@@ -676,6 +688,15 @@ export function formatAuditReportHtml(targetDate: string, results: AuditResult[]
   }
   html += `\n🌐 <a href="${LIVE_DASHBOARD_URL}">Mở Live Dashboard</a>`;
   return html;
+}
+
+/** Nếu có nhà hàng chưa soi được do AI hết lượt → trả 1 tin NGẮN riêng; else null. */
+export function buildAiBusyNotice(results: AuditResult[]): string | null {
+  const busy = results.filter((r) => r.aiBusy);
+  if (!busy.length) return null;
+  const retry = busy.map((r) => r.aiErrorDetail || "").join(" ").match(/~?(\d+)\s*s/);
+  const retryTxt = retry ? ` Thử lại sau ~${retry[1]}s.` : " Thử lại sau ít phút.";
+  return `⏳ <b>Nguồn AI đang hết lượt</b> — ${busy.length} nhà hàng chưa soi được ảnh: ${busy.map((r) => r.restaurantName).join(", ")}.${retryTxt}`;
 }
 
 /** Dựng MS Teams Adaptive Card từ kết quả audit (nhấn mạnh sai lệch). */
@@ -894,6 +915,11 @@ export async function runWeeklyPreventiveAudit(
   html += formatAuditReportHtml(chosenDate, results);
 
   const sent = shouldSend ? await sendTelegramBroadcast(html) : false;
+  // AI hết lượt → gửi RIÊNG 1 tin ngắn (tách khỏi báo cáo)
+  if (shouldSend) {
+    const busyMsg = buildAiBusyNotice(results);
+    if (busyMsg) await sendTelegramBroadcast(busyMsg);
+  }
   return { chosenDate, reason, sent, results };
 }
 
@@ -1085,6 +1111,9 @@ export async function processTelegramMessageCommand(
     await replyTelegram(`⏳ <b>Đang chạy AI Gemini soi ảnh & đối soát ngày ${formattedDate}...</b>\n<i>(Có thể mất ~10–30 giây tuỳ số ảnh)</i>`);
     const auditResults = await auditDateWithGemini(targetDate);
     await replyTelegram(formatAuditReportHtml(targetDate, auditResults));
+    // Nếu nguồn AI hết lượt → gửi RIÊNG 1 tin ngắn (không nhét vào báo cáo)
+    const busyMsg = buildAiBusyNotice(auditResults);
+    if (busyMsg) await replyTelegram(busyMsg);
   } catch (err: any) {
     console.error("[TELEGRAM COMMAND PROC ERR]", err);
     await replyTelegram(`❌ <b>Lỗi xử lý câu lệnh:</b> ${err.message || String(err)}`);
