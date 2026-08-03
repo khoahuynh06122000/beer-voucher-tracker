@@ -59,6 +59,39 @@ export function getTelegramBotToken(): Promise<string> {
   return getFirestoreSetting("telegram_bot_token");
 }
 
+/** Ghi 1 giá trị chuỗi vào collection `settings` (dùng để cache kết quả đối soát). */
+export async function saveFirestoreSetting(key: string, value: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(firestoreDocUrl(`settings/${key}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: { value: { stringValue: value } } }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Lưu / đọc cache kết quả đối soát theo ngày (để "gửi ms teams" tái dùng, không quét lại). */
+export async function saveAuditCache(date: string, results: AuditResult[]): Promise<void> {
+  await saveFirestoreSetting(`audit_cache_${date}`, JSON.stringify(results).slice(0, 900000));
+  await saveFirestoreSetting("last_audit_date", date);
+}
+export async function loadAuditCache(date: string): Promise<AuditResult[] | null> {
+  const raw = await getFirestoreSetting(`audit_cache_${date}`);
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Đọc JSON body từ request (tương thích cả Vercel đã parse sẵn `req.body`
  * lẫn Node stream thô). Trả về {} nếu rỗng/không hợp lệ.
@@ -722,51 +755,56 @@ export function buildAiBusyNotice(results: AuditResult[]): string | null {
   return msg;
 }
 
-/** Dựng MS Teams Adaptive Card từ kết quả audit (nhấn mạnh sai lệch). */
+/** Chuyển báo cáo HTML (Telegram) sang Markdown cho MS Teams (giữ ĐÚNG nội dung). */
+function telegramHtmlToTeams(html: string): string {
+  return html
+    .replace(/<a href="([^"]*)">([^<]*)<\/a>/g, "[$2]($1)")
+    .replace(/<\/?b>/g, "**")
+    .replace(/<\/?i>/g, "_")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+/** Adaptive Card = ĐÚNG nội dung báo cáo Telegram (dùng chung 1 formatter). */
 export function buildAuditTeamsCard(targetDate: string, results: AuditResult[]) {
   const dp = targetDate.split("-");
   const formatted = `${dp[2]}/${dp[1]}/${dp[0]}`;
-  const mismatch = results.filter((r) => r.status === "MISMATCH");
-
-  const lines = results.map((r) => {
-    if (r.status === "MISMATCH") {
-      return `🚨 **${r.restaurantName}**: SAI LỆCH — ${r.discrepancies.join("; ") || "xem chi tiết"}`;
-    }
-    if (r.status === "MATCH") return `🟢 **${r.restaurantName}**: Khớp (${r.imageCount} ảnh)`;
-    if (r.status === "NO_IMAGES") return `⚠️ **${r.restaurantName}**: Thiếu ảnh minh chứng`;
-    if (r.status === "NO_DATA") return `⬜ **${r.restaurantName}**: Chưa nhập số liệu`;
-    if (r.status === "NO_KEY") return `🔧 **${r.restaurantName}**: Chưa bật OCR (thiếu API key)`;
-    return `❓ **${r.restaurantName}**: ${r.summaryNote}`;
-  });
-
+  const mismatch = results.filter((r) => r.status === "MISMATCH").length;
+  const md = telegramHtmlToTeams(formatAuditReportHtml(targetDate, results));
   return {
     $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
     type: "AdaptiveCard",
     version: "1.2",
     body: [
-      {
-        type: "TextBlock",
-        size: "Large",
-        weight: "Bolder",
-        text: `🤖 BÁO CÁO ĐỐI SOÁT AI — ${formatted}`,
-        color: mismatch.length > 0 ? "Attention" : "Good",
-        wrap: true,
-      },
-      {
-        type: "TextBlock",
-        text: mismatch.length > 0
-          ? `🔴 Phát hiện ${mismatch.length} nhà hàng SAI LỆCH giữa ảnh minh chứng và số liệu nhập.`
-          : `🟢 Không phát hiện sai lệch giữa ảnh và số liệu nhập.`,
-        weight: "Bolder",
-        color: mismatch.length > 0 ? "Attention" : "Good",
-        wrap: true,
-      },
-      { type: "TextBlock", text: lines.join("\n\n"), wrap: true },
+      { type: "TextBlock", size: "Large", weight: "Bolder", text: `🤖 BÁO CÁO ĐỐI SOÁT AI — ${formatted}`, color: mismatch > 0 ? "Attention" : "Good", wrap: true },
+      { type: "TextBlock", text: md, wrap: true },
     ],
-    actions: [
-      { type: "Action.OpenUrl", title: "🌐 Mở Live Dashboard", url: LIVE_DASHBOARD_URL },
-    ],
+    actions: [{ type: "Action.OpenUrl", title: "🌐 Mở Live Dashboard", url: LIVE_DASHBOARD_URL }],
   };
+}
+
+/** Các payload MS Teams để thử (nội dung = báo cáo Telegram). MessageCard render markdown ổn nhất. */
+export function buildAuditTeamsPayloads(targetDate: string, results: AuditResult[]) {
+  const dp = targetDate.split("-");
+  const formatted = `${dp[2]}/${dp[1]}/${dp[0]}`;
+  const mismatch = results.filter((r) => r.status === "MISMATCH").length;
+  const md = telegramHtmlToTeams(formatAuditReportHtml(targetDate, results));
+  const mdSpaced = md.replace(/\n/g, "\n\n"); // MessageCard cần \n\n để xuống dòng
+
+  const messageCard = {
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    themeColor: mismatch > 0 ? "EF4444" : "10B981",
+    summary: `Đối soát AI ${formatted}`,
+    sections: [{ text: mdSpaced, markdown: true }],
+  };
+  const adaptiveContent = buildAuditTeamsCard(targetDate, results);
+  const adaptiveWrapped = {
+    type: "message",
+    attachments: [{ contentType: "application/vnd.microsoft.card.adaptive", contentUrl: null, content: adaptiveContent }],
+  };
+  const simple = { text: mdSpaced };
+  return { messageCard, adaptiveContent, adaptiveWrapped, simple };
 }
 
 // ===========================================================================
@@ -1048,6 +1086,7 @@ export async function processTelegramMessageCommand(
       }
     }
 
+    const dateExplicit = !!targetDate; // người dùng có ghi ngày cụ thể trong lệnh không
     if (!targetDate) {
       targetDate = now.toISOString().split("T")[0];
     }
@@ -1063,56 +1102,50 @@ export async function processTelegramMessageCommand(
       normText.includes("webhook");
 
     if (isTeamsRequest) {
-      await replyTelegram(`⏳ <b>Đang chạy AI đối soát ngày ${formattedDate} rồi gửi lên MS Teams...</b>`);
+      // Ngày gửi: nếu lệnh có ghi ngày -> dùng ngày đó; nếu không -> lấy NGÀY ĐỐI SOÁT GẦN NHẤT.
+      let teamsDate = targetDate;
+      if (!dateExplicit) {
+        const last = await getFirestoreSetting("last_audit_date");
+        if (last) teamsDate = last;
+      }
+      const td = teamsDate.split("-");
+      const teamsFormatted = `${td[2]}/${td[1]}/${td[0]}`;
 
       try {
         const webhookUrl = await getFirestoreSetting("ms_teams_webhook");
-
         if (!webhookUrl || !webhookUrl.trim()) {
           await replyTelegram(`❌ <b>Chưa cấu hình MS Teams Webhook!</b>\n\nBạn chưa lưu URL Webhook MS Teams trong mục <b>Cấu hình Hệ thống</b> trên Web App.`);
           return;
         }
 
-        const auditResults = await auditDateWithGemini(targetDate);
-        const cardContent = buildAuditTeamsCard(targetDate, auditResults);
+        // TÁI DÙNG kết quả đã quét (không quét lại). Chỉ quét nếu chưa có cache.
+        let auditResults = await loadAuditCache(teamsDate);
+        if (auditResults && auditResults.length) {
+          await replyTelegram(`♻️ <b>Dùng lại kết quả đối soát ngày ${teamsFormatted}</b> (đã quét trước đó) để gửi MS Teams — KHÔNG quét lại.`);
+        } else {
+          await replyTelegram(`⏳ <b>Chưa có kết quả đã quét cho ngày ${teamsFormatted}</b> — đang quét rồi gửi MS Teams...`);
+          auditResults = await auditDateWithGemini(teamsDate);
+          if (!auditResults.some((r) => r.aiBusy)) await saveAuditCache(teamsDate, auditResults);
+        }
 
-        const teamsWrappedPayload = {
-          type: "message",
-          attachments: [
-            {
-              contentType: "application/vnd.microsoft.card.adaptive",
-              contentUrl: null,
-              content: cardContent,
-            },
-          ],
-        };
-
+        const { messageCard, adaptiveWrapped, adaptiveContent, simple } = buildAuditTeamsPayloads(teamsDate, auditResults);
         const url = webhookUrl.trim();
         const isPowerAutomate =
-          url.includes("logic.azure.com") ||
-          url.includes("powerautomate") ||
-          url.includes("powerplatform") ||
-          url.includes("flow.microsoft.com");
-
+          url.includes("logic.azure.com") || url.includes("powerautomate") || url.includes("powerplatform") || url.includes("flow.microsoft.com");
         const payloadsToTry = isPowerAutomate
-          ? [cardContent, teamsWrappedPayload]
-          : [teamsWrappedPayload, cardContent];
+          ? [adaptiveContent, adaptiveWrapped, messageCard, simple]
+          : [messageCard, adaptiveWrapped, adaptiveContent, simple];
 
         let teamsSuccess = false;
         let lastErr = "";
-
         for (const payload of payloadsToTry) {
           try {
-            const resp = await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+            const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             if (resp.ok || resp.status === 200 || resp.status === 202) {
               teamsSuccess = true;
               break;
             } else {
-              lastErr = `HTTP ${resp.status}: ${await resp.text()}`;
+              lastErr = `HTTP ${resp.status}: ${(await resp.text()).slice(0, 120)}`;
             }
           } catch (err: any) {
             lastErr = err.message || String(err);
@@ -1120,9 +1153,9 @@ export async function processTelegramMessageCommand(
         }
 
         if (teamsSuccess) {
-          await replyTelegram(`🚀 <b>ĐÃ GỬI THÀNH CÔNG BÁO CÁO TỚI MS TEAMS!</b>\n\n📅 <b>Ngày đối soát:</b> ${formattedDate}\n🔗 <b>Kênh nhận:</b> MS Teams Channel Webhook\n\n📌 <i>Bạn hãy mở MS Teams để xem chi tiết Adaptive Card.</i>`);
+          await replyTelegram(`🚀 <b>ĐÃ GỬI BÁO CÁO ĐỐI SOÁT (${teamsFormatted}) LÊN MS TEAMS!</b>\n📌 <i>Nội dung giống hệt báo cáo trên Telegram.</i>`);
         } else {
-          await replyTelegram(`❌ <b>Gửi tới MS Teams thất bại!</b>\n\nLỗi: <i>${lastErr}</i>\n👉 Vui lòng kiểm tra lại URL Webhook MS Teams trong phần Cấu hình.`);
+          await replyTelegram(`❌ <b>Gửi tới MS Teams thất bại!</b>\n\nLỗi: <i>${lastErr}</i>\n👉 Vui lòng kiểm tra lại URL Webhook MS Teams.`);
         }
       } catch (e: any) {
         await replyTelegram(`❌ <b>Lỗi hệ thống khi xử lý gửi Teams:</b> ${e.message}`);
@@ -1134,6 +1167,8 @@ export async function processTelegramMessageCommand(
     await replyTelegram(`⏳ <b>Đang chạy AI Gemini soi ảnh & đối soát ngày ${formattedDate}...</b>\n<i>(Có thể mất ~10–30 giây tuỳ số ảnh)</i>`);
     const auditResults = await auditDateWithGemini(targetDate);
     await replyTelegram(formatAuditReportHtml(targetDate, auditResults));
+    // LƯU CACHE kết quả (chỉ khi quét trọn vẹn, không có nguồn AI hết lượt) để "gửi ms teams" tái dùng
+    if (!auditResults.some((r) => r.aiBusy)) await saveAuditCache(targetDate, auditResults);
     // Nếu nguồn AI hết lượt → gửi RIÊNG 1 tin ngắn (không nhét vào báo cáo)
     const busyMsg = buildAiBusyNotice(auditResults);
     if (busyMsg) await replyTelegram(busyMsg);
