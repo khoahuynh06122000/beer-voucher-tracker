@@ -107,7 +107,7 @@ export function HistoricalDataTable() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await getVouchersByDateRange(selectedFilterRestaurant, startDate, endDate);
+      const data = await getVouchersByDateRange(selectedFilterRestaurant, startDate, endDate, true);
       setRecords(data);
     } catch (e) {
       console.error("Error loading historical data:", e);

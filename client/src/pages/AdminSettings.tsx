@@ -308,7 +308,7 @@ export default function AdminSettings() {
   const handleRunAIAudit = async () => {
     setIsRunningAIAudit(true);
     try {
-      const records = await getVouchersByDateRange("all", targetCheckDate, targetCheckDate);
+      const records = await getVouchersByDateRange("all", targetCheckDate, targetCheckDate, true);
       if (!records || records.length === 0) {
         toast.info(`Không có dữ liệu báo cáo voucher cho ngày ${targetCheckDate}!`);
         setAIAuditResults([]);
@@ -461,7 +461,7 @@ export default function AdminSettings() {
   const handleExportExcel = async () => {
     setIsExporting(true);
     try {
-      const data = await getVouchersByDateRange(exportRestaurant, exportStartDate, exportEndDate);
+      const data = await getVouchersByDateRange(exportRestaurant, exportStartDate, exportEndDate, true);
       if (!data || data.length === 0) {
         toast.error("Không tìm thấy dữ liệu báo cáo trong khoảng thời gian đã chọn!");
         setIsExporting(false);

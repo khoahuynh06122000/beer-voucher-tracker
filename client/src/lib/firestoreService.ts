@@ -187,14 +187,20 @@ export async function getTodayVoucher(restaurantId: string, isAdmin: boolean = f
   return getVoucherByDate(restaurantId, getLocalDateString(), isAdmin);
 }
 
+// Cột nhẹ (KHÔNG kèm billImages base64) cho các query danh sách/KPI/chart -> nhanh.
+const LIGHT_COLS =
+  "id,date,restaurantId,restaurantName,potatoCoupons,beerCoupons,bakeryCoupons,cancelled,postedBills,totalIssued,utilizationRate,billNumber,updatedAt,createdBy";
+
 export async function getVouchersByDateRange(
   restaurantId: string | null,
   startDate: string,
-  endDate: string
+  endDate: string,
+  includeImages: boolean = false
 ): Promise<VoucherRecord[]> {
   try {
+    const select = includeImages ? "*" : LIGHT_COLS;
     const rows = await sbGet(
-      `vouchers?date=gte.${encodeURIComponent(startDate)}&date=lte.${encodeURIComponent(endDate)}&select=*`
+      `vouchers?date=gte.${encodeURIComponent(startDate)}&date=lte.${encodeURIComponent(endDate)}&select=${select}`
     );
     const results: VoucherRecord[] = [];
     rows.forEach((data: any) => {
@@ -212,9 +218,10 @@ export async function getVouchersByDateRange(
 export async function getAggregatedVoucherByDateRange(
   restaurantId: string | null,
   startDate: string,
-  endDate: string
+  endDate: string,
+  includeImages: boolean = false
 ): Promise<VoucherRecord | null> {
-  const records = await getVouchersByDateRange(restaurantId, startDate, endDate);
+  const records = await getVouchersByDateRange(restaurantId, startDate, endDate, includeImages);
   if (!records || records.length === 0) return null;
 
   let totalPotato = 0, totalBeer = 0, totalBakery = 0, totalCancelled = 0, totalPostedBills = 0, totalIssued = 0;
