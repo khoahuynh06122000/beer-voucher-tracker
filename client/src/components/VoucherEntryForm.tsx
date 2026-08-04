@@ -6,7 +6,7 @@ import { Ticket, XCircle, CheckCircle2, Save, Beer, Building2, Camera, Image as 
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getVoucherByDate, upsertVoucher, getLocalDateString } from "@/lib/firestoreService";
 import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
-import { compressImage, downloadImage } from "@/lib/imageUtils";
+import { uploadBillImage, downloadImage } from "@/lib/imageUtils";
 import { ImagePreviewModal } from "./ImagePreviewModal";
 
 interface VoucherEntryFormProps {
@@ -82,19 +82,23 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newCompressedImages: string[] = [];
+    const uploadingToast = toast.loading(`Đang tải ${files.length} ảnh lên kho...`);
+    const newImageUrls: string[] = [];
     for (let i = 0; i < files.length; i++) {
       try {
-        const compressed = await compressImage(files[i]);
-        newCompressedImages.push(compressed);
+        const url = await uploadBillImage(files[i], restaurantId, date);
+        newImageUrls.push(url);
       } catch (err) {
-        console.error("Lỗi nén ảnh:", err);
+        console.error("Lỗi tải ảnh lên Storage:", err);
       }
     }
+    toast.dismiss(uploadingToast);
 
-    if (newCompressedImages.length > 0) {
-      setBillImages((prev) => [...prev, ...newCompressedImages]);
-      toast.success(`Đã thêm ${newCompressedImages.length} ảnh Bill/Vé đối soát!`);
+    if (newImageUrls.length > 0) {
+      setBillImages((prev) => [...prev, ...newImageUrls]);
+      toast.success(`Đã tải lên ${newImageUrls.length} ảnh Bill/Vé đối soát!`);
+    } else {
+      toast.error("Tải ảnh thất bại. Kiểm tra kết nối / cấu hình Storage.");
     }
     e.target.value = "";
   };

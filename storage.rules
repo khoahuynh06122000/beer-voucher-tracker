@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Quy tắc Firebase Storage cho kho ẢNH bill.
+// Mở tương tự Firestore hiện tại (app nội bộ). Có thể siết bằng request.auth sau.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Ảnh bill: app up + hiển thị + AI đọc
+    match /bills/{allPaths=**} {
+      allow read, write: if true;
+    }
+    // Còn lại: chỉ đọc
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+  }
+}

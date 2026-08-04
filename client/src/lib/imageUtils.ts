@@ -51,6 +51,25 @@ export function compressImage(
 }
 
 /**
+ * Nén ảnh rồi TẢI LÊN FIREBASE STORAGE, trả về URL tải xuống (thay vì nhét base64
+ * vào Firestore). Nhờ vậy Firestore chỉ lưu URL nhẹ, không đốt quota.
+ */
+export async function uploadBillImage(
+  file: File,
+  restaurantId: string,
+  date: string
+): Promise<string> {
+  const dataUrl = await compressImage(file);
+  const { storage } = await import("./firebase");
+  const { ref, uploadString, getDownloadURL } = await import("firebase/storage");
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `bills/${restaurantId}/${date}/${Date.now()}_${rand}.jpg`;
+  const storageRef = ref(storage, path);
+  await uploadString(storageRef, dataUrl, "data_url");
+  return await getDownloadURL(storageRef);
+}
+
+/**
  * Trigger download of a base64 image data URL
  */
 export function downloadImage(dataUrl: string, fileName: string = "anh-bill-doi-soat.jpg") {

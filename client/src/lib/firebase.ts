@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import firebaseConfigData from "../../../firebase-applet-config.json";
 
 const firebaseConfig = {
@@ -19,5 +20,8 @@ export const auth = getAuth(app);
 const dbId = firebaseConfigData.firestoreDatabaseId;
 
 export const db = dbId && dbId !== "(default)" ? getFirestore(app, dbId) : getFirestore(app);
+
+// Firebase Storage — nơi lưu ẢNH bill (tách khỏi Firestore để không đốt quota DB)
+export const storage = getStorage(app);
 
 export default app;

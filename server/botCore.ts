@@ -414,6 +414,30 @@ export const getGeminiKeys = (): string[] =>
     .map((k) => (k || "").trim())
     .filter(Boolean);
 
+/**
+ * Chuẩn hoá 1 ảnh về data URL base64 để AI đọc. Ảnh có thể là:
+ *  - data:image/...;base64,...  (dữ liệu cũ) -> giữ nguyên
+ *  - https://... (Firebase Storage URL, dữ liệu mới) -> tải về -> base64
+ */
+async function normalizeToDataUrl(ref: string): Promise<string | null> {
+  if (!ref) return null;
+  if (/^data:image\/[a-zA-Z]+;base64,/.test(ref)) return ref;
+  if (/^https?:\/\//.test(ref)) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const resp = await fetch(ref, { signal: controller.signal }).finally(() => clearTimeout(timeout));
+      if (!resp.ok) return null;
+      const ct = (resp.headers.get("content-type") || "image/jpeg").split(";")[0];
+      const buf = Buffer.from(await resp.arrayBuffer());
+      return `data:${ct};base64,${buf.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function extractRawFromImages(promptText: string, dataUrls: string[]): Promise<string> {
   const imgs = dataUrls.slice(0, 3);
   const srcErrs: string[] = []; // "GEMINI_API_KEY (model): <lý do ngắn>"
@@ -520,9 +544,10 @@ export async function auditOneVoucher(rec: VoucherRec): Promise<AuditResult> {
     return { ...base, status: "NO_KEY", discrepancies: ["⚠️ Server chưa cấu hình GEMINI_API_KEY / OPENROUTER_API_KEY nên chưa soi ảnh được."], summaryNote: "Chưa bật OCR AI trên server." };
   }
   try {
-    const dataUrls = rec.billImages.filter((u) => /^data:image\/[a-zA-Z]+;base64,/.test(u));
+    // Ảnh có thể là data URL (cũ) hoặc URL Firebase Storage (mới) -> chuẩn hoá về base64
+    const dataUrls = (await Promise.all(rec.billImages.slice(0, 3).map(normalizeToDataUrl))).filter(Boolean) as string[];
     if (dataUrls.length === 0) {
-      return { ...base, status: "ERROR", discrepancies: ["Ảnh không đúng định dạng base64 để đọc."], summaryNote: "Không đọc được ảnh." };
+      return { ...base, status: "ERROR", discrepancies: ["Không tải/đọc được ảnh minh chứng."], summaryNote: "Không đọc được ảnh." };
     }
 
     const rawText = await extractRawFromImages(GEMINI_EXTRACT_PROMPT, dataUrls);
