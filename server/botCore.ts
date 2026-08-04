@@ -13,18 +13,6 @@
 
 import type { IncomingMessage } from "node:http";
 
-// LƯU Ý: đây là các giá trị CÔNG KHAI lấy từ web config (firebase-applet-config.json),
-// KHÔNG phải secret. Điểm mấu chốt từng gây lỗi CONSUMER_INVALID:
-//  - projectId thật là "peak-jigsaw-h8gvj" (không phải chuỗi ai-studio-... — đó là DATABASE id)
-//  - Firestore dùng NAMED database, không phải "(default)"
-//  - REST bắt buộc kèm ?key=<apiKey> để hợp lệ ở tầng API consumer.
-export const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "peak-jigsaw-h8gvj";
-export const FIRESTORE_DATABASE_ID =
-  process.env.FIRESTORE_DATABASE_ID ||
-  "ai-studio-beervoucher-cd7e66ad-a681-4c93-a133-30df0862fdee";
-export const FIREBASE_API_KEY =
-  process.env.FIREBASE_API_KEY || "AIzaSyA2J7pChKraAovbslqBL4xB5fn0JU-UsNs";
-
 export const LIVE_DASHBOARD_URL =
   "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app";
 
@@ -35,45 +23,55 @@ export const RESTAURANTS = [
   { id: "maisonkayser", name: "Maison Kayser" },
 ];
 
-const firestoreDocUrl = (path: string) =>
-  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${path}?key=${FIREBASE_API_KEY}`;
+// ===== SUPABASE (thay Firestore — cột camelCase trùng field app) =====
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_jtVF84t5gSxGDuUJb32Tuw_Rs-2sqmK";
+const sbHeaders: Record<string, string> = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json",
+};
 
-/** Đọc 1 giá trị chuỗi từ collection `settings` (settings/{key}.value). */
-export async function getFirestoreSetting(key: string): Promise<string> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const resp = await fetch(firestoreDocUrl(`settings/${key}`), {
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-    if (!resp.ok) return "";
-    const data = await resp.json();
-    return (data.fields?.value?.stringValue || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-/** Lấy Telegram Bot Token đã lưu trong Firestore. */
-export function getTelegramBotToken(): Promise<string> {
-  return getFirestoreSetting("telegram_bot_token");
-}
-
-/** Ghi 1 giá trị chuỗi vào collection `settings` (dùng để cache kết quả đối soát). */
-export async function saveFirestoreSetting(key: string, value: string): Promise<boolean> {
+async function sbGet(path: string): Promise<any[]> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const resp = await fetch(firestoreDocUrl(`settings/${key}`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: { value: { stringValue: value } } }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+async function sbUpsert(table: string, row: Record<string, any>): Promise<boolean> {
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: "POST",
+      headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(row),
+    });
     return resp.ok;
   } catch {
     return false;
   }
+}
+
+/** Đọc 1 giá trị chuỗi từ bảng `settings`. */
+export async function getFirestoreSetting(key: string): Promise<string> {
+  const rows = await sbGet(`settings?key=eq.${encodeURIComponent(key)}&select=value`);
+  return rows.length > 0 ? String(rows[0].value ?? "").trim() : "";
+}
+
+/** Lấy Telegram Bot Token đã lưu. */
+export function getTelegramBotToken(): Promise<string> {
+  return getFirestoreSetting("telegram_bot_token");
+}
+
+/** Ghi 1 giá trị chuỗi vào bảng `settings`. */
+export async function saveFirestoreSetting(key: string, value: string): Promise<boolean> {
+  return sbUpsert("settings", { key, value });
 }
 
 /** Lưu / đọc cache kết quả đối soát theo ngày (để "gửi ms teams" tái dùng, không quét lại). */
@@ -153,38 +151,26 @@ export async function getLiveMissingStatus(dateStr?: string) {
   const missing: string[] = [];
   const updated: UpdatedRestaurant[] = [];
 
+  const statusRows = await sbGet(`vouchers?date=eq.${encodeURIComponent(targetDateStr)}&select=*`);
+  const statusById: Record<string, any> = {};
+  for (const row of statusRows) statusById[row.restaurantId] = row;
+
   for (const r of RESTAURANTS) {
-    const docId = `${r.id}_${targetDateStr}`;
-    try {
-      const resp = await fetch(firestoreDocUrl(`vouchers/${docId}`));
-      if (resp.ok) {
-        const data = await resp.json();
-        const fields = data.fields || {};
-        const postedBillsVal = Number(fields.postedBills?.integerValue || fields.postedBills?.doubleValue || 0);
-        const totalIssuedVal = Number(fields.totalIssued?.integerValue || fields.totalIssued?.doubleValue || 0);
-        const bakeryVal = Number(fields.bakeryCoupons?.integerValue || fields.bakeryCoupons?.doubleValue || 0);
-        const beerVal = Number(fields.beerCoupons?.integerValue || fields.beerCoupons?.doubleValue || 0);
-        const potatoVal = Number(fields.potatoCoupons?.integerValue || fields.potatoCoupons?.doubleValue || 0);
-        const updatedAtVal = fields.updatedAt?.stringValue;
-
-        const imgValues = fields.billImages?.arrayValue?.values || [];
-        const imgCount = Array.isArray(imgValues) ? imgValues.length : 0;
-        const billNo = fields.billNumber?.stringValue;
-
-        if (updatedAtVal || postedBillsVal > 0 || totalIssuedVal > 0 || bakeryVal > 0 || beerVal > 0 || potatoVal > 0) {
-          updated.push({
-            name: r.name,
-            postedBills: postedBillsVal || bakeryVal || 1,
-            imgCount,
-            billNo,
-          });
-          continue;
-        }
+    const row = statusById[r.id];
+    if (row) {
+      const postedBillsVal = Number(row.postedBills || 0);
+      const totalIssuedVal = Number(row.totalIssued || 0);
+      const bakeryVal = Number(row.bakeryCoupons || 0);
+      const beerVal = Number(row.beerCoupons || 0);
+      const potatoVal = Number(row.potatoCoupons || 0);
+      const imgCount = Array.isArray(row.billImages) ? row.billImages.length : 0;
+      const billNo = row.billNumber || undefined;
+      if (row.updatedAt || postedBillsVal > 0 || totalIssuedVal > 0 || bakeryVal > 0 || beerVal > 0 || potatoVal > 0) {
+        updated.push({ name: r.name, postedBills: postedBillsVal || bakeryVal || 1, imgCount, billNo });
+        continue;
       }
-      missing.push(r.name);
-    } catch {
-      missing.push(r.name);
     }
+    missing.push(r.name);
   }
 
   const missingText = missing.length > 0
@@ -272,8 +258,6 @@ export async function getLiveMissingStatus(dateStr?: string) {
 // AI AUDIT (Gemini Vision): so ảnh minh chứng bộ phận up vs số liệu nhập app
 // ===========================================================================
 
-const numField = (f: any): number => Number(f?.integerValue || f?.doubleValue || 0);
-
 export interface VoucherRec {
   restaurantId: string;
   restaurantName: string;
@@ -294,31 +278,23 @@ export async function getVoucherRecord(
   restaurantName: string,
   date: string,
 ): Promise<VoucherRec | null> {
-  try {
-    const resp = await fetch(firestoreDocUrl(`vouchers/${restaurantId}_${date}`));
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const f = data.fields;
-    if (!f) return null;
-    const imgs: string[] = (f.billImages?.arrayValue?.values || [])
-      .map((v: any) => v?.stringValue)
-      .filter((s: any): s is string => typeof s === "string" && s.length > 0);
-    return {
-      restaurantId,
-      restaurantName,
-      date,
-      postedBills: numField(f.postedBills),
-      totalIssued: numField(f.totalIssued),
-      beerCoupons: numField(f.beerCoupons),
-      potatoCoupons: numField(f.potatoCoupons),
-      bakeryCoupons: numField(f.bakeryCoupons),
-      cancelled: numField(f.cancelled),
-      billImages: imgs,
-      billNumber: f.billNumber?.stringValue,
-    };
-  } catch {
-    return null;
-  }
+  const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(`${restaurantId}_${date}`)}&select=*`);
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  const imgs: string[] = Array.isArray(r.billImages) ? r.billImages.filter((s: any) => typeof s === "string" && s.length > 0) : [];
+  return {
+    restaurantId,
+    restaurantName,
+    date,
+    postedBills: Number(r.postedBills || 0),
+    totalIssued: Number(r.totalIssued || 0),
+    beerCoupons: Number(r.beerCoupons || 0),
+    potatoCoupons: Number(r.potatoCoupons || 0),
+    bakeryCoupons: Number(r.bakeryCoupons || 0),
+    cancelled: Number(r.cancelled || 0),
+    billImages: imgs,
+    billNumber: r.billNumber || undefined,
+  };
 }
 
 export type AuditStatus = "MATCH" | "MISMATCH" | "NO_IMAGES" | "NO_DATA" | "NO_KEY" | "ERROR";
@@ -838,11 +814,6 @@ export function buildAuditTeamsPayloads(targetDate: string, results: AuditResult
 // ngày đó -> gửi báo cáo về Telegram.
 // ===========================================================================
 
-const firestoreDocUrlMasked = (path: string, fields: string[]) =>
-  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${path}?${fields
-    .map((f) => `mask.fieldPaths=${f}`)
-    .join("&")}&key=${FIREBASE_API_KEY}`;
-
 /** Thời điểm hiện tại theo giờ VN (UTC+7), đọc bằng getUTC* sẽ ra giờ VN. */
 const vnNowDate = (): Date => new Date(Date.now() + 7 * 3600 * 1000);
 const toYmd = (d: Date): string =>
@@ -863,38 +834,40 @@ interface DaySummary {
   rows: DayRow[];
 }
 
-/** Lấy số liệu (KHÔNG tải ảnh — dùng field mask) cho nhiều ngày. */
+/** Lấy số liệu (KHÔNG tải ảnh) cho nhiều ngày — 1 query Supabase cho cả khoảng ngày. */
 async function getWeekSummaries(dates: string[]): Promise<DaySummary[]> {
-  const fields = ["postedBills", "totalIssued", "beerCoupons", "potatoCoupons", "cancelled", "bakeryCoupons"];
-  return Promise.all(
-    dates.map(async (date): Promise<DaySummary> => {
-      const rows = await Promise.all(
-        RESTAURANTS.map(async (r): Promise<DayRow> => {
-          const empty: DayRow = { name: r.name, hasDoc: false, postedBills: 0, totalIssued: 0, beerCoupons: 0, potatoCoupons: 0, cancelled: 0, bakeryCoupons: 0 };
-          try {
-            const resp = await fetch(firestoreDocUrlMasked(`vouchers/${r.id}_${date}`, fields));
-            if (!resp.ok) return empty;
-            const data = await resp.json();
-            const f = data.fields;
-            if (!f) return empty;
-            return {
-              name: r.name,
-              hasDoc: true,
-              postedBills: numField(f.postedBills),
-              totalIssued: numField(f.totalIssued),
-              beerCoupons: numField(f.beerCoupons),
-              potatoCoupons: numField(f.potatoCoupons),
-              cancelled: numField(f.cancelled),
-              bakeryCoupons: numField(f.bakeryCoupons),
-            };
-          } catch {
-            return empty;
-          }
-        }),
-      );
-      return { date, rows };
-    }),
+  const sorted = [...dates].sort();
+  const start = sorted[0];
+  const end = sorted[sorted.length - 1];
+  const select = "id,restaurantId,date,postedBills,totalIssued,beerCoupons,potatoCoupons,cancelled,bakeryCoupons";
+  const rows = await sbGet(
+    `vouchers?date=gte.${encodeURIComponent(start)}&date=lte.${encodeURIComponent(end)}&select=${select}`,
   );
+  // Map [date][restaurantId] -> row
+  const byDateRest: Record<string, Record<string, any>> = {};
+  for (const row of rows) {
+    (byDateRest[row.date] ||= {})[row.restaurantId] = row;
+  }
+
+  return dates.map((date): DaySummary => {
+    const dayRows: DayRow[] = RESTAURANTS.map((r): DayRow => {
+      const row = byDateRest[date]?.[r.id];
+      if (!row) {
+        return { name: r.name, hasDoc: false, postedBills: 0, totalIssued: 0, beerCoupons: 0, potatoCoupons: 0, cancelled: 0, bakeryCoupons: 0 };
+      }
+      return {
+        name: r.name,
+        hasDoc: true,
+        postedBills: Number(row.postedBills || 0),
+        totalIssued: Number(row.totalIssued || 0),
+        beerCoupons: Number(row.beerCoupons || 0),
+        potatoCoupons: Number(row.potatoCoupons || 0),
+        cancelled: Number(row.cancelled || 0),
+        bakeryCoupons: Number(row.bakeryCoupons || 0),
+      };
+    });
+    return { date, rows: dayRows };
+  });
 }
 
 /** Nhờ AI chọn 1 ngày nghi ngờ sai số nhất trong tuần (fallback heuristic). */

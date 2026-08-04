@@ -1,15 +1,42 @@
-import { db } from "./firebase";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  serverTimestamp,
-} from "firebase/firestore";
+// ===========================================================================
+// DATA LAYER — SUPABASE (Postgres REST / PostgREST)
+// Trước đây dùng Firestore (bị giới hạn quota free-tier). Đã chuyển sang Supabase
+// (free, không giới hạn theo ngày). Giữ NGUYÊN tên hàm + kiểu trả về để các
+// component không phải sửa. Cột DB đặt camelCase (quoted) trùng field app.
+// ===========================================================================
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_jtVF84t5gSxGDuUJb32Tuw_Rs-2sqmK";
+
+const sbHeaders: Record<string, string> = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json",
+};
+
+async function sbGet(path: string): Promise<any[]> {
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error("Supabase GET error:", e);
+    return [];
+  }
+}
+
+async function sbUpsert(table: string, row: Record<string, any>): Promise<void> {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(row),
+  });
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`Supabase upsert ${table} lỗi ${resp.status}: ${t.slice(0, 200)}`);
+  }
+}
 
 export interface UserProfile {
   uid: string;
@@ -40,51 +67,17 @@ export interface VoucherRecord {
 
 // Preset user map for auto-seeding
 export const PRESET_USERS: Record<string, Omit<UserProfile, "uid">> = {
-  lehoibia: {
-    username: "lehoibia",
-    role: "restaurant",
-    restaurantName: "Lê Hội Bia",
-    email: "lehoibia@beervoucher.app",
-  },
-  "1901": {
-    username: "1901",
-    role: "restaurant",
-    restaurantName: "Nhà Hàng 1901",
-    email: "1901@beervoucher.app",
-  },
-  beerplaza: {
-    username: "beerplaza",
-    role: "restaurant",
-    restaurantName: "Beer Plaza",
-    email: "beerplaza@beervoucher.app",
-  },
-  maisonkayser: {
-    username: "maisonkayser",
-    role: "restaurant",
-    restaurantName: "Maison Kayser",
-    email: "maisonkayser@beervoucher.app",
-  },
-  admin: {
-    username: "admin",
-    role: "admin",
-    restaurantName: "Ban Quản Lý",
-    email: "admin@beervoucher.app",
-  },
+  lehoibia: { username: "lehoibia", role: "restaurant", restaurantName: "Lê Hội Bia", email: "lehoibia@beervoucher.app" },
+  "1901": { username: "1901", role: "restaurant", restaurantName: "Nhà Hàng 1901", email: "1901@beervoucher.app" },
+  beerplaza: { username: "beerplaza", role: "restaurant", restaurantName: "Beer Plaza", email: "beerplaza@beervoucher.app" },
+  maisonkayser: { username: "maisonkayser", role: "restaurant", restaurantName: "Maison Kayser", email: "maisonkayser@beervoucher.app" },
+  admin: { username: "admin", role: "admin", restaurantName: "Ban Quản Lý", email: "admin@beervoucher.app" },
 };
 
-/**
- * Fetch or initialize user profile in Firestore `users` collection
- */
+/** Trả hồ sơ user từ preset (không cần bảng users). */
 export async function getUserProfile(uid: string, email?: string): Promise<UserProfile> {
   let matchedKey = "admin";
-  if (email) {
-    const usernameFromEmail = email.split("@")[0].toLowerCase();
-    if (PRESET_USERS[usernameFromEmail]) {
-      matchedKey = usernameFromEmail;
-    } else {
-      matchedKey = usernameFromEmail;
-    }
-  }
+  if (email) matchedKey = email.split("@")[0].toLowerCase();
 
   const preset = PRESET_USERS[matchedKey] || {
     username: email ? email.split("@")[0] : "user",
@@ -93,59 +86,22 @@ export async function getUserProfile(uid: string, email?: string): Promise<UserP
     email: email || "",
   };
 
-  const defaultProfile: UserProfile = {
-    uid,
-    ...preset,
-    email: email || preset.email,
-    createdAt: new Date().toISOString(),
-  };
-
-  try {
-    const userRef = doc(db, "users", uid);
-    const fetchPromise = getDoc(userRef);
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
-
-    const snap = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (snap && snap.exists()) {
-      return snap.data() as UserProfile;
-    }
-
-    setDoc(userRef, defaultProfile).catch(() => {});
-    return defaultProfile;
-  } catch (error) {
-    console.error("Error fetching user profile from Firestore:", error);
-    return defaultProfile;
-  }
+  return { uid, ...preset, email: email || preset.email, createdAt: new Date().toISOString() };
 }
 
 function cleanUndefinedFields<T extends Record<string, any>>(obj: T): Partial<T> {
   const newObj: any = {};
   Object.keys(obj).forEach((key) => {
-    if (obj[key] !== undefined) {
-      newObj[key] = obj[key];
-    }
+    if (obj[key] !== undefined) newObj[key] = obj[key];
   });
   return newObj;
 }
 
-/**
- * Save user profile explicitly
- */
 export async function createUserProfile(uid: string, profile: Omit<UserProfile, "uid">): Promise<UserProfile> {
-  const userRef = doc(db, "users", uid);
-  const newProfile: UserProfile = {
-    uid,
-    ...profile,
-    createdAt: new Date().toISOString(),
-  };
-  await setDoc(userRef, cleanUndefinedFields(newProfile) as UserProfile);
-  return newProfile;
+  return { uid, ...profile, createdAt: new Date().toISOString() };
 }
 
-/**
- * Get local date string in YYYY-MM-DD format based on client local timezone
- */
+/** Get local date string in YYYY-MM-DD format based on client local timezone */
 export function getLocalDateString(d: Date = new Date()): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -153,9 +109,21 @@ export function getLocalDateString(d: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Chuẩn hoá 1 row Supabase -> VoucherRecord (điền default potato/beer nếu thiếu). */
+function normalizeRow(data: any): VoucherRecord {
+  const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
+  const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
+  return {
+    ...data,
+    billImages: Array.isArray(data.billImages) ? data.billImages : [],
+    potatoCoupons: potato,
+    beerCoupons: beer,
+  } as VoucherRecord;
+}
+
 /**
  * Get voucher for a specific restaurant and date.
- * If isAdmin or restaurantId === 'all', aggregates vouchers across all restaurants for that date.
+ * If isAdmin or restaurantId === 'all', aggregates across all restaurants for that date.
  */
 export async function getVoucherByDate(
   restaurantId: string,
@@ -163,26 +131,15 @@ export async function getVoucherByDate(
   isAdmin: boolean = false
 ): Promise<VoucherRecord | null> {
   try {
-    const vouchersRef = collection(db, "vouchers");
-
     if (isAdmin || restaurantId === "all") {
-      const q = query(vouchersRef, where("date", "==", date));
-      const querySnap = await getDocs(q);
+      const rows = await sbGet(`vouchers?date=eq.${encodeURIComponent(date)}&select=*`);
+      if (rows.length === 0) return null;
 
-      if (querySnap.empty) {
-        return null;
-      }
+      let totalPotato = 0, totalBeer = 0, totalCancelled = 0, totalPostedBills = 0, totalIssued = 0;
+      const allBillImages: string[] = [];
+      const allBillNumbers: string[] = [];
 
-      let totalPotato = 0;
-      let totalBeer = 0;
-      let totalCancelled = 0;
-      let totalPostedBills = 0;
-      let totalIssued = 0;
-      let allBillImages: string[] = [];
-      let allBillNumbers: string[] = [];
-
-      querySnap.forEach((doc) => {
-        const data = doc.data() as VoucherRecord;
+      rows.forEach((data: any) => {
         const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
         const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
         totalPotato += potato;
@@ -190,16 +147,11 @@ export async function getVoucherByDate(
         totalCancelled += data.cancelled || 0;
         totalPostedBills += data.postedBills || (potato + beer);
         totalIssued += data.totalIssued || (potato + beer + (data.cancelled || 0));
-        if (data.billImages && Array.isArray(data.billImages)) {
-          allBillImages.push(...data.billImages);
-        }
-        if (data.billNumber) {
-          allBillNumbers.push(`${data.restaurantName || data.restaurantId}: ${data.billNumber}`);
-        }
+        if (Array.isArray(data.billImages)) allBillImages.push(...data.billImages);
+        if (data.billNumber) allBillNumbers.push(`${data.restaurantName || data.restaurantId}: ${data.billNumber}`);
       });
 
       const rate = totalIssued > 0 ? Math.round((totalPostedBills / totalIssued) * 100) : 0;
-
       return {
         id: `all_${date}`,
         date,
@@ -214,95 +166,42 @@ export async function getVoucherByDate(
         billNumber: allBillNumbers.length > 0 ? allBillNumbers.join("; ") : undefined,
         billImages: allBillImages.length > 0 ? allBillImages : undefined,
       };
-    } else {
-      const docId = `${restaurantId}_${date}`;
-      const docRef = doc(db, "vouchers", docId);
-      const snap = await getDoc(docRef);
-
-      if (snap.exists()) {
-        const data = snap.data() as VoucherRecord;
-        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
-        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
-        return {
-          id: snap.id,
-          ...data,
-          potatoCoupons: potato,
-          beerCoupons: beer,
-        } as VoucherRecord;
-      }
-
-      // Fallback query by restaurantId and date
-      const q = query(
-        vouchersRef,
-        where("restaurantId", "==", restaurantId),
-        where("date", "==", date)
-      );
-      const querySnap = await getDocs(q);
-      if (!querySnap.empty) {
-        const firstDoc = querySnap.docs[0];
-        const data = firstDoc.data() as VoucherRecord;
-        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
-        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
-        return {
-          id: firstDoc.id,
-          ...data,
-          potatoCoupons: potato,
-          beerCoupons: beer,
-        } as VoucherRecord;
-      }
-
-      return null;
     }
+
+    const docId = `${restaurantId}_${date}`;
+    const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(docId)}&select=*`);
+    if (rows.length > 0) return normalizeRow(rows[0]);
+
+    // Fallback query by restaurantId + date
+    const rows2 = await sbGet(`vouchers?restaurantId=eq.${encodeURIComponent(restaurantId)}&date=eq.${encodeURIComponent(date)}&select=*`);
+    if (rows2.length > 0) return normalizeRow(rows2[0]);
+
+    return null;
   } catch (error) {
     console.error("Error getting voucher by date:", error);
     return null;
   }
 }
 
-/**
- * Get today's voucher
- */
-export async function getTodayVoucher(
-  restaurantId: string,
-  isAdmin: boolean = false
-): Promise<VoucherRecord | null> {
-  const today = getLocalDateString();
-  return getVoucherByDate(restaurantId, today, isAdmin);
+export async function getTodayVoucher(restaurantId: string, isAdmin: boolean = false): Promise<VoucherRecord | null> {
+  return getVoucherByDate(restaurantId, getLocalDateString(), isAdmin);
 }
 
-/**
- * Get vouchers in a date range (index-safe in-memory filtering)
- */
 export async function getVouchersByDateRange(
   restaurantId: string | null,
   startDate: string,
   endDate: string
 ): Promise<VoucherRecord[]> {
   try {
-    const vouchersRef = collection(db, "vouchers");
-    const q = query(
-      vouchersRef,
-      where("date", ">=", startDate),
-      where("date", "<=", endDate)
+    const rows = await sbGet(
+      `vouchers?date=gte.${encodeURIComponent(startDate)}&date=lte.${encodeURIComponent(endDate)}&select=*`
     );
-
-    const querySnap = await getDocs(q);
     const results: VoucherRecord[] = [];
-    querySnap.forEach((d) => {
-      const data = d.data() as VoucherRecord;
+    rows.forEach((data: any) => {
       if (!restaurantId || restaurantId === "all" || data.restaurantId === restaurantId) {
-        const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
-        const beer = data.beerCoupons ?? ((data.postedBills || 0) - potato);
-        results.push({
-          id: d.id,
-          ...data,
-          potatoCoupons: potato,
-          beerCoupons: beer,
-        });
+        results.push(normalizeRow(data));
       }
     });
-
-    // Sort by date descending
     return results.sort((a, b) => b.date.localeCompare(a.date));
   } catch (error) {
     console.error("Error getting vouchers by date range:", error);
@@ -310,27 +209,17 @@ export async function getVouchersByDateRange(
   }
 }
 
-/**
- * Get aggregated voucher metrics over a date range
- */
 export async function getAggregatedVoucherByDateRange(
   restaurantId: string | null,
   startDate: string,
   endDate: string
 ): Promise<VoucherRecord | null> {
   const records = await getVouchersByDateRange(restaurantId, startDate, endDate);
-  if (!records || records.length === 0) {
-    return null;
-  }
+  if (!records || records.length === 0) return null;
 
-  let totalPotato = 0;
-  let totalBeer = 0;
-  let totalBakery = 0;
-  let totalCancelled = 0;
-  let totalPostedBills = 0;
-  let totalIssued = 0;
-  let allBillImages: string[] = [];
-  let allBillNumbers: string[] = [];
+  let totalPotato = 0, totalBeer = 0, totalBakery = 0, totalCancelled = 0, totalPostedBills = 0, totalIssued = 0;
+  const allBillImages: string[] = [];
+  const allBillNumbers: string[] = [];
 
   records.forEach((data) => {
     const potato = data.potatoCoupons ?? Math.round((data.postedBills || 0) / 2);
@@ -347,16 +236,11 @@ export async function getAggregatedVoucherByDateRange(
     totalPostedBills += posted;
     totalIssued += issued;
 
-    if (data.billImages && Array.isArray(data.billImages)) {
-      allBillImages.push(...data.billImages);
-    }
-    if (data.billNumber) {
-      allBillNumbers.push(`${data.restaurantName || data.restaurantId} (${data.date}): ${data.billNumber}`);
-    }
+    if (Array.isArray(data.billImages)) allBillImages.push(...data.billImages);
+    if (data.billNumber) allBillNumbers.push(`${data.restaurantName || data.restaurantId} (${data.date}): ${data.billNumber}`);
   });
 
   const rate = totalIssued > 0 ? Math.round((totalPostedBills / totalIssued) * 100) : 0;
-
   return {
     id: `aggregate_${startDate}_${endDate}`,
     date: startDate === endDate ? startDate : `${startDate} → ${endDate}`,
@@ -374,9 +258,7 @@ export async function getAggregatedVoucherByDateRange(
   };
 }
 
-/**
- * Upsert (create or update) a voucher record
- */
+/** Upsert (create or update) a voucher record */
 export async function upsertVoucher(data: {
   date: string;
   restaurantId: string;
@@ -392,28 +274,15 @@ export async function upsertVoucher(data: {
   billImages?: string[];
 }): Promise<VoucherRecord> {
   const docId = `${data.restaurantId}_${data.date}`;
-  const docRef = doc(db, "vouchers", docId);
+  const utilizationRate = data.totalIssued > 0 ? Math.round((data.postedBills / data.totalIssued) * 100) : 0;
 
-  const utilizationRate =
-    data.totalIssued > 0
-      ? Math.round((data.postedBills / data.totalIssued) * 100)
-      : 0;
-
-  const record: VoucherRecord = {
-    ...data,
-    utilizationRate,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const cleanedRecord = cleanUndefinedFields(record) as VoucherRecord;
-
-  await setDoc(docRef, cleanedRecord, { merge: true });
-  return { id: docId, ...cleanedRecord };
+  const record: VoucherRecord = { id: docId, ...data, utilizationRate, updatedAt: new Date().toISOString() };
+  const cleaned = cleanUndefinedFields(record) as Record<string, any>;
+  await sbUpsert("vouchers", cleaned);
+  return { ...(cleaned as VoucherRecord), id: docId };
 }
 
-/**
- * Append new bill images to an existing voucher record
- */
+/** Append new bill images to an existing voucher record */
 export async function appendBillImagesToVoucher(
   restaurantId: string,
   date: string,
@@ -421,44 +290,28 @@ export async function appendBillImagesToVoucher(
   billNumber?: string
 ): Promise<VoucherRecord> {
   const docId = `${restaurantId}_${date}`;
-  const docRef = doc(db, "vouchers", docId);
-  const snap = await getDoc(docRef);
+  const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(docId)}&select=*`);
+  const current: Partial<VoucherRecord> = rows.length > 0 ? rows[0] : {};
+  const existingImages: string[] = Array.isArray(current.billImages) ? current.billImages : [];
 
-  let existingImages: string[] = [];
-  let currentRecord: Partial<VoucherRecord> = {};
-
-  if (snap.exists()) {
-    currentRecord = snap.data() as VoucherRecord;
-    existingImages = currentRecord.billImages || [];
-  }
-
-  const updatedImages = [...existingImages, ...newImages];
-  const updatedData: Partial<VoucherRecord> = {
-    billImages: updatedImages,
+  const updated: Record<string, any> = {
+    id: docId,
+    restaurantId,
+    date,
+    billImages: [...existingImages, ...newImages],
     updatedAt: new Date().toISOString(),
   };
+  if (billNumber) updated.billNumber = billNumber;
 
-  if (billNumber) {
-    updatedData.billNumber = billNumber;
-  }
-
-  const cleanedData = cleanUndefinedFields(updatedData as Record<string, any>);
-
-  await setDoc(docRef, cleanedData, { merge: true });
-  return { ...currentRecord, ...cleanedData, id: docId } as VoucherRecord;
+  await sbUpsert("vouchers", updated);
+  return { ...current, ...updated, id: docId } as VoucherRecord;
 }
 
-/**
- * Settings CRUD (MS Teams Webhook)
- */
+/** Settings CRUD (MS Teams Webhook, Telegram token, ...) */
 export async function getSetting(key: string): Promise<string | null> {
   try {
-    const docRef = doc(db, "settings", key);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return snap.data().value || null;
-    }
-    return null;
+    const rows = await sbGet(`settings?key=eq.${encodeURIComponent(key)}&select=value`);
+    return rows.length > 0 ? (rows[0].value ?? null) : null;
   } catch (error) {
     console.error("Error fetching setting:", error);
     return null;
@@ -466,8 +319,7 @@ export async function getSetting(key: string): Promise<string | null> {
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  const docRef = doc(db, "settings", key);
-  await setDoc(docRef, { value, updatedAt: new Date().toISOString() });
+  await sbUpsert("settings", { key, value, updatedAt: new Date().toISOString() });
 }
 
 export interface RestaurantStatus {
@@ -483,9 +335,7 @@ export interface RestaurantStatus {
   updatedAt?: string;
 }
 
-/**
- * Check which restaurants have missing reports for a target date (defaults to yesterday)
- */
+/** Check which restaurants have missing reports for a target date (defaults to yesterday) */
 export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
   checkDate: string;
   missing: RestaurantStatus[];
@@ -500,7 +350,6 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
   }
 
   const restaurantKeys = Object.keys(PRESET_USERS).filter((k) => k !== "admin");
-
   const missing: RestaurantStatus[] = [];
   const updated: RestaurantStatus[] = [];
 
@@ -509,7 +358,7 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
     try {
       const record = await getVoucherByDate(key, dateToQuery, false);
       if (record && record.updatedAt) {
-        const imageCount = (record.billImages && Array.isArray(record.billImages)) ? record.billImages.length : 0;
+        const imageCount = Array.isArray(record.billImages) ? record.billImages.length : 0;
         updated.push({
           restaurantId: key,
           restaurantName: preset.restaurantName,
@@ -523,25 +372,12 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
           updatedAt: record.updatedAt,
         });
       } else {
-        missing.push({
-          restaurantId: key,
-          restaurantName: preset.restaurantName,
-          hasUpdated: false,
-        });
+        missing.push({ restaurantId: key, restaurantName: preset.restaurantName, hasUpdated: false });
       }
     } catch (e) {
-      missing.push({
-        restaurantId: key,
-        restaurantName: preset.restaurantName,
-        hasUpdated: false,
-      });
+      missing.push({ restaurantId: key, restaurantName: preset.restaurantName, hasUpdated: false });
     }
   }
 
-  return {
-    checkDate: dateToQuery,
-    missing,
-    updated,
-    totalRestaurants: restaurantKeys.length,
-  };
+  return { checkDate: dateToQuery, missing, updated, totalRestaurants: restaurantKeys.length };
 }
