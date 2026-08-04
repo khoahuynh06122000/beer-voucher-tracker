@@ -38,39 +38,31 @@ export async function sendTelegramMessage(
       };
     }
 
-    const apiUrl = `https://api.telegram.org/bot${token}/sendMessage`;
-
-    const response = await fetch(apiUrl, {
+    // Gửi QUA SERVER PROXY (Vercel) để tránh browser bị chặn/CORS khi gọi thẳng
+    // api.telegram.org ("Failed to fetch" — hay gặp ở mạng VN).
+    const response = await fetch("/api/telegram/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chat,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: false,
-      }),
+      body: JSON.stringify({ botToken: token, chatId: chat, message: text }),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
-    if (response.ok && data.ok) {
+    if (response.ok && data.success) {
       return { success: true, message: "Gửi báo cáo qua Telegram thành công!" };
     } else {
-      const desc = data.description || "Không thể gửi tin nhắn";
-      let userFriendlyMsg = `Lỗi Telegram API: ${desc}`;
+      const desc = data.message || "Không thể gửi tin nhắn";
+      let userFriendlyMsg = `Lỗi Telegram: ${desc}`;
 
       if (desc.includes("chat not found")) {
-        userFriendlyMsg = `🔴 Lỗi 'chat not found' (Không tìm thấy trò chuyện):\n1. Mở Telegram và tìm đúng Bot của bạn.\n2. Nhấn nút /start (Bắt đầu) để cho phép Bot gửi tin nhắn cho bạn.\n3. Nhập chính xác Chat ID (Lấy từ @userinfobot trên Telegram).`;
+        userFriendlyMsg = `🔴 Lỗi 'chat not found': Mở Telegram, bấm /start với Bot, và nhập đúng Chat ID (lấy từ @userinfobot).`;
       } else if (desc.includes("Unauthorized")) {
-        userFriendlyMsg = `🔴 Lỗi 'Unauthorized': Bot Token không đúng! Vui lòng sao chép lại API Token chính xác từ @BotFather.`;
+        userFriendlyMsg = `🔴 Lỗi 'Unauthorized': Bot Token không đúng! Sao chép lại token từ @BotFather.`;
       } else if (desc.includes("bot was blocked")) {
-        userFriendlyMsg = `🔴 Lỗi: Bot đã bị bạn chặn trên Telegram. Hãy mở khung chat với Bot và chọn Unblock.`;
+        userFriendlyMsg = `🔴 Bot đã bị chặn. Mở khung chat với Bot và chọn Unblock.`;
       }
 
-      return {
-        success: false,
-        message: userFriendlyMsg,
-      };
+      return { success: false, message: userFriendlyMsg };
     }
   } catch (error: any) {
     return {
