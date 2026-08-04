@@ -16,8 +16,16 @@ const sbHeaders: Record<string, string> = {
 
 async function sbGet(path: string): Promise<any[]> {
   try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders });
-    if (!resp.ok) return [];
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+    if (!resp.ok) {
+      console.error("Supabase GET không ok:", resp.status, await resp.text().catch(() => ""));
+      return [];
+    }
     const data = await resp.json();
     return Array.isArray(data) ? data : [];
   } catch (e) {
