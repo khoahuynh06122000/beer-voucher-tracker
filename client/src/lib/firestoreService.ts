@@ -128,11 +128,13 @@ function normalizeRow(data: any): VoucherRecord {
 export async function getVoucherByDate(
   restaurantId: string,
   date: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
+  includeImages: boolean = false
 ): Promise<VoucherRecord | null> {
   try {
+    const sel = includeImages ? "*" : LIGHT_COLS;
     if (isAdmin || restaurantId === "all") {
-      const rows = await sbGet(`vouchers?date=eq.${encodeURIComponent(date)}&select=*`);
+      const rows = await sbGet(`vouchers?date=eq.${encodeURIComponent(date)}&select=${sel}`);
       if (rows.length === 0) return null;
 
       let totalPotato = 0, totalBeer = 0, totalCancelled = 0, totalPostedBills = 0, totalIssued = 0;
@@ -169,11 +171,11 @@ export async function getVoucherByDate(
     }
 
     const docId = `${restaurantId}_${date}`;
-    const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(docId)}&select=*`);
+    const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(docId)}&select=${sel}`);
     if (rows.length > 0) return normalizeRow(rows[0]);
 
     // Fallback query by restaurantId + date
-    const rows2 = await sbGet(`vouchers?restaurantId=eq.${encodeURIComponent(restaurantId)}&date=eq.${encodeURIComponent(date)}&select=*`);
+    const rows2 = await sbGet(`vouchers?restaurantId=eq.${encodeURIComponent(restaurantId)}&date=eq.${encodeURIComponent(date)}&select=${sel}`);
     if (rows2.length > 0) return normalizeRow(rows2[0]);
 
     return null;

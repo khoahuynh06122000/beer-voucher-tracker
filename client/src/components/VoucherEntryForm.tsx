@@ -53,7 +53,7 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
     let isMounted = true;
     async function loadData() {
       if (!restaurantId || !date) return;
-      const record = await getVoucherByDate(restaurantId, date);
+      const record = await getVoucherByDate(restaurantId, date, false, true);
       if (isMounted) {
         if (record) {
           setPotatoCoupons(record.potatoCoupons?.toString() || "");
