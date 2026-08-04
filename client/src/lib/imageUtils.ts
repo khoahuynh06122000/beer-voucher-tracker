@@ -50,9 +50,14 @@ export function compressImage(
   });
 }
 
+// Cloudinary (miễn phí, không cần thẻ) — nơi lưu ẢNH bill. Cloud name + unsigned
+// preset là giá trị CÔNG KHAI (dùng phía client), an toàn để trong code.
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "zjtjeyqd";
+const CLOUDINARY_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET || "orq51tcc";
+
 /**
- * Nén ảnh rồi TẢI LÊN FIREBASE STORAGE, trả về URL tải xuống (thay vì nhét base64
- * vào Firestore). Nhờ vậy Firestore chỉ lưu URL nhẹ, không đốt quota.
+ * Nén ảnh rồi TẢI LÊN CLOUDINARY, trả về URL CDN (thay vì nhét base64 vào Firestore).
+ * Nhờ vậy Firestore chỉ lưu URL nhẹ, không đốt quota DB.
  */
 export async function uploadBillImage(
   file: File,
@@ -60,13 +65,21 @@ export async function uploadBillImage(
   date: string
 ): Promise<string> {
   const dataUrl = await compressImage(file);
-  const { storage } = await import("./firebase");
-  const { ref, uploadString, getDownloadURL } = await import("firebase/storage");
-  const rand = Math.random().toString(36).slice(2, 8);
-  const path = `bills/${restaurantId}/${date}/${Date.now()}_${rand}.jpg`;
-  const storageRef = ref(storage, path);
-  await uploadString(storageRef, dataUrl, "data_url");
-  return await getDownloadURL(storageRef);
+  const form = new FormData();
+  form.append("file", dataUrl);
+  form.append("upload_preset", CLOUDINARY_PRESET);
+
+  const resp = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    { method: "POST", body: form }
+  );
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`Cloudinary upload lỗi ${resp.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await resp.json();
+  if (!data.secure_url) throw new Error("Cloudinary không trả secure_url");
+  return data.secure_url as string;
 }
 
 /**
