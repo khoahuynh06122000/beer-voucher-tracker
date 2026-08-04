@@ -362,28 +362,29 @@ export async function checkUnupdatedRestaurants(checkDate?: string): Promise<{
   const missing: RestaurantStatus[] = [];
   const updated: RestaurantStatus[] = [];
 
+  // 1 QUERY duy nhất cho cả ngày (thay vì 4 call tuần tự) -> nhanh hơn nhiều
+  const rows = await getVouchersByDateRange(null, dateToQuery, dateToQuery, true);
+  const byRest: Record<string, VoucherRecord> = {};
+  for (const r of rows) byRest[r.restaurantId] = r;
+
   for (const key of restaurantKeys) {
     const preset = PRESET_USERS[key];
-    try {
-      const record = await getVoucherByDate(key, dateToQuery, false);
-      if (record && record.updatedAt) {
-        const imageCount = Array.isArray(record.billImages) ? record.billImages.length : 0;
-        updated.push({
-          restaurantId: key,
-          restaurantName: preset.restaurantName,
-          hasUpdated: true,
-          postedBills: record.postedBills ?? 0,
-          totalIssued: record.totalIssued ?? 0,
-          utilizationRate: record.utilizationRate ?? 0,
-          hasImageProof: imageCount > 0,
-          imageCount,
-          billNumber: record.billNumber,
-          updatedAt: record.updatedAt,
-        });
-      } else {
-        missing.push({ restaurantId: key, restaurantName: preset.restaurantName, hasUpdated: false });
-      }
-    } catch (e) {
+    const record = byRest[key];
+    if (record && record.updatedAt) {
+      const imageCount = Array.isArray(record.billImages) ? record.billImages.length : 0;
+      updated.push({
+        restaurantId: key,
+        restaurantName: preset.restaurantName,
+        hasUpdated: true,
+        postedBills: record.postedBills ?? 0,
+        totalIssued: record.totalIssued ?? 0,
+        utilizationRate: record.utilizationRate ?? 0,
+        hasImageProof: imageCount > 0,
+        imageCount,
+        billNumber: record.billNumber,
+        updatedAt: record.updatedAt,
+      });
+    } else {
       missing.push({ restaurantId: key, restaurantName: preset.restaurantName, hasUpdated: false });
     }
   }
