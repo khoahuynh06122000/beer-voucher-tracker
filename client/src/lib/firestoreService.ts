@@ -5,44 +5,36 @@
 // component không phải sửa. Cột DB đặt camelCase (quoted) trùng field app.
 // ===========================================================================
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_jtVF84t5gSxGDuUJb32Tuw_Rs-2sqmK";
-
-const sbHeaders: Record<string, string> = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-};
-
+// Gọi QUA SERVER PROXY /api/db (Vercel gọi Supabase) — tránh browser bị chặn/treo
+// khi gọi thẳng supabase.co ở mạng VN.
 async function sbGet(path: string): Promise<any[]> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const resp = await fetch(`/api/db?q=${encodeURIComponent(path)}`, {
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
     if (!resp.ok) {
-      console.error("Supabase GET không ok:", resp.status, await resp.text().catch(() => ""));
+      console.error("DB GET không ok:", resp.status, await resp.text().catch(() => ""));
       return [];
     }
     const data = await resp.json();
     return Array.isArray(data) ? data : [];
   } catch (e) {
-    console.error("Supabase GET error:", e);
+    console.error("DB GET error:", e);
     return [];
   }
 }
 
 async function sbUpsert(table: string, row: Record<string, any>): Promise<void> {
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const resp = await fetch(`/api/db?table=${encodeURIComponent(table)}`, {
     method: "POST",
-    headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(row),
   });
   if (!resp.ok) {
     const t = await resp.text().catch(() => "");
-    throw new Error(`Supabase upsert ${table} lỗi ${resp.status}: ${t.slice(0, 200)}`);
+    throw new Error(`DB upsert ${table} lỗi ${resp.status}: ${t.slice(0, 200)}`);
   }
 }
 
