@@ -97,6 +97,23 @@ export default function AdminSettings() {
   const [exportRestaurant, setExportRestaurant] = useState<string>("all");
   const [isExporting, setIsExporting] = useState(false);
 
+  // Dung lượng kho ảnh Cloudinary (cảnh báo sắp đầy)
+  const [cloudUsage, setCloudUsage] = useState<{
+    configured?: boolean;
+    ok?: boolean;
+    percent?: number;
+    storageGB?: number;
+    limitGB?: number;
+    message?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/cloudinary-usage")
+      .then((r) => r.json())
+      .then(setCloudUsage)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -581,6 +598,47 @@ export default function AdminSettings() {
       </header>
 
       <main className="relative z-10 container py-8 flex-1 max-w-3xl space-y-6">
+
+        {/* KHO ẢNH CLOUDINARY — dung lượng & cảnh báo */}
+        {cloudUsage?.ok && typeof cloudUsage.percent === "number" && (
+          <Card
+            className={`p-4 rounded-2xl border backdrop-blur-md text-white ${
+              cloudUsage.percent >= 90
+                ? "border-red-500/50 bg-red-950/40"
+                : cloudUsage.percent >= 70
+                  ? "border-amber-500/50 bg-amber-950/30"
+                  : "border-white/10 bg-[#0d0f17]/90"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-black tracking-wider text-gray-300 uppercase">🖼️ Kho ảnh (Cloudinary)</span>
+              <span className="text-xs font-extrabold text-gray-200">
+                {(cloudUsage.storageGB ?? 0).toFixed(2)} / {cloudUsage.limitGB ?? 25} GB ({cloudUsage.percent}%)
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  cloudUsage.percent >= 90 ? "bg-red-500" : cloudUsage.percent >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.min(100, Math.max(2, cloudUsage.percent))}%` }}
+              />
+            </div>
+            {cloudUsage.percent >= 90 ? (
+              <p className="text-[11px] text-red-300 font-bold mt-2">
+                ⚠️ Kho ảnh sắp đầy! Hãy vào tab <b>Lịch Sử</b> tải ảnh về máy lưu local, rồi xóa bớt ảnh cũ trên Cloudinary.
+              </p>
+            ) : cloudUsage.percent >= 70 ? (
+              <p className="text-[11px] text-amber-300 font-semibold mt-2">
+                Kho ảnh đã dùng {cloudUsage.percent}% — nên tải ảnh về máy backup định kỳ.
+              </p>
+            ) : (
+              <p className="text-[11px] text-gray-400 mt-2">
+                Còn nhiều dung lượng. Ảnh chỉ để làm bằng chứng — có thể tải về máy ở tab Lịch Sử bất cứ lúc nào.
+              </p>
+            )}
+          </Card>
+        )}
 
         {/* SECTION 1: XUẤT BÁO CÁO EXCEL TOÀN DIỆN */}
         <Card className="p-6 md:p-7 rounded-3xl border border-emerald-500/30 bg-[#0d0f17]/90 backdrop-blur-md shadow-2xl space-y-5 text-white">
