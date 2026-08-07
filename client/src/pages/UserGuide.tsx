@@ -184,7 +184,7 @@ export default function UserGuide() {
                 Nếu muốn dùng lịch trình của Power Automate, bạn chỉ cần tạo hành động HTTP gọi URL sau lúc 9:00 AM:
               </p>
               <code className="block p-2 rounded bg-black/60 font-mono text-[11px] text-amber-300 border border-amber-500/20 print:bg-gray-200 print:text-black">
-                GET https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app/api/cron/check-missing-reports
+                GET https://beer-voucher-tracker.vercel.app/api/cron/check-missing-reports
               </code>
             </div>
           </div>

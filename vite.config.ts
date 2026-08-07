@@ -237,7 +237,7 @@ function vitePluginManusDebugCollector(): Plugin {
                 {
                   type: "Action.OpenUrl",
                   title: "🌐 Mở Trang Nhập Báo Cáo Ngay",
-                  url: "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+                  url: "https://beer-voucher-tracker.vercel.app"
                 }
               ]
         };
@@ -588,7 +588,7 @@ function vitePluginManusDebugCollector(): Plugin {
             }
           }
 
-          reportMsg += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard System</a>`;
+          reportMsg += `\n🌐 <a href="https://beer-voucher-tracker.vercel.app">Mở Live Dashboard System</a>`;
           reportMsg += `\n\n💡 <i>Mẹo: Nhắn <b>"gửi ms teams"</b> để tự động đẩy báo cáo này thẳng lên kênh MS Teams!</i>`;
 
           await replyTelegram(reportMsg);
@@ -1111,7 +1111,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                   tgHtml += `📊 <i>Nội dung tổng hợp tự động từ hệ thống:</i>\n`;
                 }
 
-                tgHtml += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard</a>`;
+                tgHtml += `\n🌐 <a href="https://beer-voucher-tracker.vercel.app">Mở Live Dashboard</a>`;
 
                 const telegramApiUrl = `https://api.telegram.org/bot${botToken.trim()}/sendMessage`;
                 const tgRes = await fetch(telegramApiUrl, {
@@ -1471,7 +1471,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                       {
                         type: "Action.OpenUrl",
                         title: "🌐 Mở Live Dashboard Báo Cáo",
-                        url: "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app"
+                        url: "https://beer-voucher-tracker.vercel.app"
                       }
                     ]
                   }
@@ -1520,7 +1520,7 @@ Chỉ trả về duy nhất 1 JSON hợp lệ, KHÔNG bọc trong markdown block
                   "@type": "OpenUri",
                   "name": "🌐 Mở Dashboard Trực Tuyến",
                   "targets": [
-                    { "os": "default", "uri": "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app" }
+                    { "os": "default", "uri": "https://beer-voucher-tracker.vercel.app" }
                   ]
                 }
               ]

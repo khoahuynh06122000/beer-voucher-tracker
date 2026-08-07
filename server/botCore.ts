@@ -14,11 +14,11 @@
 import type { IncomingMessage } from "node:http";
 
 export const LIVE_DASHBOARD_URL =
-  "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app";
+  "https://beer-voucher-tracker.vercel.app";
 
 export const RESTAURANTS = [
   { id: "lehoibia", name: "Lê Hội Bia" },
-  { id: "nhahang1901", name: "Nhà Hàng 1901" },
+  { id: "1901", name: "Nhà Hàng 1901" },
   { id: "beerplaza", name: "Beer Plaza" },
   { id: "maisonkayser", name: "Maison Kayser" },
 ];

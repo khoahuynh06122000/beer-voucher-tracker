@@ -163,7 +163,7 @@ export function formatTelegramAIAuditReport(
     html += `\n`;
   });
 
-  html += `🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard Chi Tiết</a>`;
+  html += `🌐 <a href="https://beer-voucher-tracker.vercel.app">Mở Live Dashboard Chi Tiết</a>`;
 
   return html;
 }

@@ -288,6 +288,16 @@ export async function upsertVoucher(data: {
   const record: VoucherRecord = { id: docId, ...data, utilizationRate, updatedAt: new Date().toISOString() };
   const cleaned = cleanUndefinedFields(record) as Record<string, any>;
   await sbUpsert("vouchers", cleaned);
+
+  // ĐỌC LẠI XÁC NHẬN đã lưu thật vào Supabase — tránh báo "lưu thành công" giả
+  // (trước đây nếu ghi hụt âm thầm, app vẫn hiện thành công & gửi card khiến tưởng đã nhập).
+  const verify = await sbGet(`vouchers?id=eq.${encodeURIComponent(docId)}&select=id`);
+  if (!verify || verify.length === 0) {
+    throw new Error(
+      "Lưu THẤT BẠI: đã gửi nhưng đọc lại KHÔNG thấy dữ liệu trong kho (Supabase). " +
+        "Kiểm tra mạng và bấm Lưu lại — KHÔNG được coi là đã nhập cho tới khi báo thành công."
+    );
+  }
   return { ...(cleaned as VoucherRecord), id: docId };
 }
 

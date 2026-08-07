@@ -4,7 +4,7 @@ export function getPublicAppUrl(): string {
   if (typeof window !== "undefined" && window.location && window.location.origin) {
     return window.location.origin.replace("ais-dev-", "ais-pre-");
   }
-  return "https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app";
+  return "https://beer-voucher-tracker.vercel.app";
 }
 
 export function getExpertAssessmentText(record: {

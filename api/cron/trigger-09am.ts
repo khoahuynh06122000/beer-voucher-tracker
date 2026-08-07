@@ -60,7 +60,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
         let tgHtml = `<b>🤖 BÁO CÁO TIẾN ĐỘ VOUCHER (09:00 AM)</b>\n`;
         tgHtml += `📅 <b>Ngày kiểm tra:</b> ${checkDateStr}\n\n`;
         tgHtml += `📊 <i>Nội dung tổng hợp tự động từ hệ thống.</i>\n`;
-        tgHtml += `\n🌐 <a href="https://ais-pre-bwzcf2gu5c624hioouglz7-321266207795.asia-east1.run.app">Mở Live Dashboard</a>`;
+        tgHtml += `\n🌐 <a href="https://beer-voucher-tracker.vercel.app">Mở Live Dashboard</a>`;
 
         const tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
           method: "POST",
