@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -9,7 +8,6 @@ import { AuthProvider } from "./contexts/AuthContext";
 import Home from "./pages/Home";
 import AdminSettings from "./pages/AdminSettings";
 import UserGuide from "./pages/UserGuide";
-import { pollTelegramMessages } from "./lib/telegramService";
 
 function Router() {
   return (
@@ -25,18 +23,16 @@ function Router() {
 }
 
 function App() {
-  // Global background listener to trigger Telegram polling heartbeat
-  useEffect(() => {
-    // Initial trigger
-    pollTelegramMessages().catch(() => {});
-
-    // Repeat poll every 4 seconds to guarantee Telegram commands are processed immediately
-    const interval = setInterval(() => {
-      pollTelegramMessages().catch(() => {});
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // KHÔNG poll Telegram từ client nữa.
+  //
+  // - Production (Vercel): bot chạy chế độ WEBHOOK real-time. /api/telegram/poll
+  //   chỉ trả về trạng thái webhook (processedCount luôn = 0), không xử lý tin
+  //   nhắn nào. Gọi định kỳ = đốt invocation Vercel + 2 call api.telegram.org
+  //   mỗi lần, đổi lại 0 giá trị.
+  // - Dev (vite.config.ts): đã có sẵn vòng lặp getUpdates 3 giây phía server,
+  //   nên client gọi thêm cũng thừa.
+  //
+  // Nếu cần kiểm tra thủ công: nút "Kiểm tra tin nhắn" trong AdminSettings.
 
   return (
     <ErrorBoundary>
