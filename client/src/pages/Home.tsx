@@ -6,6 +6,7 @@ import { VoucherEntryForm } from "@/components/VoucherEntryForm";
 import { KPIDashboard } from "@/components/KPIDashboard";
 import { HistoricalDataTable } from "@/components/HistoricalDataTable";
 import { AnalyticsCharts } from "@/components/AnalyticsCharts";
+import { AnomalyAlert } from "@/components/AnomalyAlert";
 import { useLocation } from "wouter";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 import { getLocalDateString } from "@/lib/firestoreService";
@@ -217,6 +218,11 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="relative z-10 container py-4 sm:py-8 pb-28 md:pb-8 flex-1 space-y-6 sm:space-y-8">
+        {/* Cảnh báo số liệu bất thường của CHÍNH nhà hàng — hiện ở mọi tab ngay khi đăng nhập */}
+        {!isAdmin && user?.username && (
+          <AnomalyAlert restaurantId={user.username} variant="banner" refreshTrigger={refreshTrigger} />
+        )}
+
         {/* Admin Comprehensive Analytics View */}
         {activeTab === "analytics" && (
           <div className="space-y-8">
@@ -235,6 +241,8 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+              {/* Rà số liệu bất thường toàn hệ thống trước khi nhìn biểu đồ */}
+              <AnomalyAlert restaurantId={null} variant="panel" refreshTrigger={refreshTrigger} />
               <AnalyticsCharts
                 startDate={analyticsStartDate}
                 endDate={analyticsEndDate}
