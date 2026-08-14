@@ -7,6 +7,7 @@ import { KPIDashboard } from "@/components/KPIDashboard";
 import { HistoricalDataTable } from "@/components/HistoricalDataTable";
 import { AnalyticsCharts } from "@/components/AnalyticsCharts";
 import { AnomalyAlert } from "@/components/AnomalyAlert";
+import { CancellationReport } from "@/components/CancellationReport";
 import { useLocation } from "wouter";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
 import { getLocalDateString } from "@/lib/firestoreService";
@@ -243,6 +244,8 @@ export default function Home() {
               </div>
               {/* Rà số liệu bất thường toàn hệ thống trước khi nhìn biểu đồ */}
               <AnomalyAlert restaurantId={null} variant="panel" refreshTrigger={refreshTrigger} />
+              {/* Biến động vé hủy 3 ngày gần nhất, tách nguyên nhân hủy tăng */}
+              <CancellationReport refreshTrigger={refreshTrigger} />
               <AnalyticsCharts
                 startDate={analyticsStartDate}
                 endDate={analyticsEndDate}
