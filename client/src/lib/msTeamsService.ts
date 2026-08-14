@@ -1,4 +1,10 @@
 import { getSetting, checkUnupdatedRestaurants } from "./firestoreService";
+import {
+  formatPercent,
+  formatPp,
+  TREND_LABEL,
+  type RestaurantCancelReport,
+} from "./cancellationAnalyzer";
 
 export function getPublicAppUrl(): string {
   if (typeof window !== "undefined" && window.location && window.location.origin) {
@@ -360,6 +366,184 @@ export async function sendStoredMSTeamsReport(record: {
     console.error("Failed to send stored MS Teams report:", error);
     return { success: false, message: error.message || "Lỗi gửi webhook MS Teams" };
   }
+}
+
+const CANCEL_DATE = (iso: string) => {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+};
+
+/** Thẻ MS Teams cho báo cáo biến động vé hủy 3 ngày. */
+export function getCancellationAdaptiveCard(reports: RestaurantCancelReport[], timeStr: string) {
+  const severe = reports.filter((r) => r.severity === "nghiem_trong");
+  const warn = reports.filter((r) => r.severity === "canh_bao");
+
+  const headline =
+    severe.length > 0
+      ? `🔴 ${severe.length} nhà hàng cần xử lý ngay, ${warn.length} nhà hàng cần theo dõi.`
+      : warn.length > 0
+        ? `🟠 ${warn.length} nhà hàng cần theo dõi, không có trường hợp nghiêm trọng.`
+        : "🟢 Tỷ lệ hủy của tất cả nhà hàng đang ổn định.";
+
+  const blocks = reports.map((r) => {
+    const style =
+      r.severity === "nghiem_trong" ? "attention" : r.severity === "canh_bao" ? "warning" : "good";
+
+    const chuoi =
+      r.days.length > 0
+        ? [...r.days]
+            .reverse()
+            .map((d) => `${CANCEL_DATE(d.date)}: **${formatPercent(d.rate)}**`)
+            .join("  →  ")
+        : "chưa có dữ liệu";
+
+    const lines = [`📉 ${chuoi}`];
+    if (r.days.length >= 2) {
+      lines.push(`Chênh so với trung bình 2 ngày trước: **${formatPp(r.deltaPp)}**`);
+    }
+    if (r.driverText) lines.push(`\n${r.driverText}`);
+    if (r.checklist.length > 0) {
+      lines.push(`\n**Cần ${r.restaurantName} giải trình:**`);
+      lines.push(r.checklist.map((c) => `• ${c}`).join("\n"));
+    }
+
+    return {
+      type: "Container",
+      style,
+      items: [
+        {
+          type: "TextBlock",
+          text: `${r.restaurantName} — ${TREND_LABEL[r.trend].toUpperCase()}`,
+          weight: "Bolder",
+          wrap: true,
+        },
+        { type: "TextBlock", text: lines.join("\n\n"), wrap: true },
+      ],
+    };
+  });
+
+  return {
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    type: "AdaptiveCard",
+    version: "1.2",
+    body: [
+      {
+        type: "TextBlock",
+        size: "Large",
+        weight: "Bolder",
+        text: "❌ BIẾN ĐỘNG VÉ HỦY — 3 NGÀY GẦN NHẤT",
+        color: severe.length > 0 ? "Attention" : warn.length > 0 ? "Warning" : "Good",
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        text: `🕒 **Gửi lúc:** ${timeStr}  |  Tỷ lệ hủy = vé hủy / tổng phát hành`,
+        isSubtle: true,
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        text: headline,
+        weight: "Bolder",
+        wrap: true,
+      },
+      ...blocks,
+      {
+        type: "TextBlock",
+        text:
+          "_Tỷ lệ hủy tăng có hai nguồn khác nhau: khách bỏ vé nhiều hơn thật, hoặc tổng phát hành giảm làm mẫu số co lại. Đây là dấu hiệu để yêu cầu giải trình, chưa phải kết luận._",
+        isSubtle: true,
+        wrap: true,
+      },
+    ],
+    actions: [
+      {
+        type: "Action.OpenUrl",
+        title: "🌐 Mở báo cáo đầy đủ",
+        url: getPublicAppUrl(),
+      },
+    ],
+  };
+}
+
+/** Gửi báo cáo biến động vé hủy lên MS Teams. */
+export async function sendCancellationReport(
+  reports: RestaurantCancelReport[],
+  customWebhookUrl?: string
+): Promise<{ success: boolean; message: string }> {
+  if (reports.length === 0) {
+    return { success: false, message: "Chưa có dữ liệu vé hủy để gửi." };
+  }
+
+  let webhookUrl = customWebhookUrl;
+  if (!webhookUrl) {
+    webhookUrl = (await getSetting("ms_teams_webhook")) || "";
+  }
+  if (!webhookUrl || !webhookUrl.trim()) {
+    return { success: false, message: "Chưa cấu hình Webhook MS Teams trong Cài Đặt Admin!" };
+  }
+
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(
+    now.getMonth() + 1
+  )}/${now.getFullYear()}`;
+
+  const adaptiveCardContent = getCancellationAdaptiveCard(reports, timeStr);
+  const adaptiveCardPayload = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        contentUrl: null,
+        content: adaptiveCardContent,
+      },
+    ],
+  };
+
+  const url = webhookUrl.trim();
+  const isPowerAutomate =
+    url.includes("logic.azure.com") ||
+    url.includes("powerautomate") ||
+    url.includes("powerplatform") ||
+    url.includes("flow.microsoft.com");
+
+  const payloadsToTry = isPowerAutomate
+    ? [adaptiveCardContent, adaptiveCardPayload]
+    : [adaptiveCardPayload, adaptiveCardContent];
+
+  for (const payload of payloadsToTry) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok || res.status === 200 || res.status === 202) {
+        return { success: true, message: "Đã gửi báo cáo vé hủy lên MS Teams thành công!" };
+      }
+    } catch (err: any) {
+      console.warn("Direct fetch error:", err);
+    }
+  }
+
+  // Fallback qua proxy server khi trình duyệt bị CORS chặn
+  try {
+    const proxyRes = await fetch("/api/send-msteams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ webhookUrl: url, customPayload: adaptiveCardContent }),
+    });
+    const proxyData = await proxyRes.json();
+    if (proxyRes.ok && proxyData.success) {
+      return { success: true, message: "Đã gửi báo cáo vé hủy lên MS Teams qua Server Proxy!" };
+    }
+    if (proxyData?.message) return { success: false, message: proxyData.message };
+  } catch (err: any) {
+    console.error("Proxy error:", err);
+  }
+
+  return { success: false, message: "Không gửi được lên MS Teams. Kiểm tra lại Webhook URL." };
 }
 
 /**

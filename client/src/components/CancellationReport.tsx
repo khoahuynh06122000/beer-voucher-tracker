@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, MinusCircle, TrendingDown, TrendingUp, XCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, MinusCircle, Send, TrendingDown, TrendingUp, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { getVouchersByDateRange, getLocalDateString } from "@/lib/firestoreService";
+import { sendCancellationReport } from "@/lib/msTeamsService";
 import {
   analyzeCancellations,
   cancellationStartDate,
@@ -53,6 +55,7 @@ export function CancellationReport({ refreshTrigger = 0 }: Props) {
   const [reports, setReports] = useState<RestaurantCancelReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +83,20 @@ export function CancellationReport({ refreshTrigger = 0 }: Props) {
   );
   const severeCount = useMemo(() => reports.filter((r) => r.severity === "nghiem_trong").length, [reports]);
 
+  const handleSendTeams = async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await sendCancellationReport(reports);
+      if (res.success) toast.success("📢 " + res.message);
+      else toast.error(res.message);
+    } catch (err: any) {
+      toast.error("Lỗi gửi MS Teams: " + (err?.message || "không rõ nguyên nhân"));
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-border/60 bg-card/60 p-4 text-sm text-muted-foreground">
@@ -92,7 +109,7 @@ export function CancellationReport({ refreshTrigger = 0 }: Props) {
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
-      <div className="p-4 border-b border-border/60 flex items-center gap-3">
+      <div className="p-4 border-b border-border/60 flex items-center gap-3 flex-wrap">
         <div
           className={`p-2 rounded-xl shrink-0 ${
             severeCount > 0
@@ -118,6 +135,20 @@ export function CancellationReport({ refreshTrigger = 0 }: Props) {
             bằng điểm phần trăm (pp).
           </p>
         </div>
+
+        <button
+          onClick={handleSendTeams}
+          disabled={sending}
+          title="Gửi bảng này lên kênh MS Teams đã cấu hình trong Cài Đặt Admin"
+          className="ml-auto shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {sending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Send className="w-3.5 h-3.5" />
+          )}
+          {sending ? "Đang gửi…" : "Gửi MS Teams"}
+        </button>
       </div>
 
       <div className="overflow-x-auto">
