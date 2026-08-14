@@ -36,6 +36,8 @@ function TrendIcon({ r }: { r: RestaurantCancelReport }) {
   if (r.trend === "thieu_du_lieu" || r.trend === "on_dinh")
     return <MinusCircle className="w-4 h-4 text-muted-foreground shrink-0" />;
   if (r.trend === "cai_thien") return <TrendingDown className="w-4 h-4 text-emerald-500 shrink-0" />;
+  // Hủy rơi về sát 0: vẫn là mũi tên xuống nhưng màu cảnh báo, không phải tin tốt.
+  if (r.trend === "giam_dang_ngo") return <TrendingDown className="w-4 h-4 text-amber-500 shrink-0" />;
   return (
     <TrendingUp
       className={`w-4 h-4 shrink-0 ${r.severity === "nghiem_trong" ? "text-red-500" : "text-amber-500"}`}
@@ -154,10 +156,10 @@ export function CancellationReport({ refreshTrigger = 0 }: Props) {
                   </td>
                   <td
                     className={`px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap ${
-                      r.deltaPp >= 0.05
-                        ? "text-red-600 dark:text-red-400"
-                        : r.deltaPp <= -0.05
-                          ? "text-emerald-600 dark:text-emerald-400"
+                      r.trend === "cai_thien"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : r.severity === "nghiem_trong" || r.severity === "canh_bao"
+                          ? "text-red-600 dark:text-red-400"
                           : "text-muted-foreground"
                     }`}
                   >

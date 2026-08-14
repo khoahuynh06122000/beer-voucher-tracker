@@ -30,11 +30,14 @@ export const HIGH_RATE = 0.25;
 export const RISE_MILD = 0.05;
 export const RISE_STRONG = 0.1;
 export const RISE_SPIKE = 0.15;
+/** Tỷ lệ hủy thấp tới mức này thì nghi là ngừng nhập, không phải hết hủy. */
+export const NEAR_ZERO = 0.03;
 /** Ngày có tổng phát hành quá nhỏ thì tỷ lệ nhiễu, không kết luận. */
 export const MIN_ISSUED_FOR_RATE = 20;
 
 export type CancelTrend =
   | "thieu_du_lieu"
+  | "giam_dang_ngo"
   | "cai_thien"
   | "on_dinh"
   | "tang_nhe"
@@ -44,7 +47,12 @@ export type CancelTrend =
 export type CancelSeverity = "khong_ap_dung" | "binh_thuong" | "canh_bao" | "nghiem_trong";
 
 /** Tỷ lệ hủy tăng là do khách hủy nhiều thật, hay do tổng phát hành co lại? */
-export type CancelDriver = "huy_that_tang" | "mau_so_co_lai" | "ca_hai" | "khong_ro";
+export type CancelDriver =
+  | "huy_that_tang"
+  | "mau_so_co_lai"
+  | "ca_hai"
+  | "huy_giam_manh"
+  | "khong_ro";
 
 export interface DayCancel {
   date: string;
@@ -88,6 +96,7 @@ export const formatPp = (pp: number) => `${pp >= 0 ? "+" : "−"}${Math.abs(Math
 
 export const TREND_LABEL: Record<CancelTrend, string> = {
   thieu_du_lieu: "Chưa đủ dữ liệu",
+  giam_dang_ngo: "Giảm đáng ngờ",
   cai_thien: "Cải thiện",
   on_dinh: "Ổn định",
   tang_nhe: "Tăng nhẹ",
@@ -95,7 +104,7 @@ export const TREND_LABEL: Record<CancelTrend, string> = {
   tang_dot_bien: "Tăng đột biến",
 };
 
-function classifyTrend(deltaPp: number): CancelTrend {
+function classifyTrend(deltaPp: number, latestRate: number): CancelTrend {
   // Phân loại theo ĐÚNG con số hiển thị (làm tròn 0,1pp). Nếu so trực tiếp trên
   // số thực, sai số dấu phẩy động làm 10%->20%->30% ra 0.14999... và bị xếp
   // "tăng mạnh" trong khi bảng vẫn hiện "+15pp" — người đọc thấy mâu thuẫn.
@@ -103,6 +112,10 @@ function classifyTrend(deltaPp: number): CancelTrend {
   if (d >= RISE_SPIKE) return "tang_dot_bien";
   if (d >= RISE_STRONG) return "tang_manh";
   if (d >= RISE_MILD) return "tang_nhe";
+  // Rơi mạnh về sát 0 gần như luôn là NGỪNG NHẬP ô vé hủy, chứ không phải một
+  // đêm khách hết bỏ vé. Gắn nhãn "cải thiện" ở đây là khen nhầm đúng cái lỗi
+  // mà bảng này sinh ra để bắt.
+  if (d <= -RISE_STRONG && latestRate <= NEAR_ZERO) return "giam_dang_ngo";
   if (d <= -RISE_MILD) return "cai_thien";
   return "on_dinh";
 }
@@ -111,6 +124,7 @@ function classifySeverity(trend: CancelTrend, latestRate: number): CancelSeverit
   if (trend === "tang_dot_bien") return "nghiem_trong";
   if (trend === "tang_manh" && latestRate >= HIGH_RATE) return "nghiem_trong";
   if (latestRate >= 0.4) return "nghiem_trong";
+  if (trend === "giam_dang_ngo") return "canh_bao";
   if (trend === "tang_manh" || trend === "tang_nhe" || latestRate >= HIGH_RATE) return "canh_bao";
   return "binh_thuong";
 }
@@ -128,6 +142,7 @@ function analyzeDriver(latest: DayCancel, prev: DayCancel[]): { driver: CancelDr
   const issuedChange = prevIssued > 0 ? latest.totalIssued / prevIssued - 1 : 0;
 
   const cancelUp = cancelChange >= 0.15;
+  const cancelDown = cancelChange <= -0.15;
   const issuedDown = issuedChange <= -0.15;
 
   const soVe = `${latest.cancelled.toLocaleString("vi-VN")} vé hủy / ${latest.totalIssued.toLocaleString(
@@ -156,6 +171,12 @@ function analyzeDriver(latest: DayCancel, prev: DayCancel[]): { driver: CancelDr
       )}% — ${soVe}. Tỷ lệ tăng chủ yếu do mẫu số co lại, chưa hẳn là khách bỏ vé nhiều hơn.`,
     };
   }
+  if (cancelDown) {
+    return {
+      driver: "huy_giam_manh",
+      driverText: `Số vé hủy giảm ${Math.abs(Math.round(cancelChange * 100))}% trong khi tổng phát hành gần như giữ nguyên — ${soVe}. Giảm nhanh như vậy thường là do ngừng nhập ô vé hủy, cần xác nhận lại trước khi coi là tín hiệu tốt.`,
+    };
+  }
   return {
     driver: "khong_ro",
     driverText: `Số vé hủy và tổng phát hành đều không đổi rõ rệt — ${soVe}.`,
@@ -168,6 +189,14 @@ function buildChecklist(driver: CancelDriver, severity: CancelSeverity, latestRa
   const common = [
     "Đối chiếu lại số vé hủy đã nhập với bill thực tế — có nhập nhầm ô hủy không?",
   ];
+
+  if (driver === "huy_giam_manh") {
+    return [
+      "Xác nhận nhà hàng có còn nhập ô vé hủy hằng ngày không — hủy về gần 0 thường là bỏ trống ô, không phải hết hủy.",
+      "Nếu đúng là không còn vé hủy, ghi lại lý do (đổi quy trình phát vé, đổi ca trực) để lần sau không bị nghi.",
+      ...common,
+    ];
+  }
 
   if (driver === "mau_so_co_lai") {
     return [
@@ -262,7 +291,7 @@ export function analyzeCancellations(
 
       const prevAvgRate = avg(prev.map(RATE));
       const deltaPp = latest.rate - prevAvgRate;
-      const trend = classifyTrend(deltaPp);
+      const trend = classifyTrend(deltaPp, latest.rate);
       const severity = classifySeverity(trend, latest.rate);
       const { driver, driverText } = analyzeDriver(latest, prev);
 
