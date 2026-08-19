@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, type CSSProperties } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -253,7 +253,9 @@ export function ImagePreviewModal({
               alt={`Ảnh Bill ${currentIndex + 1}`}
               className="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 bg-black/40"
               style={{
-                imageRendering: "high-quality",
+                // "high-quality" là giá trị hợp lệ của CSS Images 4 nhưng csstype chưa khai báo,
+                // nên phải ép kiểu riêng thuộc tính này thay vì bỏ kiểm tra cả object style.
+                imageRendering: "high-quality" as unknown as CSSProperties["imageRendering"],
                 WebkitBackfaceVisibility: "hidden",
               }}
               draggable={false}

@@ -155,7 +155,12 @@ export function VoucherEntryForm({ onSuccess }: VoucherEntryFormProps) {
       toast.success(`Đã lưu thành công số liệu ngày ${date} cho ${restaurantName}!`);
 
       // Trigger automatic MS Teams Report & Analysis send
-      const res = await sendStoredMSTeamsReport(savedRecord);
+      // restaurantName là optional trên VoucherRecord; ở đây đã biết chắc tên nhà hàng
+      // đang nhập liệu nên dùng luôn làm phương án dự phòng.
+      const res = await sendStoredMSTeamsReport({
+        ...savedRecord,
+        restaurantName: savedRecord.restaurantName ?? restaurantName,
+      });
       if (res.success) {
         toast.success("📢 " + res.message);
       } else {

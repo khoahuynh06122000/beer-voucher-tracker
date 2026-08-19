@@ -66,7 +66,15 @@ const RESTAURANT_OPTIONS = [
 
 const RESTAURANT_META: Record<
   string,
-  { name: string; color: string; badgeBg: string; textCol: string; borderCol: string }
+  {
+    name: string;
+    color: string;
+    badgeBg: string;
+    textCol: string;
+    borderCol: string;
+    /** Maison Kayser bán voucher bánh nên cách tính chi phí và diễn giải khác các nhà hàng bia. */
+    isMaisonKayser?: boolean;
+  }
 > = {
   lehoibia: {
     name: "Lễ Hội Bia",
@@ -95,6 +103,7 @@ const RESTAURANT_META: Record<
     badgeBg: "bg-emerald-500/10",
     textCol: "text-emerald-600 dark:text-emerald-400",
     borderCol: "border-emerald-500/30",
+    isMaisonKayser: true,
   },
 };
 
@@ -308,8 +317,11 @@ export function KPIDashboard({
         avgDaily,
         overallRate,
         periodGrowth,
-        peakRecord,
-        offPeakRecord,
+        // Hai biến này chỉ được gán bên trong callback của .map() ở trên, mà TypeScript
+        // không theo dõi phép gán trong hàm lồng nhau — tới đây nó vẫn coi kiểu là null.
+        // Khai báo lại để nơi dùng nhận đúng VoucherRecord | null.
+        peakRecord: peakRecord as VoucherRecord | null,
+        offPeakRecord: offPeakRecord as VoucherRecord | null,
         dailyList: dailyWithFluctuation.reverse(), // desc for display
       };
     });

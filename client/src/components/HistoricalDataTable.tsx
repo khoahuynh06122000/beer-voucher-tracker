@@ -91,7 +91,12 @@ export function HistoricalDataTable() {
     const rowId = record.id || `${record.restaurantId}_${record.date}`;
     setSendingRowId(rowId);
     try {
-      const res = await sendStoredMSTeamsReport(record);
+      // restaurantName là optional trên VoucherRecord nhưng báo cáo bắt buộc phải có tên,
+      // nên lấy restaurantId làm phương án dự phòng.
+      const res = await sendStoredMSTeamsReport({
+        ...record,
+        restaurantName: record.restaurantName ?? record.restaurantId,
+      });
       if (res.success) {
         toast.success("📢 " + res.message);
       } else {
