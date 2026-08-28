@@ -5,6 +5,13 @@
  * Dùng cho:
  *   - Nút "Gửi báo cáo 09:00" trong AdminSettings
  *   - Vercel Cron (khai báo trong vercel.json) chạy mỗi sáng
+ *
+ * LỊCH CRON: "8 1 * * *" = 01:08 UTC = 08:08 giờ VN — CỐ Ý đặt sớm hơn 52 phút,
+ * KHÔNG phải gõ sai. Lý do: gói Vercel Hobby chỉ chạy cron trong khoảng một giờ
+ * quanh mốc hẹn, thực tế đo được trễ ~52 phút (hẹn 09:00 nhưng bắn 09:52), nên
+ * hẹn 08:08 để tin về Teams sát 09:00. Độ trễ này KHÔNG cố định: nếu hôm nào
+ * Vercel chạy đúng giờ thì tin sẽ về sớm, khoảng 08:08-09:08. Muốn đúng giờ tuyệt
+ * đối thì phải lên gói Pro hoặc gọi endpoint này từ một scheduler bên ngoài.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getLiveMissingStatus, getFirestoreSetting, runWeeklyPreventiveAudit } from "../../server/botCore.js";

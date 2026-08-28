@@ -12,7 +12,7 @@
     "api/admin/migrate.ts": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/cron/trigger-09am", "schedule": "0 2 * * *" }
+    { "path": "/api/cron/trigger-09am", "schedule": "8 1 * * *" }
   ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
