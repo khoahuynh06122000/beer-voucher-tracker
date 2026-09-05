@@ -1,8 +1,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { initializeFirestore, getFirestore } from "firebase/firestore";
 import firebaseConfigData from "../../../firebase-applet-config.json";
 
+/**
+ * Firebase ở dự án này CHỈ làm một việc: đăng nhập Google.
+ * Dữ liệu voucher nằm ở Supabase, ảnh bill nằm ở Cloudinary — không dùng
+ * Firestore hay Firebase Storage, nên không khởi tạo hai thứ đó nữa.
+ */
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigData.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigData.authDomain,
@@ -20,9 +24,5 @@ export const auth = getAuth(app);
  *  cứng vào tài khoản Google đầu tiên của trình duyệt. */
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
-
-const dbId = firebaseConfigData.firestoreDatabaseId;
-
-export const db = dbId && dbId !== "(default)" ? getFirestore(app, dbId) : getFirestore(app);
 
 export default app;

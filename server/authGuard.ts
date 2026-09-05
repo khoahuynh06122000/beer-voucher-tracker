@@ -16,7 +16,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const FB_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "peak-jigsaw-h8gvj";
+const FB_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "gen-lang-client-0780471401";
 
 /** Email luôn có quyền cao nhất, không thể bị xoá quyền qua giao diện. */
 export const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "khoa.huynh.06.12.2000@gmail.com").toLowerCase();
