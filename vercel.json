@@ -8,8 +8,7 @@
     "api/telegram/webhook.ts": { "maxDuration": 60 },
     "api/ai-audit.ts": { "maxDuration": 60 },
     "api/cron/trigger-09am.ts": { "maxDuration": 60 },
-    "api/cron/weekly-audit.ts": { "maxDuration": 60 },
-    "api/admin/migrate.ts": { "maxDuration": 60 }
+    "api/cron/weekly-audit.ts": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/cron/trigger-09am", "schedule": "8 1 * * *" }
