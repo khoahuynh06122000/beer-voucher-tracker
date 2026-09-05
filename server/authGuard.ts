@@ -19,7 +19,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 const FB_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "peak-jigsaw-h8gvj";
 
 /** Email luôn có quyền cao nhất, không thể bị xoá quyền qua giao diện. */
-export const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "khoahd@banahills.com.vn").toLowerCase();
+export const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "khoa.huynh.06.12.2000@gmail.com").toLowerCase();
 
 const SB_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
 const SB_KEY = process.env.SUPABASE_KEY || "";
