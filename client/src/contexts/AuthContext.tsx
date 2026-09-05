@@ -1,213 +1,177 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  User,
-} from "firebase/auth";
-import {
-  getUserProfile,
-  createUserProfile,
-  PRESET_USERS,
-  UserProfile,
-} from "@/lib/firestoreService";
+/**
+ * Đăng nhập bằng Google (Firebase Auth).
+ *
+ * Thay cho cách cũ: 4 nút "đăng nhập 1-click" dùng chung mật khẩu "123456" nằm
+ * ngay trong mã nguồn của một repo công khai — ai mở link cũng bấm vào thẳng
+ * được tài khoản Ban Quản Lý.
+ *
+ * Luồng mới:
+ *   1. Bấm "Đăng nhập bằng Google".
+ *   2. Client gửi ID token lên /api/session. Server tự xác minh chữ ký và TRA
+ *      QUYỀN Ở PHÍA SERVER — client không bao giờ tự khai vai trò của mình.
+ *   3. Email lạ -> trạng thái "pending", chọn nhà hàng muốn xin vào, chờ chủ hệ
+ *      thống duyệt. Chưa duyệt thì không đọc được dữ liệu nào.
+ */
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { auth, googleProvider } from "@/lib/firebase";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User } from "firebase/auth";
+import { authFetchJson } from "@/lib/authFetch";
+import type { UserProfile } from "@/lib/firestoreService";
+
+export type AppRole = "super_admin" | "admin" | "restaurant" | "pending";
+
+export interface SessionUser {
+  email: string;
+  role: AppRole;
+  restaurantId: string | null;
+  restaurantName: string;
+  requestedRestaurantId: string | null;
+  displayName: string | null;
+}
+
+export interface RestaurantOption {
+  id: string;
+  name: string;
+}
 
 interface AuthContextType {
-  user: User | { uid: string; email?: string } | null;
+  user: User | null;
   profile: UserProfile | null;
+  session: SessionUser | null;
+  restaurants: RestaurantOption[];
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
-  loginWithEmailOrUsername: (u: string, p: string) => Promise<void>;
-  loginAsPreset: (presetKey: string) => Promise<void>;
+  /** Đã đăng nhập Google nhưng chưa được cấp quyền xem dữ liệu. */
+  isPending: boolean;
+  loginWithGoogle: () => Promise<void>;
+  /** Người dùng chờ duyệt chọn nhà hàng muốn xin vào. */
+  requestAccess: (restaurantId: string) => Promise<void>;
+  refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
-const LOCAL_STORAGE_KEY = "beer_voucher_user_session";
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Đổi hồ sơ phiên sang UserProfile để phần giao diện cũ dùng lại được.
+ *  `username` mang restaurantId vì các màn hình hiện có đang truyền
+ *  `user.username` xuống làm khoá nhà hàng. */
+function toProfile(s: SessionUser): UserProfile | null {
+  if (s.role === "pending") return null;
+  const isAdmin = s.role === "admin" || s.role === "super_admin";
+  return {
+    uid: s.email,
+    username: isAdmin ? "admin" : s.restaurantId || "",
+    role: isAdmin ? "admin" : "restaurant",
+    restaurantName: s.restaurantName || (isAdmin ? "Ban Quản Lý" : ""),
+    email: s.email,
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | { uid: string; email?: string } | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<SessionUser | null>(null);
+  const [restaurants, setRestaurants] = useState<RestaurantOption[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let resolved = false;
-
-    // Safety timeout for iOS Safari / MS Teams Webview where onAuthStateChanged may hang or delay
-    const timer = setTimeout(() => {
-      if (!resolved) {
-        console.warn("Auth initialization timeout reached. Attempting local storage recovery.");
-        resolved = true;
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved) as UserProfile;
-            setProfile(parsed);
-            setUser({ uid: parsed.uid, email: parsed.email });
-          } catch (e) {
-            setProfile(null);
-            setUser(null);
-          }
-        } else {
-          setProfile(null);
-          setUser(null);
-        }
-        setLoading(false);
-      }
-    }, 2000);
-
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (firebaseUser) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timer);
-
-        if (firebaseUser) {
-          setUser(firebaseUser);
-          try {
-            const userProf = await getUserProfile(firebaseUser.uid, firebaseUser.email || undefined);
-            setProfile(userProf);
-            if (userProf) {
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProf));
-            }
-          } catch (e) {
-            console.error("Error loading user profile:", e);
-          }
-        } else {
-          // Fallback to local session if present
-          const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved) as UserProfile;
-              setProfile(parsed);
-              setUser({ uid: parsed.uid, email: parsed.email });
-            } catch (e) {
-              setProfile(null);
-              setUser(null);
-            }
-          } else {
-            setProfile(null);
-            setUser(null);
-          }
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("onAuthStateChanged error:", error);
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timer);
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
+  const loadSession = useCallback(async (requestRestaurantId?: string) => {
+    try {
+      const data = await authFetchJson<{
+        success: boolean;
+        user: SessionUser;
+        restaurants: RestaurantOption[];
+      }>("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestRestaurantId ? { requestRestaurantId } : {}),
+      });
+      setSession(data.user);
+      setRestaurants(data.restaurants || []);
+      setError(null);
+    } catch (e: any) {
+      setSession(null);
+      setError(e?.message || "Không lấy được thông tin phiên đăng nhập.");
+    }
   }, []);
 
-  const formatEmailAndPassword = (input: string, pass: string) => {
-    const trimmed = input.trim();
-    const email = trimmed.includes("@") ? trimmed : `${trimmed.toLowerCase()}@beervoucher.app`;
-    const password = pass.length < 6 ? pass.padEnd(6, "0") : pass;
-    return { email, password, username: trimmed.toLowerCase() };
-  };
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      setUser(fbUser);
+      if (fbUser) {
+        await loadSession();
+      } else {
+        setSession(null);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [loadSession]);
 
-  const loginWithEmailOrUsername = async (u: string, p: string) => {
+  const loginWithGoogle = async () => {
     setError(null);
     setLoading(true);
-    const { email, password, username } = formatEmailAndPassword(u, p);
-
-    const presetData = PRESET_USERS[username] || {
-      username: u,
-      role: username === "admin" ? "admin" : "restaurant",
-      restaurantName: username === "admin" ? "Ban Quản Lý" : `Nhà Hàng ${u}`,
-      email,
-    };
-
     try {
-      // 1. Try Firebase Auth sign in
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      let userProf = await getUserProfile(cred.user.uid, email);
-      if (!userProf) {
-        userProf = {
-          uid: cred.user.uid,
-          ...presetData,
-          email,
-        };
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged sẽ tự gọi loadSession.
+    } catch (e: any) {
+      const code = e?.code || "";
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        // Webview của MS Teams / một số trình duyệt trong app chặn popup.
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (e2: any) {
+          setError("Trình duyệt chặn cửa sổ đăng nhập. Vui lòng mở app bằng Chrome hoặc Safari.");
+        }
+      } else if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        setError(null); // người dùng tự đóng, không phải lỗi
+      } else if (code === "auth/unauthorized-domain") {
+        setError("Tên miền này chưa được cho phép trong Firebase Console (Authentication > Settings > Authorized domains).");
+      } else {
+        setError(e?.message || "Đăng nhập Google thất bại.");
       }
-      setUser(cred.user);
-      setProfile(userProf);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProf));
-    } catch (err: any) {
-      // 2. Try auto-registration if sign-in fails
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        const userProf = await createUserProfile(cred.user.uid, presetData).catch(() => ({
-          uid: cred.user.uid,
-          ...presetData,
-        }));
-        setUser(cred.user);
-        setProfile(userProf);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(userProf));
-        return;
-      } catch (createErr: any) {
-        console.warn("Firebase Auth fallback triggered:", createErr);
-      }
-
-      // 3. Fallback: Local session creation to guarantee user access
-      const fallbackUid = `local_${username}_${Date.now()}`;
-      const fallbackProf: UserProfile = {
-        uid: fallbackUid,
-        ...presetData,
-        email,
-      };
-
-      setUser({ uid: fallbackUid, email });
-      setProfile(fallbackProf);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fallbackProf));
-    } finally {
       setLoading(false);
     }
   };
 
-  const loginAsPreset = async (presetKey: string) => {
-    const pass = "123456";
-    await loginWithEmailOrUsername(presetKey, pass);
+  const requestAccess = async (restaurantId: string) => {
+    setLoading(true);
+    await loadSession(restaurantId);
+    setLoading(false);
+  };
+
+  const refreshSession = async () => {
+    await loadSession();
   };
 
   const logout = async () => {
     setLoading(true);
     try {
       await signOut(auth).catch(() => {});
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
       setUser(null);
-      setProfile(null);
-    } catch (e) {
-      console.error("Signout error:", e);
+      setSession(null);
     } finally {
       setLoading(false);
     }
   };
+
+  const profile = session ? toProfile(session) : null;
 
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
+        session,
+        restaurants,
         loading,
         error,
         isAuthenticated: Boolean(user && profile),
-        loginWithEmailOrUsername,
-        loginAsPreset,
+        isPending: Boolean(user && session && session.role === "pending"),
+        loginWithGoogle,
+        requestAccess,
+        refreshSession,
         logout,
       }}
     >

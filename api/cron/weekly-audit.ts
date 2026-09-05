@@ -9,10 +9,13 @@
  * bất cứ lúc nào để kiểm thử.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { requireCronOrAdmin } from "../../server/authGuard.js";
 import { runWeeklyPreventiveAudit } from "../../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
+  if (!(await requireCronOrAdmin(req, res))) return;
+
   try {
     // ?dryRun=1 -> chạy đủ logic nhưng KHÔNG gửi Telegram (để kiểm thử an toàn)
     const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);

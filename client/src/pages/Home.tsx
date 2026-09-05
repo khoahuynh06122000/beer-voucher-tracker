@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { VoucherEntryForm } from "@/components/VoucherEntryForm";
@@ -7,6 +8,7 @@ import { KPIDashboard } from "@/components/KPIDashboard";
 import { HistoricalDataTable } from "@/components/HistoricalDataTable";
 import { AnalyticsCharts } from "@/components/AnalyticsCharts";
 import { AnomalyAlert } from "@/components/AnomalyAlert";
+import { PendingAccess } from "@/components/PendingAccess";
 import { CancellationReport } from "@/components/CancellationReport";
 import { useLocation } from "wouter";
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
@@ -30,6 +32,7 @@ import { LandingCover } from "@/components/LandingCover";
 
 export default function Home() {
   const { user, loading, isAuthenticated, logout } = useAuth();
+  const { isPending } = useAuthContext();
   const { theme, toggleTheme } = useTheme();
   const [, setLocation] = useLocation();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -72,6 +75,12 @@ export default function Home() {
         </div>
       </div>
     );
+  }
+
+  // Đã đăng nhập Google nhưng chưa được cấp quyền: cho chọn nhà hàng muốn xin
+  // vào và chờ duyệt, thay vì đá về màn hình đăng nhập gây tưởng là lỗi.
+  if (isPending) {
+    return <PendingAccess />;
   }
 
   if (!isAuthenticated) {

@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
 import firebaseConfigData from "../../../firebase-applet-config.json";
 
@@ -15,6 +15,11 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+
+/** Đăng nhập Google. `prompt: select_account` để đổi tài khoản được, không dính
+ *  cứng vào tài khoản Google đầu tiên của trình duyệt. */
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 const dbId = firebaseConfigData.firestoreDatabaseId;
 

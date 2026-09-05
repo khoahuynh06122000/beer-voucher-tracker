@@ -36,8 +36,10 @@ import {
   getVouchersByDateRange,
   RestaurantStatus
 } from "@/lib/firestoreService";
-import { sendMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
-import { getTelegramSettings, saveTelegramSettings, sendTelegramMessage, registerTelegramWebhook, pollTelegramMessages } from "@/lib/telegramService";
+import { UserApproval } from "@/components/UserApproval";
+import { authFetch } from "@/lib/authFetch";
+import { sendStoredMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
+import { sendTelegramMessage, registerTelegramWebhook, pollTelegramMessages } from "@/lib/telegramService";
 import { runAIAuditForDate, formatTelegramAIAuditReport, AIAuditResult } from "@/lib/aiAuditAgent";
 
 import beerFoamBg from "@/assets/beer_foam_bg.jpg";
@@ -108,7 +110,7 @@ export default function AdminSettings() {
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/cloudinary-usage")
+    authFetch("/api/cloudinary-usage")
       .then((r) => r.json())
       .then(setCloudUsage)
       .catch(() => {});
@@ -118,19 +120,13 @@ export default function AdminSettings() {
     let isMounted = true;
     async function loadData() {
       setIsLoadingSetting(true);
-      const val = await getSetting("ms_teams_webhook");
-      const tg = await getTelegramSettings();
-      if (isMounted) {
-        if (val) setWebhookUrl(val);
-        setTelegramBotToken(tg.botToken);
-        setTelegramChatId(tg.chatId);
-        setIsLoadingSetting(false);
-      }
+      // Bí mật (webhook Teams, token Telegram) nay nằm ở biến môi trường trên
+      // server — client không tải về nữa để không lộ qua tab Network.
+      if (isMounted) setIsLoadingSetting(false);
 
-      // Auto-activate Telegram Bot listener on mount if token is saved
-      if (tg.botToken) {
-        registerTelegramWebhook(tg.botToken).catch(() => {});
-      }
+      // Server tự biết đã có token hay chưa; cứ gọi, không có token thì nó báo lỗi
+      // và mình bỏ qua im lặng như trước.
+      registerTelegramWebhook().catch(() => {});
 
       // Check yesterday status
       setIsCheckingStatus(true);
@@ -199,15 +195,11 @@ export default function AdminSettings() {
       return;
     }
 
-    setIsSaving(true);
-    try {
-      await setSetting("ms_teams_webhook", webhookUrl.trim());
-      toast.success("Lưu URL MS Teams Webhook thành công vào Firestore!");
-    } catch (err: any) {
-      toast.error(err?.message || "Không thể lưu cài đặt");
-    } finally {
-      setIsSaving(false);
-    }
+    // Webhook không còn lưu trong cơ sở dữ liệu nữa. Nó là bí mật hệ thống nên
+    // phải đặt ở biến môi trường Vercel, nơi trình duyệt không đọc được.
+    toast.error(
+      "Webhook nay đặt ở biến môi trường MS_TEAMS_WEBHOOK trên Vercel, không lưu qua giao diện nữa (để không bị lộ ra trình duyệt)."
+    );
   };
 
   const handleSaveTelegram = async () => {
@@ -217,8 +209,7 @@ export default function AdminSettings() {
     }
     setIsSavingTelegram(true);
     try {
-      await saveTelegramSettings(telegramBotToken, telegramChatId);
-      const webhookRes = await registerTelegramWebhook(telegramBotToken);
+      const webhookRes = await registerTelegramWebhook();
       if (webhookRes.success) {
         toast.success("Lưu cấu hình & Kích hoạt Telegram Webhook thành công! Bot đã sẵn sàng nhận lệnh chat đối soát.");
       } else {
@@ -238,7 +229,7 @@ export default function AdminSettings() {
     }
     setIsSavingTelegram(true);
     try {
-      const res = await registerTelegramWebhook(telegramBotToken);
+      const res = await registerTelegramWebhook();
       if (res.success) {
         toast.success("🎉 " + res.message);
       } else {
@@ -276,7 +267,7 @@ export default function AdminSettings() {
     setIsTestingTelegram(true);
     try {
       const msg = `<b>🤖 KHẢO SÁT THỬ NGHIỆM TELEGRAM BOT</b>\n\n🟢 Bot đã kết nối thành công với Hệ Thống Quản Lý Voucher Bia!\n⏰ Thời gian thử: ${new Date().toLocaleString("vi-VN")}\n\n<i>Sẵn sàng tự động gửi báo cáo đối soát AI 09:00 AM hàng ngày.</i>`;
-      const res = await sendTelegramMessage(msg, telegramBotToken, telegramChatId);
+      const res = await sendTelegramMessage(msg);
       if (res.success) {
         toast.success("🎉 " + res.message);
       } else {
@@ -350,7 +341,7 @@ export default function AdminSettings() {
     try {
       const missingNames = statusCheck?.missing.map((m) => m.restaurantName) || [];
       const reportText = formatTelegramAIAuditReport(targetCheckDate, aiAuditResults, missingNames);
-      const res = await sendTelegramMessage(reportText, telegramBotToken, telegramChatId);
+      const res = await sendTelegramMessage(reportText);
       if (res.success) {
         toast.success("📲 " + res.message);
       } else {
@@ -384,7 +375,7 @@ export default function AdminSettings() {
         createdBy: user?.name || "Admin Test",
       };
 
-      const result = await sendMSTeamsReport(webhookUrl.trim(), testRecord);
+      const result = await sendStoredMSTeamsReport(testRecord);
       if (result.success) {
         toast.success("🎉 " + result.message);
       } else {
@@ -405,7 +396,7 @@ export default function AdminSettings() {
 
     setIsSendingAlert(true);
     try {
-      const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
+      const result = await sendMissingReportAlert(targetCheckDate);
       if (result.success) {
         toast.success("🔔 " + result.message);
       } else {
@@ -437,7 +428,7 @@ export default function AdminSettings() {
       } else if (data && data.message) {
         toast.error("Không thể kích hoạt: " + data.message);
       } else {
-        const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
+        const result = await sendMissingReportAlert(targetCheckDate);
         if (result.success) {
           toast.success("⚡ " + result.message);
           const newStatus = await checkUnupdatedRestaurants(targetCheckDate);
@@ -448,7 +439,7 @@ export default function AdminSettings() {
       }
     } catch (err: any) {
       try {
-        const result = await sendMissingReportAlert(webhookUrl.trim(), targetCheckDate);
+        const result = await sendMissingReportAlert(targetCheckDate);
         if (result.success) {
           toast.success("⚡ " + result.message);
           const newStatus = await checkUnupdatedRestaurants(targetCheckDate);
@@ -598,6 +589,9 @@ export default function AdminSettings() {
       </header>
 
       <main className="relative z-10 container py-8 flex-1 max-w-3xl space-y-6">
+
+        {/* DUYỆT TÀI KHOẢN — chỉ chủ hệ thống thấy, tự ẩn với người khác */}
+        <UserApproval />
 
         {/* KHO ẢNH CLOUDINARY — dung lượng & cảnh báo */}
         {cloudUsage?.ok && typeof cloudUsage.percent === "number" && (

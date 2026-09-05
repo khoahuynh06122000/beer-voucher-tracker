@@ -9,18 +9,19 @@
  * thay vì để function crash 500 — giúp xác định nguyên nhân trên Vercel.)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { applyCors, requireAuth } from "../../server/authGuard.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Content-Type", "application/json");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") {
     res.writeHead(200);
     res.end(JSON.stringify({ ok: true }));
     return;
   }
+
+  const who = await requireAuth(req, res, "admin");
+  if (!who) return;
 
   let core: typeof import("../../server/botCore.js");
   try {

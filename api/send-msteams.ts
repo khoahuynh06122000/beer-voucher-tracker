@@ -3,17 +3,22 @@
  *
  * Proxy gửi báo cáo lên MS Teams Webhook (né CORS trình duyệt + thử nhiều
  * schema Adaptive Card / MessageCard / Power Automate). Nhận:
- *   { webhookUrl, record }        -> tự dựng dashboard card từ record
- *   { webhookUrl, customPayload } -> gửi thẳng payload tuỳ ý
+ *   { record }        -> tự dựng dashboard card từ record
+ *   { customPayload } -> gửi thẳng payload tuỳ ý
+ *
+ * BẮT BUỘC đăng nhập. URL webhook lấy từ BIẾN MÔI TRƯỜNG MS_TEAMS_WEBHOOK,
+ * KHÔNG nhận từ client.
+ *
+ * Trước đây người gọi tự truyền webhookUrl và không cần đăng nhập — nghĩa là
+ * bất kỳ ai trên internet cũng bắt được server này POST dữ liệu tuỳ ý tới BẤT KỲ
+ * URL nào họ muốn, và webhook của bộ phận thì lộ ra trình duyệt.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody, LIVE_DASHBOARD_URL } from "../server/botCore.js";
+import { applyCors, requireAuth } from "../server/authGuard.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Content-Type", "application/json");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") {
     res.writeHead(200);
@@ -26,11 +31,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const who = await requireAuth(req, res, "any");
+  if (!who) return;
+
+  const webhookUrl = (process.env.MS_TEAMS_WEBHOOK || "").trim();
+  if (!webhookUrl) {
+    res.writeHead(500);
+    res.end(
+      JSON.stringify({
+        success: false,
+        message: "Server chưa cấu hình MS_TEAMS_WEBHOOK trong biến môi trường Vercel.",
+      })
+    );
+    return;
+  }
+
   try {
-    const { webhookUrl, record, customPayload } = await readJsonBody(req);
-    if (!webhookUrl || (!record && !customPayload)) {
+    const { record, customPayload } = await readJsonBody(req);
+    if (!record && !customPayload) {
       res.writeHead(400);
-      res.end(JSON.stringify({ success: false, message: "Thiếu URL webhook hoặc dữ liệu báo cáo" }));
+      res.end(JSON.stringify({ success: false, message: "Thiếu dữ liệu báo cáo" }));
       return;
     }
 

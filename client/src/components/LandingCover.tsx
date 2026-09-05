@@ -20,42 +20,20 @@ import {
 export function LandingCover() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginUsername, setLoginUsername] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
 
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const { loginWithEmailOrUsername, loginAsPreset } = useAuthContext();
+  const { loginWithGoogle, error: ctxError } = useAuthContext();
 
-  const handleLoginWithCreds = async (u: string, p: string) => {
-    setAuthError(null);
-    if (!u.trim() || !p) return;
-
-    setIsLoggingIn(true);
-    try {
-      await loginWithEmailOrUsername(u.trim(), p);
-      setShowLoginModal(false);
-    } catch (err: any) {
-      setAuthError(err.message || "Đăng nhập thất bại.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await handleLoginWithCreds(loginUsername.trim() || "admin", loginPassword);
-  };
-
-  const handleQuickPresetLogin = async (key: string) => {
+  const handleGoogleLogin = async () => {
     setAuthError(null);
     setIsLoggingIn(true);
     try {
-      await loginAsPreset(key);
+      await loginWithGoogle();
       setShowLoginModal(false);
     } catch (err: any) {
-      setAuthError(err.message || "Đăng nhập nhanh thất bại.");
+      setAuthError(err?.message || "Đăng nhập Google thất bại.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -462,58 +440,39 @@ export function LandingCover() {
                   </button>
                 </div>
 
-                {authError && (
+                {(authError || ctxError) && (
                   <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                    <span>{authError}</span>
+                    <span>{authError || ctxError}</span>
                   </div>
                 )}
 
-                <div className="pt-4 space-y-4">
-                  {/* Preset Quick Login Buttons */}
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
-                    <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Chọn Nhanh Đơn Vị:
-                      </span>
-                      <span className="text-[10px] text-amber-300/80 font-normal">Đăng nhập 1-Click</span>
-                    </p>
-                    <div className="grid grid-cols-1 gap-2 text-xs">
-                      {[
-                        { key: "lehoibia", l: "🍺 Lễ Hội Bia", desc: "Bộ phận Lễ Hội Bia Ba Na Hills" },
-                        { key: "1901", l: "🍷 Nhà Hàng 1901", desc: "Bộ phận Nhà Hàng 1901" },
-                        { key: "beerplaza", l: "🏰 Beer Plaza", desc: "Bộ phận Nhà Hàng Beer Plaza" },
-                        { key: "maisonkayser", l: "🥐 Maison Kayser", desc: "Bộ phận Bánh Maison Kayser" },
-                        { key: "admin", l: "🏢 Ban Quản Lý", desc: "Tài khoản Quản trị & Kế toán" },
-                      ].map((acc) => (
-                        <button
-                          key={acc.key}
-                          type="button"
-                          onClick={() => handleQuickPresetLogin(acc.key)}
-                          disabled={isLoggingIn}
-                          className="p-2.5 px-3.5 rounded-xl bg-black/60 border border-white/10 hover:border-amber-400 text-left transition-all group disabled:opacity-50 hover:bg-amber-500/20 flex items-center justify-between"
-                        >
-                          <div>
-                            <div className="font-bold text-gray-200 group-hover:text-amber-300 text-sm">
-                              {acc.l}
-                            </div>
-                            <div className="text-[10px] text-gray-400">
-                              {acc.desc}
-                            </div>
-                          </div>
-                          <div className="p-1.5 rounded-lg bg-amber-500/10 group-hover:bg-amber-500 group-hover:text-black text-amber-400 transition-colors">
-                            {isLoggingIn ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <ArrowRight className="w-4 h-4" />
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                <div className="pt-6 space-y-4">
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl bg-white text-gray-800 font-bold text-sm hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]"
+                  >
+                    {isLoggingIn ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
+                    ) : (
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z" />
+                        <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24z" />
+                        <path fill="#FBBC05" d="M5.3 14.3a7.1 7.1 0 0 1 0-4.6v-3.1h-4a12 12 0 0 0 0 10.8l4-3.1z" />
+                        <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8z" />
+                      </svg>
+                    )}
+                    <span>{isLoggingIn ? "Đang đăng nhập…" : "Đăng nhập bằng Google"}</span>
+                  </button>
+
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
+                    Dùng email công ty của bạn. Lần đầu đăng nhập, bạn sẽ chọn nhà hàng
+                    muốn xin quyền xem số liệu, sau đó chờ Ban Quản Lý duyệt.
                   </div>
                 </div>
+
               </div>
             </div>
 

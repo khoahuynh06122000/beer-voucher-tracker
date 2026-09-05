@@ -25,7 +25,7 @@ export const RESTAURANTS = [
 
 // ===== SUPABASE (thay Firestore — cột camelCase trùng field app) =====
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
-const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_jtVF84t5gSxGDuUJb32Tuw_Rs-2sqmK";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
 const sbHeaders: Record<string, string> = {
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -59,7 +59,25 @@ async function sbUpsert(table: string, row: Record<string, any>): Promise<boolea
 }
 
 /** Đọc 1 giá trị chuỗi từ bảng `settings`. */
+/**
+ * Bí mật hệ thống ưu tiên đọc từ BIẾN MÔI TRƯỜNG, chỉ khi thiếu mới tra bảng
+ * `settings`.
+ *
+ * Vì sao đổi: trước đây token Telegram và webhook Teams nằm trong bảng dữ liệu,
+ * mà bảng đó lại đọc được qua /api/db (khi ấy chưa có xác thực) và qua Supabase
+ * anon key. Bí mật không nên nằm cùng chỗ với dữ liệu nghiệp vụ. Nhánh tra bảng
+ * giữ lại để không gãy trong lúc chuyển đổi — xoá được sau khi đã set đủ env và
+ * dọn các dòng cũ trong bảng.
+ */
+const ENV_SETTING: Record<string, string | undefined> = {
+  telegram_bot_token: process.env.TELEGRAM_BOT_TOKEN,
+  telegram_chat_id: process.env.TELEGRAM_CHAT_ID,
+  ms_teams_webhook: process.env.MS_TEAMS_WEBHOOK,
+};
+
 export async function getFirestoreSetting(key: string): Promise<string> {
+  const fromEnv = ENV_SETTING[key];
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
   const rows = await sbGet(`settings?key=eq.${encodeURIComponent(key)}&select=value`);
   return rows.length > 0 ? String(rows[0].value ?? "").trim() : "";
 }

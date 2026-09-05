@@ -5,13 +5,16 @@
 // component không phải sửa. Cột DB đặt camelCase (quoted) trùng field app.
 // ===========================================================================
 
+import { authFetch } from "./authFetch";
+
 // Gọi QUA SERVER PROXY /api/db (Vercel gọi Supabase) — tránh browser bị chặn/treo
 // khi gọi thẳng supabase.co ở mạng VN.
+// authFetch tự gắn Firebase ID token; /api/db từ chối request không có token.
 async function sbGet(path: string): Promise<any[]> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
-    const resp = await fetch(`/api/db?q=${encodeURIComponent(path)}`, {
+    const resp = await authFetch(`/api/db?q=${encodeURIComponent(path)}`, {
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
     if (!resp.ok) {
@@ -27,7 +30,7 @@ async function sbGet(path: string): Promise<any[]> {
 }
 
 async function sbUpsert(table: string, row: Record<string, any>): Promise<void> {
-  const resp = await fetch(`/api/db?table=${encodeURIComponent(table)}`, {
+  const resp = await authFetch(`/api/db?table=${encodeURIComponent(table)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(row),

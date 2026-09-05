@@ -3,10 +3,13 @@
  * Trả về Adaptive Card JSON trạng thái thiếu báo cáo (cho Power Automate / cron).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { requireCronOrAdmin } from "../../server/authGuard.js";
 import { getLiveMissingStatus } from "../../server/botCore.js";
 
-export default async function handler(_req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
+  if (!(await requireCronOrAdmin(req, res))) return;
+
   try {
     const card = await getLiveMissingStatus();
     res.writeHead(200);

@@ -14,10 +14,13 @@
  * đối thì phải lên gói Pro hoặc gọi endpoint này từ một scheduler bên ngoài.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { requireCronOrAdmin } from "../../server/authGuard.js";
 import { getLiveMissingStatus, getFirestoreSetting, runWeeklyPreventiveAudit } from "../../server/botCore.js";
 
-export default async function handler(_req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
+  if (!(await requireCronOrAdmin(req, res))) return;
+
   try {
     const card = await getLiveMissingStatus();
     let sentSuccess = false;

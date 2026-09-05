@@ -4,15 +4,18 @@
  * KHÔNG commit). Key/cloud có thể hardcode (bán công khai) hoặc override qua env.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { applyCors, requireAuth } from "../server/authGuard.js";
 
 const CLOUD = process.env.CLOUDINARY_CLOUD_NAME || "zjtjeyqd";
 const AKEY = process.env.CLOUDINARY_API_KEY || "256774734751537";
 const ASEC = process.env.CLOUDINARY_API_SECRET || "";
 const FREE_LIMIT_GB = 25; // gói free Cloudinary ~25GB / 25 credits
 
-export default async function handler(_req: IncomingMessage, res: ServerResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  applyCors(req, res);
+  const who = await requireAuth(req, res, "admin");
+  if (!who) return;
+
 
   if (!ASEC) {
     res.writeHead(200);

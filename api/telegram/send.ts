@@ -1,17 +1,21 @@
 /**
- * POST /api/telegram/send — Vercel Serverless Function.
- * Proxy gửi tin nhắn Telegram (server gọi api.telegram.org) để tránh browser bị
- * chặn/CORS ("Failed to fetch") khi gọi thẳng Telegram từ trình duyệt (hay gặp ở VN).
- * Body: { botToken, chatId, message }
+ * POST /api/telegram/send — proxy gửi tin nhắn Telegram.
+ * Body: { message }
+ *
+ * BẮT BUỘC đăng nhập. Bot token & chat id lấy từ BIẾN MÔI TRƯỜNG của server,
+ * KHÔNG nhận từ client nữa.
+ *
+ * Trước đây endpoint nhận thẳng { botToken, chatId } do người gọi gửi lên và
+ * không kiểm tra đăng nhập — tức là một trạm chuyển tiếp miễn phí: người lạ gọi
+ * được, và client phải tải bot token về trình duyệt mới gọi được (ai mở tab
+ * Network cũng đọc thấy token).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody } from "../../server/botCore.js";
+import { applyCors, requireAuth } from "../../server/authGuard.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Content-Type", "application/json");
+  applyCors(req, res);
 
   if (req.method === "OPTIONS") {
     res.writeHead(200);
@@ -24,19 +28,35 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const who = await requireAuth(req, res, "any");
+  if (!who) return;
+
+  const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  const chatId = (process.env.TELEGRAM_CHAT_ID || "").trim();
+  if (!botToken || !chatId) {
+    res.writeHead(500);
+    res.end(
+      JSON.stringify({
+        success: false,
+        message: "Server chưa cấu hình TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID trong biến môi trường Vercel.",
+      })
+    );
+    return;
+  }
+
   try {
-    const { botToken, chatId, message } = await readJsonBody(req);
-    if (!botToken || !chatId || !message) {
+    const { message } = await readJsonBody(req);
+    if (!message) {
       res.writeHead(400);
-      res.end(JSON.stringify({ success: false, message: "Thiếu botToken, chatId hoặc message" }));
+      res.end(JSON.stringify({ success: false, message: "Thiếu nội dung tin nhắn." }));
       return;
     }
 
-    const resp = await fetch(`https://api.telegram.org/bot${String(botToken).trim()}/sendMessage`, {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: String(chatId).trim(),
+        chat_id: chatId,
         text: message,
         parse_mode: "HTML",
         disable_web_page_preview: false,
