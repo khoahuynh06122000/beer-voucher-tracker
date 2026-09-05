@@ -49,7 +49,7 @@ export function UserApproval() {
     setLoading(true);
     try {
       const data = await authFetchJson<{ users: ApiUser[]; restaurants: { id: string; name: string }[] }>(
-        "/api/admin/users"
+        "/api/session?admin=users"
       );
       setUsers(data.users || []);
       setRestaurants(data.restaurants || []);
@@ -70,7 +70,7 @@ export function UserApproval() {
   const act = async (email: string, action: "approve" | "reject" | "revoke", extra?: Record<string, any>) => {
     setBusy(email);
     try {
-      const data = await authFetchJson<{ success: boolean; message?: string }>("/api/admin/users", {
+      const data = await authFetchJson<{ success: boolean; message?: string }>("/api/session?admin=users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action, ...extra }),
