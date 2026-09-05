@@ -30,6 +30,8 @@ import {
   listAppUsers,
   verifyIdToken,
   RESTAURANTS,
+  ADMIN_REQUEST,
+  ADMIN_REQUEST_LABEL,
   SUPER_ADMIN_EMAIL,
   type AppRole,
   type AppUser,
@@ -70,7 +72,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   const requested = String(body.requestRestaurantId || "").trim();
-  const validRequested = RESTAURANTS.some((r) => r.id === requested) ? requested : "";
+  // Ngoài 4 nhà hàng, còn cho xin quyền xem toàn hệ thống (kế toán / Ban Quản Lý).
+  const validRequested =
+    requested === ADMIN_REQUEST || RESTAURANTS.some((r) => r.id === requested) ? requested : "";
 
   let user = await getAppUser(token.email);
 
@@ -125,7 +129,10 @@ async function handleUsers(req: IncomingMessage, res: ServerResponse) {
       .map((u) => ({
         ...u,
         restaurantName: RESTAURANTS.find((r) => r.id === u.restaurantId)?.name || null,
-        requestedRestaurantName: RESTAURANTS.find((r) => r.id === u.requestedRestaurantId)?.name || null,
+        requestedRestaurantName:
+          u.requestedRestaurantId === ADMIN_REQUEST
+            ? ADMIN_REQUEST_LABEL
+            : RESTAURANTS.find((r) => r.id === u.requestedRestaurantId)?.name || null,
       }))
       // Người đang chờ duyệt lên đầu để không bị bỏ sót.
       .sort((a, b) => {

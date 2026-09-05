@@ -25,6 +25,14 @@ const SB_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabas
 const SB_KEY = process.env.SUPABASE_KEY || "";
 const sbAuth = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
 
+/**
+ * Giá trị đặc biệt khi người dùng xin quyền xem TOÀN hệ thống (kế toán, Ban
+ * Quản Lý) thay vì một nhà hàng cụ thể. Chỉ là NGUYỆN VỌNG — vẫn phải chủ hệ
+ * thống duyệt mới có quyền thật.
+ */
+export const ADMIN_REQUEST = "admin";
+export const ADMIN_REQUEST_LABEL = "Ban Quản Lý (xem toàn hệ thống)";
+
 /** Danh sách nhà hàng hợp lệ — dùng để chặn người dùng tự bịa restaurantId. */
 export const RESTAURANTS: { id: string; name: string }[] = [
   { id: "lehoibia", name: "Lê Hội Bia" },

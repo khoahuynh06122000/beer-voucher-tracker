@@ -9,6 +9,9 @@ import { useState } from "react";
 import { Beer, Check, Clock, LogOut, Loader2 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 
+/** Phai trung voi ADMIN_REQUEST trong server/authGuard.ts */
+const ADMIN_REQUEST = "admin";
+
 export function PendingAccess() {
   const { session, restaurants, requestAccess, refreshSession, logout } = useAuthContext();
   const [choice, setChoice] = useState<string>(session?.requestedRestaurantId || "");
@@ -58,8 +61,10 @@ export function PendingAccess() {
             <p className="text-xs text-amber-100/80 leading-relaxed">
               Bạn đã xin quyền xem số liệu của{" "}
               <strong>
-                {restaurants.find((r) => r.id === session?.requestedRestaurantId)?.name ||
-                  session?.requestedRestaurantId}
+                {session?.requestedRestaurantId === ADMIN_REQUEST
+                  ? "Ban Quản Lý (xem toàn hệ thống)"
+                  : restaurants.find((r) => r.id === session?.requestedRestaurantId)?.name ||
+                    session?.requestedRestaurantId}
               </strong>
               . Khi được duyệt, bạn đăng nhập lại là vào được ngay.
             </p>
@@ -73,8 +78,27 @@ export function PendingAccess() {
 
         <div className="space-y-2">
           <p className="text-[11px] uppercase font-bold text-gray-400">
-            {alreadyRequested ? "Chọn lại nếu bạn chọn nhầm" : "Chọn nhà hàng"}
+            {alreadyRequested ? "Chọn lại nếu bạn chọn nhầm" : "Chọn phần bạn cần xem"}
           </p>
+
+          {/* Dành cho kế toán / Ban Quản Lý: xem toàn hệ thống thay vì một nhà hàng */}
+          <button
+            type="button"
+            onClick={() => setChoice(ADMIN_REQUEST)}
+            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors flex items-center justify-between ${
+              choice === ADMIN_REQUEST
+                ? "border-amber-400 bg-amber-500/20 text-amber-200"
+                : "border-white/10 bg-black/40 text-gray-200 hover:border-amber-400/50"
+            }`}
+          >
+            <span>
+              <span className="font-bold text-sm block">Ban Quản Lý — xem toàn hệ thống</span>
+              <span className="text-[11px] text-gray-400">Dành cho kế toán, xem cả 4 nhà hàng</span>
+            </span>
+            {choice === ADMIN_REQUEST && <Check className="w-4 h-4 shrink-0" />}
+          </button>
+
+          <p className="text-[11px] uppercase font-bold text-gray-400 pt-2">Hoặc một nhà hàng</p>
           {restaurants.map((r) => (
             <button
               key={r.id}

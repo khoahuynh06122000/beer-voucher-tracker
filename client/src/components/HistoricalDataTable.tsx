@@ -13,7 +13,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { History, RefreshCw, Download, Send, Camera, Eye, Plus } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getVouchersByDateRange, VoucherRecord, appendBillImagesToVoucher } from "@/lib/firestoreService";
+import { getVouchersByDateRange, VoucherRecord, appendBillImagesToVoucher,
+  getVoucherImages,
+} from "@/lib/firestoreService";
 import { sendStoredMSTeamsReport } from "@/lib/msTeamsService";
 import { compressImage } from "@/lib/imageUtils";
 import { ImagePreviewModal } from "./ImagePreviewModal";
@@ -55,6 +57,28 @@ export function HistoricalDataTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [sendingRowId, setSendingRowId] = useState<string | null>(null);
   const [activePreviewRecord, setActivePreviewRecord] = useState<VoucherRecord | null>(null);
+  const [loadingImagesId, setLoadingImagesId] = useState<string | null>(null);
+
+  /**
+   * Tải ảnh bill của đúng dòng này rồi mới mở khung xem.
+   * Bảng cố ý không tải sẵn ảnh — xem lý do ở getVoucherImages().
+   */
+  const handleOpenImages = async (record: VoucherRecord) => {
+    const key = record.id || record.date;
+    setLoadingImagesId(key);
+    try {
+      const images = await getVoucherImages(record.id || `${record.restaurantId}_${record.date}`);
+      if (images.length === 0) {
+        toast.info(`Ngày ${record.date} chưa có ảnh bill nào.`);
+        return;
+      }
+      setActivePreviewRecord({ ...record, billImages: images });
+    } catch (err: any) {
+      toast.error("Không tải được ảnh bill: " + (err?.message || "lỗi không rõ"));
+    } finally {
+      setLoadingImagesId(null);
+    }
+  };
 
   const handleAppendImagesToRecord = async (record: VoucherRecord, files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -112,7 +136,9 @@ export function HistoricalDataTable() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await getVouchersByDateRange(selectedFilterRestaurant, startDate, endDate, true);
+      // KHÔNG kéo ảnh ở đây. Ảnh base64 nằm trong cột billImages, 30 ngày là
+      // hàng chục MB mỗi lần mở tab. Ảnh chỉ tải khi người dùng bấm xem.
+      const data = await getVouchersByDateRange(selectedFilterRestaurant, startDate, endDate);
       setRecords(data);
     } catch (e) {
       console.error("Error loading historical data:", e);
@@ -411,16 +437,19 @@ export function HistoricalDataTable() {
                     </TableCell>
                     <TableCell className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {record.billImages && record.billImages.length > 0 ? (
+                        {true ? (
                           <>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setActivePreviewRecord(record)}
+                              disabled={loadingImagesId === (record.id || record.date)}
+                              onClick={() => handleOpenImages(record)}
                               className="h-8 px-2 text-xs text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/10 gap-1 rounded-lg font-bold"
                             >
                               <Camera className="w-3.5 h-3.5 text-amber-500" />
-                              <span>{record.billImages.length} ảnh</span>
+                              <span>
+                                {loadingImagesId === (record.id || record.date) ? "Đang tải…" : "Ảnh bill"}
+                              </span>
                             </Button>
 
                             <label className="cursor-pointer" title="Bổ sung thêm ảnh bill">

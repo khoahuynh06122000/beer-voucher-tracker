@@ -304,6 +304,24 @@ export async function upsertVoucher(data: {
   return { ...(cleaned as VoucherRecord), id: docId };
 }
 
+/**
+ * Chỉ lấy ảnh bill của MỘT bản ghi, gọi khi người dùng bấm xem.
+ *
+ * Vì sao cần: ảnh bill cũ được lưu thẳng dạng base64 trong cột `billImages`,
+ * chiếm 14 MB / 28 MB cả bảng, có dòng nặng tới 892 kB. Tab "Lịch Sử" trước đây
+ * tải 30 ngày KÈM ảnh nên mỗi lần mở kéo về hàng chục MB — đó là thứ đã đốt hết
+ * 5 GB egress/tháng của gói Supabase Free. Nay bảng tải nhẹ, ảnh lấy khi cần.
+ */
+export async function getVoucherImages(id: string): Promise<string[]> {
+  try {
+    const rows = await sbGet(`vouchers?id=eq.${encodeURIComponent(id)}&select=billImages`);
+    return rows.length > 0 && Array.isArray(rows[0].billImages) ? rows[0].billImages : [];
+  } catch (e) {
+    console.error("Không tải được ảnh bill:", e);
+    return [];
+  }
+}
+
 /** Append new bill images to an existing voucher record */
 export async function appendBillImagesToVoucher(
   restaurantId: string,
