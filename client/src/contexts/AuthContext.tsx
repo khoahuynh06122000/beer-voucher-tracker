@@ -14,7 +14,14 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { auth, googleProvider } from "@/lib/firebase";
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+  User,
+} from "firebase/auth";
 import { authFetchJson } from "@/lib/authFetch";
 import type { UserProfile } from "@/lib/firestoreService";
 
@@ -50,6 +57,9 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
 }
+
+/** Người dùng tự đóng popup — không phải lỗi, đừng hiện gì. */
+const USER_CANCELLED = ["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/user-cancelled"];
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -95,6 +105,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Sau khi Google chuyển trang trả về, lấy kết quả để BẮT ĐƯỢC LỖI. Không gọi
+  // hàm này thì lỗi của luồng chuyển trang biến mất im lặng, người dùng chỉ thấy
+  // màn hình đăng nhập hiện lại mà không hiểu vì sao.
+  useEffect(() => {
+    getRedirectResult(auth).catch((e: any) => {
+      if (!USER_CANCELLED.includes(e?.code)) {
+        setError(e?.message || "Đăng nhập Google thất bại khi quay lại từ Google.");
+      }
+    });
+  }, []);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       setUser(fbUser);
@@ -116,22 +137,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // onAuthStateChanged sẽ tự gọi loadSession.
     } catch (e: any) {
       const code = e?.code || "";
-      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-        // Webview của MS Teams / một số trình duyệt trong app chặn popup.
-        try {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        } catch (e2: any) {
-          setError("Trình duyệt chặn cửa sổ đăng nhập. Vui lòng mở app bằng Chrome hoặc Safari.");
-        }
-      } else if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-        setError(null); // người dùng tự đóng, không phải lỗi
-      } else if (code === "auth/unauthorized-domain") {
-        setError("Tên miền này chưa được cho phép trong Firebase Console (Authentication > Settings > Authorized domains).");
-      } else {
-        setError(e?.message || "Đăng nhập Google thất bại.");
+
+      if (USER_CANCELLED.includes(code)) {
+        setError(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      if (code === "auth/unauthorized-domain") {
+        setError(
+          "Tên miền này chưa được cho phép trong Firebase Console (Authentication → Settings → Authorized domains)."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // MỌI lỗi popup còn lại đều thử lại bằng cách CHUYỂN TRANG.
+      //
+      // Vì sao: luồng popup cần cookie bên thứ ba và gọi thẳng
+      // identitytoolkit.googleapis.com — proxy công ty hoặc trình duyệt siết chặt
+      // hay cắt mất, cho ra "auth/internal-error" hoặc trang Google báo 401. Máy
+      // khác vẫn vào bình thường nên rất khó đoán. Luồng chuyển trang không cần
+      // popup, không phụ thuộc cookie bên thứ ba, nên sống được ở những máy đó.
+      console.warn("Popup đăng nhập lỗi, chuyển sang cách chuyển trang:", code, e?.message);
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return; // trình duyệt rời trang, không chạy tiếp
+      } catch (e2: any) {
+        setError(
+          `Không đăng nhập được (${code || "lỗi không rõ"}). Thử mở bằng Chrome, hoặc dùng mạng 4G thay vì wifi công ty.`
+        );
+        setLoading(false);
+      }
     }
   };
 
