@@ -10,7 +10,8 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { applyCors, requireAuth } from "../../server/authGuard.js";
-import { getTelegramBotToken } from "../../server/botCore.js";
+import { getTelegramBotToken, setFirestoreSetting } from "../../server/botCore.js";
+import { webhookSecretFor, WEBHOOK_SECURED_KEY } from "../../server/telegramSecret.js";
 
 function resolveOrigin(req: IncomingMessage): string {
   const proto =
@@ -77,11 +78,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         url: webhookUrl,
         allowed_updates: ["message", "edited_message", "channel_post", "callback_query"],
         drop_pending_updates: false,
+        // Telegram sẽ gửi lại chuỗi này ở header mỗi lần đẩy update, nhờ đó
+        // /api/telegram/webhook phân biệt được update thật với update giả mạo.
+        secret_token: webhookSecretFor(botToken),
       }),
     });
     const setData = await setResp.json().catch(() => ({}));
 
     if (setResp.ok && setData.ok) {
+      // Bật cờ để webhook bắt đầu siết chữ ký. Đặt SAU khi đăng ký thành công
+      // để không khoá nhầm bot khi setWebhook lỗi.
+      await setFirestoreSetting(WEBHOOK_SECURED_KEY, "1").catch(() => {});
       res.writeHead(200);
       res.end(JSON.stringify({
         success: true,

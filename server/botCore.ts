@@ -82,6 +82,11 @@ export async function getFirestoreSetting(key: string): Promise<string> {
   return rows.length > 0 ? String(rows[0].value ?? "").trim() : "";
 }
 
+/** Ghi một thiết lập hệ thống (dùng cho cờ nội bộ, không dùng cho bí mật mới). */
+export async function setFirestoreSetting(key: string, value: string): Promise<boolean> {
+  return sbUpsert("settings", { key, value, updatedAt: new Date().toISOString() });
+}
+
 /** Lấy Telegram Bot Token đã lưu. */
 export function getTelegramBotToken(): Promise<string> {
   return getFirestoreSetting("telegram_bot_token");

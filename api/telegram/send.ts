@@ -2,8 +2,9 @@
  * POST /api/telegram/send — proxy gửi tin nhắn Telegram.
  * Body: { message }
  *
- * BẮT BUỘC đăng nhập. Bot token & chat id lấy từ BIẾN MÔI TRƯỜNG của server,
- * KHÔNG nhận từ client nữa.
+ * BẮT BUỘC đăng nhập. Bot token & chat id do SERVER tự tra (biến môi trường
+ * TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID, không có thì lấy cấu hình đã lưu trong
+ * bảng settings) — KHÔNG nhận từ client nữa.
  *
  * Trước đây endpoint nhận thẳng { botToken, chatId } do người gọi gửi lên và
  * không kiểm tra đăng nhập — tức là một trạm chuyển tiếp miễn phí: người lạ gọi
@@ -11,7 +12,7 @@
  * Network cũng đọc thấy token).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readJsonBody } from "../../server/botCore.js";
+import { readJsonBody, getFirestoreSetting } from "../../server/botCore.js";
 import { applyCors, requireAuth } from "../../server/authGuard.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -31,14 +32,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const who = await requireAuth(req, res, "any");
   if (!who) return;
 
-  const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-  const chatId = (process.env.TELEGRAM_CHAT_ID || "").trim();
+  // getFirestoreSetting: ưu tiên biến môi trường, không có thì đọc cấu hình đã
+  // lưu sẵn trong bảng settings. Nhờ vậy bot Telegram đang chạy KHÔNG phải khai
+  // báo lại gì cả — điểm khác biệt là client không còn cầm token nữa.
+  const [botToken, chatId] = await Promise.all([
+    getFirestoreSetting("telegram_bot_token"),
+    getFirestoreSetting("telegram_chat_id"),
+  ]);
   if (!botToken || !chatId) {
     res.writeHead(500);
     res.end(
       JSON.stringify({
         success: false,
-        message: "Server chưa cấu hình TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID trong biến môi trường Vercel.",
+        message: "Server chưa có Telegram Bot Token / Chat ID.",
       })
     );
     return;

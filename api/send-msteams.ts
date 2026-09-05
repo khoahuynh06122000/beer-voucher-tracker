@@ -6,15 +6,16 @@
  *   { record }        -> tự dựng dashboard card từ record
  *   { customPayload } -> gửi thẳng payload tuỳ ý
  *
- * BẮT BUỘC đăng nhập. URL webhook lấy từ BIẾN MÔI TRƯỜNG MS_TEAMS_WEBHOOK,
- * KHÔNG nhận từ client.
+ * BẮT BUỘC đăng nhập. URL webhook do SERVER tự tra (biến môi trường
+ * MS_TEAMS_WEBHOOK, không có thì lấy cấu hình đã lưu trong bảng settings) —
+ * KHÔNG nhận từ client nữa.
  *
  * Trước đây người gọi tự truyền webhookUrl và không cần đăng nhập — nghĩa là
  * bất kỳ ai trên internet cũng bắt được server này POST dữ liệu tuỳ ý tới BẤT KỲ
  * URL nào họ muốn, và webhook của bộ phận thì lộ ra trình duyệt.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readJsonBody, LIVE_DASHBOARD_URL } from "../server/botCore.js";
+import { readJsonBody, LIVE_DASHBOARD_URL, getFirestoreSetting } from "../server/botCore.js";
 import { applyCors, requireAuth } from "../server/authGuard.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -34,15 +35,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const who = await requireAuth(req, res, "any");
   if (!who) return;
 
-  const webhookUrl = (process.env.MS_TEAMS_WEBHOOK || "").trim();
+  // Ưu tiên biến môi trường, không có thì dùng webhook đã lưu sẵn trong bảng
+  // settings — webhook Teams đang chạy không phải cấu hình lại.
+  const webhookUrl = await getFirestoreSetting("ms_teams_webhook");
   if (!webhookUrl) {
     res.writeHead(500);
-    res.end(
-      JSON.stringify({
-        success: false,
-        message: "Server chưa cấu hình MS_TEAMS_WEBHOOK trong biến môi trường Vercel.",
-      })
-    );
+    res.end(JSON.stringify({ success: false, message: "Server chưa có webhook MS Teams." }));
     return;
   }
 

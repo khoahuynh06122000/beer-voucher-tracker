@@ -11,9 +11,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   getTelegramBotToken,
+  getFirestoreSetting,
   processTelegramMessageCommand,
   readJsonBody,
 } from "../../server/botCore.js";
+import { webhookSecretFor, WEBHOOK_SECURED_KEY } from "../../server/telegramSecret.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
@@ -22,6 +24,31 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     res.writeHead(200);
     res.end(JSON.stringify({ ok: true }));
     return;
+  }
+
+  // Endpoint này BẮT BUỘC mở ra internet vì Telegram gọi vào. Nhưng chatId lại
+  // lấy từ chính payload gửi tới — nếu không xác thực, người lạ tự gửi một
+  // update giả kèm chat id của họ và một lệnh đối soát là bot gửi thẳng báo cáo
+  // về cho họ. Nên phải kiểm chữ ký bí mật mà Telegram gửi kèm.
+  //
+  // Chỉ siết sau khi webhook đã được đăng ký lại kèm secret (cờ trong settings),
+  // để lúc vừa deploy bot không chết oan.
+  try {
+    const [botTokenForCheck, secured] = await Promise.all([
+      getTelegramBotToken(),
+      getFirestoreSetting(WEBHOOK_SECURED_KEY),
+    ]);
+    if (secured === "1" && botTokenForCheck) {
+      const got = req.headers["x-telegram-bot-api-secret-token"];
+      const raw = Array.isArray(got) ? got[0] : got;
+      if (raw !== webhookSecretFor(botTokenForCheck)) {
+        res.writeHead(401);
+        res.end(JSON.stringify({ ok: false, message: "Chữ ký webhook không hợp lệ." }));
+        return;
+      }
+    }
+  } catch {
+    /* không kiểm được thì cho qua, tránh làm bot chết vì lỗi tra cứu */
   }
 
   try {
