@@ -155,7 +155,7 @@ export function ApiAccessLog() {
       )}
 
       <p className="px-4 py-3 text-[11px] text-muted-foreground border-t border-border/50">
-        Máy mới xuất hiện được bắn ngay về Telegram nên anh không cần ngồi canh bảng này. Nhật ký tự xoá mỗi sáng sau báo cáo 09:00. Cột "Lượt" chỉ là con số tham khảo vì mỗi máy chỉ ghi lại nhiều nhất 30 phút một lần, để không làm chậm app.
+        Máy mới xuất hiện được bắn ngay về Telegram nên anh không cần ngồi canh bảng này. Nhật ký tự xoá mỗi sáng sau báo cáo 09:00. Cột "Lượt" của <strong>agent báo cáo là số thật, đếm từng lượt gọi</strong>. Với người dùng trình duyệt thì chỉ ghi lại nhiều nhất 30 phút một lần để không làm chậm app, nên con số đó mang tính tham khảo.
       </p>
     </div>
   );

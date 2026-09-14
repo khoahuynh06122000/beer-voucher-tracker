@@ -184,7 +184,10 @@ export interface AuthResult {
 export const ACCESS_LOG_KEY = "api_access_log";
 /** Giữ tối đa ngần này mục, cũ nhất bị loại. Đủ để soi mà không phình bảng. */
 const ACCESS_LOG_MAX = 200;
-/** Cùng một máy thì mỗi tiến trình chỉ ghi lại một lần trong ngần này. */
+/**
+ * Người dùng trình duyệt: mỗi tiến trình chỉ ghi lại một lần trong ngần này.
+ * KHÔNG áp dụng cho agent/script — nhóm đó đếm từng lượt, xem recordApiAccess().
+ */
 const RELOG_AFTER_MS = 30 * 60 * 1000;
 
 export interface AccessEntry {
@@ -331,9 +334,19 @@ export async function recordApiAccess(
     const ip = (header(req, "x-forwarded-for").split(",")[0] || "").trim() || "không rõ";
     const key = `${who}|${ip}`;
 
-    const last = loggedRecently.get(key);
-    if (last && Date.now() - last < RELOG_AFTER_MS) return;
-    loggedRecently.set(key, Date.now());
+    // Agent/script: ĐẾM TỪNG LƯỢT, không bỏ sót. Chúng gọi thưa và không ai
+    // ngồi chờ màn hình nên thêm một vòng ghi không ảnh hưởng gì.
+    //
+    // Người dùng trình duyệt: vẫn chặn 30 phút. Một lần mở app có 4-5 lời gọi,
+    // ghi hết là cộng thêm 8-10 vòng mạng ngay trên đường vào — đúng thứ đã làm
+    // app chậm và vừa phải sửa. Với họ, biết "có mặt hôm nay" là đủ.
+    const demTungLuot = kind === "report-token";
+
+    if (!demTungLuot) {
+      const last = loggedRecently.get(key);
+      if (last && Date.now() - last < RELOG_AFTER_MS) return;
+      loggedRecently.set(key, Date.now());
+    }
 
     const now = new Date().toISOString();
     const map = await readAccessLog();
