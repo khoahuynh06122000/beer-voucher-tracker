@@ -223,6 +223,25 @@ export async function requireAuth(
   return { email: user.email, role: user.role, restaurantId: user.restaurantId };
 }
 
+/**
+ * Token cho script/agent lấy số liệu về làm báo cáo (không phải người dùng
+ * ngồi trước trình duyệt nên không đăng nhập Google được).
+ *
+ * Đặt ở biến môi trường REPORT_API_TOKEN trên Vercel. Ràng buộc cố ý:
+ *   - CHỈ dùng cho GET, không bao giờ ghi được dữ liệu
+ *   - CHỈ bảng vouchers; bảng settings vẫn chặn tuyệt đối vì chứa bot token và
+ *     webhook Teams
+ *   - Yêu cầu tối thiểu 24 ký tự để lỡ ai đặt token ngắn/rỗng thì cửa vẫn đóng
+ *
+ * Muốn thu hồi thì đổi giá trị biến môi trường, token cũ chết ngay.
+ * TUYỆT ĐỐI không nhúng token này vào mã client — làm vậy là công khai nó.
+ */
+export function isReportToken(req: IncomingMessage): boolean {
+  const expected = (process.env.REPORT_API_TOKEN || "").trim();
+  if (expected.length < 24) return false;
+  return bearerToken(req) === expected;
+}
+
 /** Cron của Vercel gửi `Authorization: Bearer $CRON_SECRET`. Chặn người lạ gọi tay. */
 export function requireCronSecret(req: IncomingMessage, res: ServerResponse): boolean {
   const secret = process.env.CRON_SECRET || "";

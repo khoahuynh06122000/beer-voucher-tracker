@@ -2,7 +2,9 @@
  * GET  /api/db?q=vouchers...        -> proxy đọc Supabase
  * POST /api/db?table=vouchers       -> upsert
  *
- * BẮT BUỘC đăng nhập: gửi kèm `Authorization: Bearer <Firebase ID token>`.
+ * BẮT BUỘC xác thực, bằng MỘT trong hai cách:
+ *   - Người dùng: `Authorization: Bearer <Firebase ID token>`
+ *   - Script/agent báo cáo: `Authorization: Bearer <REPORT_API_TOKEN>` — CHỈ ĐỌC
  *
  * Trước đây endpoint này mở toang, CORS "*", không kiểm tra gì. Bất kỳ ai cũng
  * GET được bảng `settings` (chứa telegram_bot_token, ms_teams_webhook) và POST
@@ -15,7 +17,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody } from "../server/botCore.js";
-import { applyCors, requireAuth } from "../server/authGuard.js";
+import { applyCors, requireAuth, isReportToken } from "../server/authGuard.js";
 
 const SB_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
 const SB_KEY = process.env.SUPABASE_KEY || "";
@@ -39,7 +41,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const who = await requireAuth(req, res, "any");
+  // Script/agent báo cáo dùng REPORT_API_TOKEN. Chỉ chấp nhận cho GET — token
+  // này không bao giờ ghi được dữ liệu, kể cả khi bị lộ.
+  const viaReportToken = req.method === "GET" && isReportToken(req);
+
+  const who = viaReportToken
+    ? ({ email: "service:report", role: "admin" } as const)
+    : await requireAuth(req, res, "any");
   if (!who) return;
 
   const isAdmin = who.role === "admin" || who.role === "super_admin";
