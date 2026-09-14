@@ -182,6 +182,8 @@ export interface AuthResult {
  * ------------------------------------------------------------------ */
 
 export const ACCESS_LOG_KEY = "api_access_log";
+/** Tiền tố của dòng đánh dấu "đã báo máy này rồi", xoá cùng nhật ký mỗi ngày. */
+const ALERTED_PREFIX = "alerted:";
 /** Giữ tối đa ngần này mục, cũ nhất bị loại. Đủ để soi mà không phình bảng. */
 const ACCESS_LOG_MAX = 200;
 /**
@@ -276,11 +278,50 @@ export async function clearAccessLog(): Promise<AccessEntry[]> {
       headers: { ...sbAuth, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify({ key: ACCESS_LOG_KEY, value: "{}", updatedAt: new Date().toISOString() }),
     });
+
+    // Xoá luôn các dòng đánh dấu "đã báo máy này". Quên bước này thì hôm sau
+    // máy cũ vẫn bị coi là đã báo rồi và sẽ KHÔNG báo nữa.
+    await fetch(`${SB_URL}/rest/v1/settings?key=like.${encodeURIComponent(ALERTED_PREFIX + "*")}`, {
+      method: "DELETE",
+      headers: sbAuth,
+    });
+
     loggedRecently.clear();
   } catch {
     /* xoá hụt thì mai xoá tiếp, không đáng làm hỏng báo cáo 09:00 */
   }
   return before;
+}
+
+/**
+ * Giành quyền báo cho MỘT máy, chống bắn trùng.
+ *
+ * Vì sao cần: một lần mở app bắn 4-5 lời gọi API song song, mỗi lời gọi chạy
+ * trên một tiến trình riêng với bộ nhớ riêng. Cả đám cùng đọc nhật ký, cùng
+ * thấy "chưa có máy này", nên cùng kết luận là máy mới và cùng bắn tin — đó là
+ * lý do Telegram báo trùng 2-3 lần.
+ *
+ * Cách chặn: ghi một dòng đánh dấu KHÔNG dùng merge-duplicates. `key` là khoá
+ * chính nên tiến trình thứ hai trở đi sẽ đụng trùng khoá và bị từ chối. Chỉ
+ * tiến trình ghi thành công mới được gửi tin. Đây là chốt ở tầng database nên
+ * đúng kể cả khi các tiến trình chạy song song.
+ */
+async function gianhQuyenBao(key: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/settings`, {
+      method: "POST",
+      // CỐ Ý không có Prefer: resolution=merge-duplicates — cần nó BÁO LỖI khi trùng.
+      headers: { ...sbAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: `${ALERTED_PREFIX}${key}`,
+        value: "1",
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+    return r.ok; // 201 = mình giành được; 409 = tiến trình khác đã báo rồi
+  } catch {
+    return false; // không chắc thì thôi không báo, thà sót còn hơn spam
+  }
 }
 
 /** Gửi cảnh báo Telegram khi thấy máy chưa từng gọi trong ngày. */
@@ -376,7 +417,7 @@ export async function recordApiAccess(
       body: JSON.stringify({ key: ACCESS_LOG_KEY, value: JSON.stringify(trimmed), updatedAt: now }),
     });
 
-    if (laMayMoi) await alertNewMachine(map[key]);
+    if (laMayMoi && (await gianhQuyenBao(key))) await alertNewMachine(map[key]);
   } catch {
     /* ghi log hỏng thì kệ, tuyệt đối không được làm chết request của người dùng */
   }
