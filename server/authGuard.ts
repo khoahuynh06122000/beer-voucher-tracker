@@ -176,6 +176,142 @@ export interface AuthResult {
   restaurantId?: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * NHẬT KÝ TRUY CẬP API — để phát hiện máy lạ gọi vào
+ * ------------------------------------------------------------------ */
+
+export const ACCESS_LOG_KEY = "api_access_log";
+/** Giữ tối đa ngần này mục, cũ nhất bị loại. Đủ để soi mà không phình bảng. */
+const ACCESS_LOG_MAX = 200;
+/** Cùng một máy thì mỗi tiến trình chỉ ghi lại một lần trong ngần này. */
+const RELOG_AFTER_MS = 30 * 60 * 1000;
+
+export interface AccessEntry {
+  who: string;
+  kind: "user" | "report-token" | "cron";
+  ip: string;
+  city?: string;
+  country?: string;
+  ua?: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+/** Đã ghi gần đây trong chính tiến trình này -> khỏi ghi lại, tránh mỗi request
+ *  một lượt ghi database. */
+const loggedRecently = new Map<string, number>();
+
+const header = (req: IncomingMessage, name: string): string => {
+  const v = req.headers[name];
+  return (Array.isArray(v) ? v[0] : v) || "";
+};
+
+/** Rút gọn user-agent thành thứ người đọc được: "Chrome trên Windows". */
+function shortDevice(ua: string): string {
+  if (!ua) return "không rõ";
+  const os = /Windows/i.test(ua)
+    ? "Windows"
+    : /Android/i.test(ua)
+      ? "Android"
+      : /iPhone|iPad/i.test(ua)
+        ? "iPhone/iPad"
+        : /Mac OS X/i.test(ua)
+          ? "macOS"
+          : /Linux/i.test(ua)
+            ? "Linux"
+            : "";
+  const app = /PowerShell|WindowsPowerShell/i.test(ua)
+    ? "PowerShell"
+    : /curl/i.test(ua)
+      ? "curl"
+      : /Edg\//i.test(ua)
+        ? "Edge"
+        : /Chrome\//i.test(ua)
+          ? "Chrome"
+          : /Safari\//i.test(ua)
+            ? "Safari"
+            : /Firefox\//i.test(ua)
+              ? "Firefox"
+              : "khác";
+  return os ? `${app} trên ${os}` : app;
+}
+
+async function readAccessLog(): Promise<Record<string, AccessEntry>> {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/settings?key=eq.${encodeURIComponent(ACCESS_LOG_KEY)}&select=value`,
+      { headers: sbAuth }
+    );
+    if (!r.ok) return {};
+    const rows = (await r.json()) as { value: string }[];
+    if (!rows.length || !rows[0].value) return {};
+    const parsed = JSON.parse(rows[0].value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Danh sách máy đã gọi API, mới nhất trước. */
+export async function getAccessLog(): Promise<AccessEntry[]> {
+  const map = await readAccessLog();
+  return Object.values(map).sort((a, b) => (b.lastSeen || "").localeCompare(a.lastSeen || ""));
+}
+
+/**
+ * Ghi nhận một máy vừa gọi API.
+ *
+ * Cố ý KHÔNG ghi mỗi request: một lần mở app có 4-5 lời gọi, ghi hết thì vừa
+ * chậm vừa tốn băng thông — đúng thứ vừa phải sửa. Mỗi máy chỉ ghi lại nhiều
+ * nhất 30 phút một lần trên mỗi tiến trình máy chủ.
+ *
+ * Số đếm chỉ mang tính tham khảo: nhiều tiến trình cùng cập nhật một dòng nên
+ * có thể hụt vài lượt. Mục đích là PHÁT HIỆN MÁY LẠ, không phải đếm chính xác.
+ */
+export async function recordApiAccess(
+  req: IncomingMessage,
+  who: string,
+  kind: AccessEntry["kind"]
+): Promise<void> {
+  try {
+    const ip = (header(req, "x-forwarded-for").split(",")[0] || "").trim() || "không rõ";
+    const key = `${who}|${ip}`;
+
+    const last = loggedRecently.get(key);
+    if (last && Date.now() - last < RELOG_AFTER_MS) return;
+    loggedRecently.set(key, Date.now());
+
+    const now = new Date().toISOString();
+    const map = await readAccessLog();
+    const prev = map[key];
+
+    map[key] = {
+      who,
+      kind,
+      ip,
+      city: header(req, "x-vercel-ip-city") ? decodeURIComponent(header(req, "x-vercel-ip-city")) : prev?.city,
+      country: header(req, "x-vercel-ip-country") || prev?.country,
+      ua: shortDevice(header(req, "user-agent")),
+      count: (prev?.count || 0) + 1,
+      firstSeen: prev?.firstSeen || now,
+      lastSeen: now,
+    };
+
+    // Quá nhiều mục thì bỏ những máy lâu không gọi.
+    const all = Object.entries(map).sort((a, b) => (b[1].lastSeen || "").localeCompare(a[1].lastSeen || ""));
+    const trimmed = Object.fromEntries(all.slice(0, ACCESS_LOG_MAX));
+
+    await fetch(`${SB_URL}/rest/v1/settings`, {
+      method: "POST",
+      headers: { ...sbAuth, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key: ACCESS_LOG_KEY, value: JSON.stringify(trimmed), updatedAt: now }),
+    });
+  } catch {
+    /* ghi log hỏng thì kệ, tuyệt đối không được làm chết request của người dùng */
+  }
+}
+
 function deny(res: ServerResponse, code: number, message: string) {
   res.setHeader("Content-Type", "application/json");
   res.writeHead(code);
@@ -219,6 +355,8 @@ export async function requireAuth(
     deny(res, 403, "Chỉ quản trị viên mới được thực hiện thao tác này.");
     return null;
   }
+
+  await recordApiAccess(req, user.email, "user");
 
   return { email: user.email, role: user.role, restaurantId: user.restaurantId };
 }

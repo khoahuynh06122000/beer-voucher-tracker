@@ -37,6 +37,7 @@ import {
   RestaurantStatus
 } from "@/lib/firestoreService";
 import { UserApproval } from "@/components/UserApproval";
+import { ApiAccessLog } from "@/components/ApiAccessLog";
 import { authFetch } from "@/lib/authFetch";
 import { sendStoredMSTeamsReport, sendMissingReportAlert, getMissingReportAdaptiveCard } from "@/lib/msTeamsService";
 import { sendTelegramMessage, registerTelegramWebhook, pollTelegramMessages } from "@/lib/telegramService";
@@ -592,6 +593,9 @@ export default function AdminSettings() {
 
         {/* DUYỆT TÀI KHOẢN — chỉ chủ hệ thống thấy, tự ẩn với người khác */}
         <UserApproval />
+
+        {/* Nhat ky may goi API — soi may la */}
+        <ApiAccessLog />
 
         {/* KHO ẢNH CLOUDINARY — dung lượng & cảnh báo */}
         {cloudUsage?.ok && typeof cloudUsage.percent === "number" && (

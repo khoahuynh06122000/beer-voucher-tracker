@@ -28,6 +28,7 @@ import {
   getAppUser,
   saveAppUser,
   listAppUsers,
+  getAccessLog,
   verifyIdToken,
   RESTAURANTS,
   ADMIN_REQUEST,
@@ -48,6 +49,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
   if (url.searchParams.get("admin") === "users") {
     return handleUsers(req, res);
+  }
+  if (url.searchParams.get("admin") === "log") {
+    const who = await requireAuth(req, res, "super_admin");
+    if (!who) return;
+    res.writeHead(200);
+    res.end(JSON.stringify({ success: true, entries: await getAccessLog() }));
+    return;
   }
 
   if (req.method !== "POST") {

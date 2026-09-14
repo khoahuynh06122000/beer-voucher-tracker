@@ -17,7 +17,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody } from "../server/botCore.js";
-import { applyCors, requireAuth, isReportToken } from "../server/authGuard.js";
+import { applyCors, requireAuth, isReportToken, recordApiAccess } from "../server/authGuard.js";
 
 const SB_URL = process.env.SUPABASE_URL || "https://fuqxhhtpdwujupjjwbzi.supabase.co";
 const SB_KEY = process.env.SUPABASE_KEY || "";
@@ -49,6 +49,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     ? ({ email: "service:report", role: "admin" } as const)
     : await requireAuth(req, res, "any");
   if (!who) return;
+
+  // requireAuth da tu ghi nhan; nhanh token bao cao thi ghi o day.
+  if (viaReportToken) await recordApiAccess(req, "service:report", "report-token");
 
   const isAdmin = who.role === "admin" || who.role === "super_admin";
   const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
