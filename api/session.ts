@@ -90,11 +90,28 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     } as AppUser;
     if (user.role !== "super_admin") await saveAppUser(user);
   } else {
-    user.lastLoginAt = now;
-    if (token.name && !user.displayName) user.displayName = token.name;
+    // CHỈ ghi xuống database khi thật sự có gì đổi. Trước đây mỗi lần mở app là
+    // một lượt ghi chỉ để cập nhật lastLoginAt — tốn một vòng mạng ngay trên
+    // đường vào, làm app vào chậm.
+    let changed = false;
+
+    if (token.name && !user.displayName) {
+      user.displayName = token.name;
+      changed = true;
+    }
     // Cho phép đổi nguyện vọng khi còn đang chờ duyệt (chọn nhầm thì chọn lại).
-    if (user.role === "pending" && validRequested) user.requestedRestaurantId = validRequested;
-    if (user.role !== "super_admin") await saveAppUser(user);
+    if (user.role === "pending" && validRequested && user.requestedRestaurantId !== validRequested) {
+      user.requestedRestaurantId = validRequested;
+      changed = true;
+    }
+    // lastLoginAt chỉ cần đủ chính xác để biết ai còn dùng app, không cần từng phút.
+    const lastSeen = user.lastLoginAt ? Date.parse(user.lastLoginAt) : 0;
+    if (!lastSeen || Date.now() - lastSeen > 60 * 60 * 1000) {
+      user.lastLoginAt = now;
+      changed = true;
+    }
+
+    if (changed && user.role !== "super_admin") await saveAppUser(user);
   }
 
   const restaurantName =

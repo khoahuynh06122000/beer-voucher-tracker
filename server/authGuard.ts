@@ -90,20 +90,42 @@ export async function verifyIdToken(
 
 const userKey = (email: string) => `user:${email.toLowerCase()}`;
 
+/**
+ * Nhớ tạm hồ sơ quyền trong bộ nhớ của chính function đang chạy.
+ *
+ * Vì sao cần: MỌI lời gọi /api đều phải tra quyền, mà một lần mở app có 4-5 lời
+ * gọi — nghĩa là 4-5 vòng tới Supabase chỉ để hỏi đi hỏi lại "người này là ai".
+ * Đó là lý do app vào chậm sau khi siết bảo mật.
+ *
+ * Chỉ 30 giây để nếu chủ hệ thống vừa duyệt cho ai thì người đó không phải chờ
+ * lâu. saveAppUser() ghi đè thẳng vào bộ nhớ này nên thao tác duyệt có hiệu lực
+ * ngay trên chính máy chủ vừa xử lý.
+ */
+const USER_CACHE_MS = 30_000;
+const userCache = new Map<string, { user: AppUser | null; at: number }>();
+
 export async function getAppUser(email: string): Promise<AppUser | null> {
   const lower = email.toLowerCase();
   if (lower === SUPER_ADMIN_EMAIL) {
     return { email: lower, role: "super_admin" };
   }
+
+  const hit = userCache.get(lower);
+  if (hit && Date.now() - hit.at < USER_CACHE_MS) return hit.user;
+
   try {
     const r = await fetch(
       `${SB_URL}/rest/v1/settings?key=eq.${encodeURIComponent(userKey(lower))}&select=value`,
       { headers: sbAuth }
     );
+    // Lỗi mạng thì KHÔNG nhớ tạm, để lần sau thử lại — nhớ nhầm "không có
+    // quyền" sẽ khoá oan người dùng suốt 30 giây.
     if (!r.ok) return null;
     const rows = (await r.json()) as { value: string }[];
-    if (!rows.length || !rows[0].value) return null;
-    return JSON.parse(rows[0].value) as AppUser;
+    const found =
+      rows.length && rows[0].value ? (JSON.parse(rows[0].value) as AppUser) : null;
+    userCache.set(lower, { user: found, at: Date.now() });
+    return found;
   } catch {
     return null;
   }
@@ -120,6 +142,9 @@ export async function saveAppUser(user: AppUser): Promise<boolean> {
         updatedAt: new Date().toISOString(),
       }),
     });
+    // Ghi đè bộ nhớ tạm để thao tác duyệt có hiệu lực ngay, không phải chờ hết
+    // 30 giây.
+    if (r.ok) userCache.set(user.email.toLowerCase(), { user, at: Date.now() });
     return r.ok;
   } catch {
     return false;
