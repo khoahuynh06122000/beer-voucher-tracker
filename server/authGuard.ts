@@ -15,6 +15,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { getFirestoreSetting } from "./botCore.js";
 
 const FB_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "gen-lang-client-0780471401";
 
@@ -253,10 +254,62 @@ async function readAccessLog(): Promise<Record<string, AccessEntry>> {
   }
 }
 
-/** Danh sách máy đã gọi API, mới nhất trước. */
+/** Danh sách máy đã gọi API trong ngày, mới nhất trước. */
 export async function getAccessLog(): Promise<AccessEntry[]> {
   const map = await readAccessLog();
   return Object.values(map).sort((a, b) => (b.lastSeen || "").localeCompare(a.lastSeen || ""));
+}
+
+/**
+ * Xoá sạch nhật ký. Gọi từ cron 09:00 sau khi đã gửi bản tổng kết — mỗi ngày
+ * bắt đầu lại từ trắng, nên bảng settings không phình và "máy mới" luôn có
+ * nghĩa là mới trong hôm nay.
+ */
+export async function clearAccessLog(): Promise<AccessEntry[]> {
+  const before = await getAccessLog();
+  try {
+    await fetch(`${SB_URL}/rest/v1/settings`, {
+      method: "POST",
+      headers: { ...sbAuth, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key: ACCESS_LOG_KEY, value: "{}", updatedAt: new Date().toISOString() }),
+    });
+    loggedRecently.clear();
+  } catch {
+    /* xoá hụt thì mai xoá tiếp, không đáng làm hỏng báo cáo 09:00 */
+  }
+  return before;
+}
+
+/** Gửi cảnh báo Telegram khi thấy máy chưa từng gọi trong ngày. */
+async function alertNewMachine(e: AccessEntry): Promise<void> {
+  try {
+    const [botToken, chatId] = await Promise.all([
+      getFirestoreSetting("telegram_bot_token"),
+      getFirestoreSetting("telegram_chat_id"),
+    ]);
+    if (!botToken || !chatId) return;
+
+    const viTri = [e.city, e.country].filter(Boolean).join(", ") || "không rõ";
+    const loai =
+      e.kind === "report-token" ? "Agent báo cáo (token dịch vụ)" : e.kind === "cron" ? "Hẹn giờ" : "Người dùng";
+
+    const html =
+      `<b>🔔 MÁY MỚI GỌI API</b>\n\n` +
+      `👤 <b>Ai:</b> ${e.who}\n` +
+      `🏷 <b>Loại:</b> ${loai}\n` +
+      `🌐 <b>IP:</b> <code>${e.ip}</code>\n` +
+      `📍 <b>Vị trí:</b> ${viTri}\n` +
+      `💻 <b>Thiết bị:</b> ${e.ua || "không rõ"}\n\n` +
+      `<i>Nếu đây không phải nhà hàng hay agent của bạn, vào Cài Đặt Admin thu hồi quyền hoặc đổi REPORT_API_TOKEN.</i>`;
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: "HTML" }),
+    });
+  } catch {
+    /* báo hỏng thì kệ, tuyệt đối không được làm chết request của người dùng */
+  }
 }
 
 /**
@@ -285,6 +338,8 @@ export async function recordApiAccess(
     const now = new Date().toISOString();
     const map = await readAccessLog();
     const prev = map[key];
+    // Chưa từng thấy trong ngày -> đây là máy mới, phải báo ngay.
+    const laMayMoi = !prev;
 
     map[key] = {
       who,
@@ -307,6 +362,8 @@ export async function recordApiAccess(
       headers: { ...sbAuth, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify({ key: ACCESS_LOG_KEY, value: JSON.stringify(trimmed), updatedAt: now }),
     });
+
+    if (laMayMoi) await alertNewMachine(map[key]);
   } catch {
     /* ghi log hỏng thì kệ, tuyệt đối không được làm chết request của người dùng */
   }

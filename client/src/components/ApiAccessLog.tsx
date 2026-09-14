@@ -77,8 +77,7 @@ export function ApiAccessLog() {
             </span>
           </p>
           <p className="text-xs text-muted-foreground">
-            Mỗi máy một dòng. Thấy dòng lạ — không phải nhà hàng, không phải agent của bạn — thì
-            kiểm tra ngay.
+            Nhật ký của HÔM NAY. Máy mới xuất hiện sẽ được báo ngay về Telegram, và toàn bộ danh sách này bị xoá sau báo cáo 09:00 sáng mai.
           </p>
         </div>
         <button
@@ -96,7 +95,7 @@ export function ApiAccessLog() {
         </p>
       ) : entries.length === 0 ? (
         <p className="p-4 text-sm text-muted-foreground">
-          Chưa ghi nhận lượt gọi nào. Nhật ký bắt đầu tính từ lúc tính năng này lên.
+          Hôm nay chưa có máy nào gọi API, hoặc nhật ký vừa được xoá sau báo cáo 09:00.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -156,9 +155,7 @@ export function ApiAccessLog() {
       )}
 
       <p className="px-4 py-3 text-[11px] text-muted-foreground border-t border-border/50">
-        Mỗi máy chỉ được ghi lại nhiều nhất 30 phút một lần để không làm chậm app, nên cột "Lượt"
-        là con số tham khảo chứ không phải tổng số request. Cái cần nhìn là <strong>có dòng nào lạ
-        không</strong>.
+        Máy mới xuất hiện được bắn ngay về Telegram nên anh không cần ngồi canh bảng này. Nhật ký tự xoá mỗi sáng sau báo cáo 09:00. Cột "Lượt" chỉ là con số tham khảo vì mỗi máy chỉ ghi lại nhiều nhất 30 phút một lần, để không làm chậm app.
       </p>
     </div>
   );

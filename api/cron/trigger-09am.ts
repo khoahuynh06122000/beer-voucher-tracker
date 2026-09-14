@@ -14,12 +14,16 @@
  * đối thì phải lên gói Pro hoặc gọi endpoint này từ một scheduler bên ngoài.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { requireCronOrAdmin } from "../../server/authGuard.js";
+import { requireCronOrAdmin, clearAccessLog } from "../../server/authGuard.js";
 import { getLiveMissingStatus, getFirestoreSetting, runWeeklyPreventiveAudit } from "../../server/botCore.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader("Content-Type", "application/json");
   if (!(await requireCronOrAdmin(req, res))) return;
+
+  // Lấy nhật ký máy gọi API rồi XOÁ SẠCH: báo cáo 09:00 là mốc reset mỗi ngày,
+  // nhờ vậy "máy mới" luôn có nghĩa là mới trong ngày và bảng settings không phình.
+  const accessSummary = await clearAccessLog();
 
   try {
     const card = await getLiveMissingStatus();
@@ -70,6 +74,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         let tgHtml = `<b>🤖 BÁO CÁO TIẾN ĐỘ VOUCHER (09:00 AM)</b>\n`;
         tgHtml += `📅 <b>Ngày kiểm tra:</b> ${checkDateStr}\n\n`;
         tgHtml += `📊 <i>Nội dung tổng hợp tự động từ hệ thống.</i>\n`;
+
+        // Tổng kết máy đã gọi API trong ngày, rồi xoá sạch để hôm nay bắt đầu
+        // lại từ trắng — nhờ vậy "máy mới" luôn có nghĩa là mới trong ngày.
+        if (accessSummary.length > 0) {
+          tgHtml += `\n<b>🖥 MÁY ĐÃ GỌI API HÔM QUA (${accessSummary.length}):</b>\n`;
+          for (const e of accessSummary.slice(0, 15)) {
+            const viTri = [e.city, e.country].filter(Boolean).join(", ") || "?";
+            tgHtml += `• ${e.who} — <code>${e.ip}</code> (${viTri}, ${e.ua || "?"})\n`;
+          }
+          if (accessSummary.length > 15) tgHtml += `• …và ${accessSummary.length - 15} máy nữa\n`;
+          tgHtml += `<i>Nhật ký đã được xoá, hôm nay đếm lại từ đầu.</i>\n`;
+        }
+
         tgHtml += `\n🌐 <a href="https://beer-voucher-tracker.vercel.app">Mở Live Dashboard</a>`;
 
         const tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
