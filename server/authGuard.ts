@@ -338,13 +338,13 @@ async function alertNewMachine(e: AccessEntry): Promise<void> {
       e.kind === "report-token" ? "Agent báo cáo (token dịch vụ)" : e.kind === "cron" ? "Hẹn giờ" : "Người dùng";
 
     const html =
-      `<b>🔔 MÁY MỚI GỌI API</b>\n\n` +
+      `<b>🔔 MÁY MỚI GỌI API BẰNG TOKEN AGENT</b>\n\n` +
       `👤 <b>Ai:</b> ${e.who}\n` +
       `🏷 <b>Loại:</b> ${loai}\n` +
       `🌐 <b>IP:</b> <code>${e.ip}</code>\n` +
       `📍 <b>Vị trí:</b> ${viTri}\n` +
       `💻 <b>Thiết bị:</b> ${e.ua || "không rõ"}\n\n` +
-      `<i>Nếu đây không phải nhà hàng hay agent của bạn, vào Cài Đặt Admin thu hồi quyền hoặc đổi REPORT_API_TOKEN.</i>`;
+      `<i>Nếu đây không phải agent của bạn thì token đã bị lộ — đổi REPORT_API_TOKEN trên Vercel ngay.</i>`;
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -417,7 +417,12 @@ export async function recordApiAccess(
       body: JSON.stringify({ key: ACCESS_LOG_KEY, value: JSON.stringify(trimmed), updatedAt: now }),
     });
 
-    if (laMayMoi && (await gianhQuyenBao(key))) await alertNewMachine(map[key]);
+    // CHỈ báo Telegram cho agent/script. Nhân viên mở app thao tác hằng ngày là
+    // chuyện bình thường, báo hết thì mỗi sáng nhận cả chục tin rồi đâm ra
+    // không ai đọc nữa — cảnh báo mất tác dụng. Họ vẫn được ghi vào bảng trong
+    // Cài Đặt Admin, chỉ là không làm phiền.
+    const canBao = kind === "report-token";
+    if (canBao && laMayMoi && (await gianhQuyenBao(key))) await alertNewMachine(map[key]);
   } catch {
     /* ghi log hỏng thì kệ, tuyệt đối không được làm chết request của người dùng */
   }
