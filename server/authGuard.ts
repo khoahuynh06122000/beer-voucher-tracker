@@ -202,6 +202,27 @@ export interface AccessEntry {
   count: number;
   firstSeen: string;
   lastSeen: string;
+
+  // --- Hồ sơ truy vết, tra một lần cho mỗi máy mới trong ngày ---
+  /** Tỉnh/thành theo nhà mạng đăng ký, ví dụ "Da Nang". */
+  region?: string;
+  /** Nhà mạng: VNPT, Viettel, FPT... — thứ dùng để yêu cầu tra thuê bao. */
+  isp?: string;
+  /** Tổ chức sở hữu dải IP. Khác ISP khi là máy chủ thuê hoặc VPN. */
+  org?: string;
+  /** Số hiệu mạng (Autonomous System), ví dụ "AS45899". Không đổi, tra được. */
+  asn?: string;
+  /** Toạ độ tâm vùng phủ của nhà mạng — KHÔNG phải vị trí máy. */
+  lat?: number;
+  lon?: number;
+  /** Múi giờ nhà mạng khai báo. Lệch so với VN là dấu hiệu gọi từ nước ngoài. */
+  timezone?: string;
+  /** Chuỗi user-agent nguyên văn, giữ để làm bằng chứng. */
+  uaRaw?: string;
+  /** Đường dẫn API bị gọi (đã cắt bỏ query để không lưu nhầm token). */
+  path?: string;
+  /** Dấu hiệu đáng ngờ đã phát hiện được, ví dụ "máy chủ thuê", "ngoài VN". */
+  flags?: string[];
 }
 
 /** Đã ghi gần đây trong chính tiến trình này -> khỏi ghi lại, tránh mỗi request
@@ -241,6 +262,111 @@ function shortDevice(ua: string): string {
               ? "Firefox"
               : "khác";
   return os ? `${app} trên ${os}` : app;
+}
+
+/** Dải IP nội bộ / máy chủ tự gọi — tra cứu ngoài Internet sẽ không ra gì. */
+function laIpNoiBo(ip: string): boolean {
+  return (
+    !ip ||
+    ip === "không rõ" ||
+    ip === "::1" ||
+    ip.startsWith("127.") ||
+    ip.startsWith("10.") ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("169.254.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
+    ip.startsWith("fc") ||
+    ip.startsWith("fd")
+  );
+}
+
+/**
+ * Tên nhà mạng cho biết đây là máy chủ thuê / VPN chứ không phải nhà dân hay
+ * văn phòng. Người lạ muốn giấu mặt hầu như luôn đi qua một trong những nơi này,
+ * nên đây là dấu hiệu mạnh hơn hẳn tên thành phố.
+ */
+const DAU_HIEU_MAY_CHU =
+  /amazon|aws|google|microsoft|azure|digitalocean|linode|akamai|cloudflare|ovh|hetzner|vultr|contabo|m247|choopa|leaseweb|oracle|alibaba|tencent|datacamp|nordvpn|surfshark|expressvpn|proton|mullvad|private internet|hosting|datacenter|data center|server|vpn|proxy|colo/i;
+
+/**
+ * Tra hồ sơ của một địa chỉ IP: nhà mạng, số hiệu mạng, tỉnh thành, múi giờ.
+ *
+ * VÌ SAO KHÔNG DÙNG HEADER CỦA VERCEL LÀ ĐỦ: Vercel chỉ gắn tên thành phố, mà
+ * tên thành phố là thứ sai nhiều nhất (dải VNPT đăng ký ở Hà Nội thì máy Đà Nẵng
+ * cũng bị ghi Hà Nội). Thứ thật sự truy được người là NHÀ MẠNG + SỐ HIỆU MẠNG +
+ * IP + MỐC THỜI GIAN — bộ này mới đủ để yêu cầu nhà mạng tra thuê bao, hoặc để
+ * đối chiếu với nhật ký mạng nội bộ.
+ *
+ * CHỈ GỌI KHI PHÁT HIỆN MÁY MỚI (mỗi máy nhiều nhất một lần/ngày) nên không
+ * ảnh hưởng tốc độ app. Hỏng mạng hay quá hạn thì trả null, tuyệt đối không
+ * được làm hỏng lời gọi API của người dùng.
+ */
+async function traCuuIP(ip: string): Promise<Partial<AccessEntry> | null> {
+  if (laIpNoiBo(ip)) return null;
+
+  const fetchNgan = async (url: string): Promise<any | null> => {
+    const bo = new AbortController();
+    const hen = setTimeout(() => bo.abort(), 2500);
+    try {
+      const r = await fetch(url, { signal: bo.signal });
+      return r.ok ? await r.json() : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(hen);
+    }
+  };
+
+  // Nguồn 1: ipwho.is — https, không cần khoá, có sẵn nhà mạng + số hiệu mạng.
+  const a = await fetchNgan(`https://ipwho.is/${encodeURIComponent(ip)}`);
+  if (a && a.success !== false && a.country) {
+    return {
+      city: a.city || undefined,
+      region: a.region || undefined,
+      country: a.country_code || a.country || undefined,
+      isp: a.connection?.isp || undefined,
+      org: a.connection?.org || undefined,
+      asn: a.connection?.asn ? `AS${a.connection.asn}` : undefined,
+      lat: typeof a.latitude === "number" ? a.latitude : undefined,
+      lon: typeof a.longitude === "number" ? a.longitude : undefined,
+      timezone: a.timezone?.id || undefined,
+    };
+  }
+
+  // Nguồn 2 (dự phòng): ip-api.com. Bản miễn phí chỉ có http và giới hạn
+  // 45 lượt/phút — thừa sức vì ta chỉ tra khi có máy mới.
+  const b = await fetchNgan(
+    `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,proxy,hosting`
+  );
+  if (b && b.status === "success") {
+    const flags: string[] = [];
+    if (b.proxy) flags.push("proxy/VPN");
+    if (b.hosting) flags.push("máy chủ thuê");
+    return {
+      city: b.city || undefined,
+      region: b.regionName || undefined,
+      country: b.countryCode || b.country || undefined,
+      isp: b.isp || undefined,
+      org: b.org || undefined,
+      asn: b.as ? String(b.as).split(" ")[0] : undefined,
+      lat: typeof b.lat === "number" ? b.lat : undefined,
+      lon: typeof b.lon === "number" ? b.lon : undefined,
+      timezone: b.timezone || undefined,
+      flags: flags.length ? flags : undefined,
+    };
+  }
+
+  return null;
+}
+
+/** Soi hồ sơ để rút ra những điểm đáng ngờ, ghép vào cờ sẵn có. */
+function timDauHieuLa(e: Partial<AccessEntry>): string[] {
+  const flags = new Set(e.flags || []);
+  const ten = `${e.isp || ""} ${e.org || ""}`;
+  if (ten.trim() && DAU_HIEU_MAY_CHU.test(ten)) flags.add("máy chủ thuê / VPN");
+  if (e.country && e.country !== "VN" && !/viet ?nam/i.test(e.country)) flags.add(`ngoài VN (${e.country})`);
+  if (e.timezone && !/Ho_Chi_Minh|Bangkok|Saigon/i.test(e.timezone)) flags.add(`múi giờ lạ (${e.timezone})`);
+  return [...flags];
 }
 
 async function readAccessLog(): Promise<Record<string, AccessEntry>> {
@@ -333,17 +459,41 @@ async function alertNewMachine(e: AccessEntry): Promise<void> {
     ]);
     if (!botToken || !chatId) return;
 
-    const viTri = [e.city, e.country].filter(Boolean).join(", ") || "không rõ";
+    const viTri = [e.city, e.region, e.country].filter(Boolean).join(", ") || "không rõ";
     const loai =
       e.kind === "report-token" ? "Agent báo cáo (token dịch vụ)" : e.kind === "cron" ? "Hẹn giờ" : "Người dùng";
+    const gioVN = new Date(new Date(e.lastSeen).getTime() + 7 * 3600 * 1000)
+      .toISOString()
+      .replace("T", " ")
+      .slice(0, 19);
+    const nhaMang = [e.isp, e.asn].filter(Boolean).join(" · ");
 
-    const html =
+    let html =
       `<b>🔔 MÁY MỚI GỌI API BẰNG TOKEN AGENT</b>\n\n` +
       `👤 <b>Ai:</b> ${e.who}\n` +
       `🏷 <b>Loại:</b> ${loai}\n` +
+      `🕒 <b>Lúc:</b> ${gioVN} (giờ VN)\n\n` +
+      `<b>━ DẤU VẾT TRUY NGƯỜI ━</b>\n` +
       `🌐 <b>IP:</b> <code>${e.ip}</code>\n` +
-      `📍 <b>Vị trí:</b> ${viTri}\n` +
-      `💻 <b>Thiết bị:</b> ${e.ua || "không rõ"}\n\n` +
+      `🏢 <b>Nhà mạng:</b> ${nhaMang || "không tra được"}\n`;
+    if (e.org && e.org !== e.isp) html += `🏭 <b>Chủ dải IP:</b> ${e.org}\n`;
+    html += `📍 <b>Khu vực nhà mạng:</b> ${viTri}\n`;
+    if (e.timezone) html += `🕓 <b>Múi giờ:</b> ${e.timezone}\n`;
+    if (e.lat != null && e.lon != null) {
+      html += `🗺 <a href="https://www.google.com/maps?q=${e.lat},${e.lon}">Xem vùng phủ trên bản đồ</a>\n`;
+    }
+    html += `💻 <b>Thiết bị:</b> ${e.ua || "không rõ"}\n`;
+    if (e.uaRaw) html += `🔎 <b>Nguyên văn:</b> <code>${e.uaRaw.slice(0, 180)}</code>\n`;
+    if (e.path) html += `📄 <b>Gọi vào:</b> <code>${e.path}</code>\n`;
+
+    if (e.flags?.length) {
+      html += `\n⚠️ <b>ĐÁNG NGỜ:</b> ${e.flags.join(" · ")}\n`;
+    }
+
+    html +=
+      `\n<i>Khu vực trên là nơi nhà mạng ĐĂNG KÝ dải IP, không phải chỗ máy đang đứng — ` +
+      `dải VNPT/Viettel ở Đà Nẵng vẫn thường hiện ra Hà Nội. Thứ truy được người là ` +
+      `IP + mốc thời gian + nhà mạng ở trên.</i>\n` +
       `<i>Nếu đây không phải agent của bạn thì token đã bị lộ — đổi REPORT_API_TOKEN trên Vercel ngay.</i>`;
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -395,17 +545,41 @@ export async function recordApiAccess(
     // Chưa từng thấy trong ngày -> đây là máy mới, phải báo ngay.
     const laMayMoi = !prev;
 
-    map[key] = {
+    // Vercel chỉ đưa được tên thành phố, mà tên thành phố sai nhiều nhất. Máy
+    // mới thì tra thêm hồ sơ IP thật (nhà mạng, số hiệu mạng, múi giờ) để có cái
+    // mà truy. Chỉ tra một lần cho mỗi máy mỗi ngày nên không làm chậm app.
+    const hoSo = laMayMoi || !prev?.isp ? await traCuuIP(ip) : null;
+
+    const uaRaw = header(req, "user-agent");
+    const duLieu: AccessEntry = {
       who,
       kind,
       ip,
-      city: header(req, "x-vercel-ip-city") ? decodeURIComponent(header(req, "x-vercel-ip-city")) : prev?.city,
-      country: header(req, "x-vercel-ip-country") || prev?.country,
-      ua: shortDevice(header(req, "user-agent")),
+      // Ưu tiên kết quả tra cứu, thiếu thì mới dùng header của Vercel.
+      city:
+        hoSo?.city ||
+        (header(req, "x-vercel-ip-city") ? decodeURIComponent(header(req, "x-vercel-ip-city")) : "") ||
+        prev?.city,
+      region: hoSo?.region || prev?.region,
+      country: hoSo?.country || header(req, "x-vercel-ip-country") || prev?.country,
+      isp: hoSo?.isp || prev?.isp,
+      org: hoSo?.org || prev?.org,
+      asn: hoSo?.asn || prev?.asn,
+      lat: hoSo?.lat ?? prev?.lat,
+      lon: hoSo?.lon ?? prev?.lon,
+      timezone: hoSo?.timezone || prev?.timezone,
+      ua: shortDevice(uaRaw),
+      uaRaw: uaRaw || prev?.uaRaw,
+      // Cắt query để không bao giờ lỡ tay lưu token vào nhật ký.
+      path: (req.url || "").split("?")[0] || prev?.path,
       count: (prev?.count || 0) + 1,
       firstSeen: prev?.firstSeen || now,
       lastSeen: now,
     };
+    duLieu.flags = timDauHieuLa({ ...duLieu, flags: hoSo?.flags || prev?.flags });
+    if (!duLieu.flags.length) delete duLieu.flags;
+
+    map[key] = duLieu;
 
     // Quá nhiều mục thì bỏ những máy lâu không gọi.
     const all = Object.entries(map).sort((a, b) => (b[1].lastSeen || "").localeCompare(a[1].lastSeen || ""));

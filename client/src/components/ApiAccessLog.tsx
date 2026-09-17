@@ -18,8 +18,18 @@ interface AccessEntry {
   kind: "user" | "report-token" | "cron";
   ip: string;
   city?: string;
+  region?: string;
   country?: string;
+  isp?: string;
+  org?: string;
+  asn?: string;
+  lat?: number;
+  lon?: number;
+  timezone?: string;
   ua?: string;
+  uaRaw?: string;
+  path?: string;
+  flags?: string[];
   count: number;
   firstSeen: string;
   lastSeen: string;
@@ -105,7 +115,8 @@ export function ApiAccessLog() {
                 <th className="px-4 py-2 font-bold">Ai gọi</th>
                 <th className="px-4 py-2 font-bold">Loại</th>
                 <th className="px-4 py-2 font-bold">Địa chỉ IP</th>
-                <th className="px-4 py-2 font-bold">Vị trí</th>
+                <th className="px-4 py-2 font-bold">Nhà mạng</th>
+                <th className="px-4 py-2 font-bold">Khu vực</th>
                 <th className="px-4 py-2 font-bold">Thiết bị</th>
                 <th className="px-4 py-2 font-bold text-right">Lượt</th>
                 <th className="px-4 py-2 font-bold">Gần nhất</th>
@@ -129,19 +140,50 @@ export function ApiAccessLog() {
                       {KIND_LABEL[e.kind] || e.kind}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">{e.ip}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">
+                    {e.ip}
+                    {e.flags?.length ? (
+                      <span
+                        title={e.flags.join(" · ")}
+                        className="ml-1.5 px-1.5 py-0.5 rounded bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-extrabold uppercase"
+                      >
+                        ⚠ {e.flags[0]}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                    {e.city || e.country ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Globe className="w-3 h-3 shrink-0" />
-                        {[e.city, e.country].filter(Boolean).join(", ")}
+                    {e.isp || e.org ? (
+                      <span title={[e.org, e.asn].filter(Boolean).join(" · ")}>
+                        {e.isp || e.org}
+                        {e.asn ? <span className="ml-1 font-mono opacity-70">{e.asn}</span> : null}
                       </span>
                     ) : (
                       "—"
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                    {e.ua || "—"}
+                    {e.city || e.region || e.country ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="w-3 h-3 shrink-0" />
+                        {e.lat != null && e.lon != null ? (
+                          <a
+                            href={`https://www.google.com/maps?q=${e.lat},${e.lon}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="hover:underline"
+                          >
+                            {[e.city, e.country].filter(Boolean).join(", ")}
+                          </a>
+                        ) : (
+                          [e.city, e.country].filter(Boolean).join(", ")
+                        )}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    <span title={[e.uaRaw, e.path].filter(Boolean).join("\n")}>{e.ua || "—"}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">{e.count}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
@@ -156,6 +198,8 @@ export function ApiAccessLog() {
 
       <p className="px-4 py-3 text-[11px] text-muted-foreground border-t border-border/50">
         Agent lạ dùng token sẽ bắn tin Telegram ngay. Nhân viên thao tác thì chỉ hiện ở bảng này, không báo. Nhật ký tự xoá mỗi sáng sau báo cáo 09:00. Cột "Lượt" của <strong>agent báo cáo là số thật, đếm từng lượt gọi</strong>. Với người dùng trình duyệt thì chỉ ghi lại nhiều nhất 30 phút một lần để không làm chậm app, nên con số đó mang tính tham khảo.
+        <br />
+        <strong>Đọc cột "Khu vực" cho đúng:</strong> đó là nơi nhà mạng ĐĂNG KÝ dải IP, không phải chỗ máy đang đứng — dải VNPT/Viettel dùng ở Đà Nẵng vẫn thường hiện ra Hà Nội. Muốn truy ra người thì căn cứ vào <strong>IP + thời điểm + nhà mạng</strong> (ba thứ này nhà mạng tra được thuê bao), còn cột Khu vực chỉ để nhìn nhanh. Nhãn ⚠ đỏ là IP thuộc máy chủ thuê / VPN / ngoài Việt Nam — dấu hiệu người lạ cố giấu mặt.
       </p>
     </div>
   );

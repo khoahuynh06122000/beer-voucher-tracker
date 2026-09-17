@@ -81,7 +81,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           tgHtml += `\n<b>🖥 MÁY ĐÃ GỌI API HÔM QUA (${accessSummary.length}):</b>\n`;
           for (const e of accessSummary.slice(0, 15)) {
             const viTri = [e.city, e.country].filter(Boolean).join(", ") || "?";
-            tgHtml += `• ${e.who} — <code>${e.ip}</code> (${viTri}, ${e.ua || "?"})\n`;
+            const nhaMang = e.isp ? `, ${e.isp}${e.asn ? ` ${e.asn}` : ""}` : "";
+            const canh = e.flags?.length ? ` ⚠️ ${e.flags.join(", ")}` : "";
+            tgHtml += `• ${e.who} — <code>${e.ip}</code> (${viTri}${nhaMang}, ${e.ua || "?"})${canh}\n`;
           }
           if (accessSummary.length > 15) tgHtml += `• …và ${accessSummary.length - 15} máy nữa\n`;
           tgHtml += `<i>Nhật ký đã được xoá, hôm nay đếm lại từ đầu.</i>\n`;
