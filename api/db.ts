@@ -106,6 +106,27 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
       }
 
+      // Ép khóa chính `id` phải đúng "<restaurantId>_<date>" của chính dòng đó.
+      // Lệnh ghi dùng merge-duplicates trên `id`, nên chỉ kiểm restaurantId là
+      // CHƯA ĐỦ: nhà hàng A gửi {id:"B_2026-11-20", restaurantId:"A"} vẫn qua
+      // bước trên rồi đè lên bản ghi của nhà hàng B. Áp cho cả admin để không
+      // ai tạo được bản ghi có id lệch với nhà hàng/ngày của nó.
+      for (const row of rows) {
+        const date = typeof row?.date === "string" ? row.date : "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || typeof row.restaurantId !== "string" || !row.restaurantId) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: "Thiếu hoặc sai ngày (YYYY-MM-DD) / nhà hàng." }));
+          return;
+        }
+        const expectedId = `${row.restaurantId}_${date}`;
+        if (row.id !== undefined && row.id !== expectedId) {
+          res.writeHead(403);
+          res.end(JSON.stringify({ error: "Mã bản ghi không khớp nhà hàng và ngày." }));
+          return;
+        }
+        row.id = expectedId;
+      }
+
       const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
         method: "POST",
         headers: { ...sbAuth, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
